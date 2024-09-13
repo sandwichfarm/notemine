@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nostr Miner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        textarea {
+            width: 100%;
+            max-width: 600px;
+        }
+        input[type="number"] {
+            width: 100px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            max-width: 600px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Nostr Event Miner</h1>
+    <textarea id="eventInput" rows="10" placeholder='Enter Nostr Event JSON here'>
+{
+    "pubkey": "your_pubkey_here",
+    "content": "Hello, Nostr!",
+    "tags": []
+}
+    </textarea><br><br>
+    <label for="difficulty">Difficulty:</label>
+    <input type="number" id="difficulty" value="20" min="1"><br><br>
+    <button id="mineButton" disabled>Start Mining</button>
+    <h2>Result:</h2>
+    <pre id="result">Waiting for worker to initialize...</pre>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

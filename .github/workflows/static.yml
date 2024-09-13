@@ -1,0 +1,57 @@
+name: deploy demo to gh pages
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Delete demo/pkg symlink
+        run: rm -fr demo/pkg
+
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      - uses: qmaru/wasm-pack-action@v0.5.0
+        with:
+          version: 'latest'
+
+      - name: Build with wasm-pack
+        run: |
+          export RUSTFLAGS="-C target-feature=+simd128"
+          wasm-pack build --target web --release
+
+      - name: Prepare Demo Directory
+        run: mkdir -p demo/pkg
+
+      - name: Copy Build Artifacts to Demo
+        run: cp -r pkg/* demo/pkg/
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'demo'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

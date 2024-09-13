@@ -1,5 +1,4 @@
-// worker.js
-import init, { mine_event } from './pkg/nostr_miner.js';
+import init, { mine_event } from './pkg/notemine.js'; // Ensure correct import path
 
 let wasm;
 
@@ -14,22 +13,22 @@ async function initWasm() {
 
 initWasm();
 
+function reportProgress(hashCount, elapsedTime) {
+    postMessage({ type: 'progress', hashCount, elapsedTime });
+}
+
 self.onmessage = async function (e) {
     const { type, event, difficulty } = e.data;
-
-    console.log('Worker received message:', e.data); // Debugging log
-
+    console.log('Worker received message:', e.data); 
     if (type === 'mine') {
         try {
-            // Ensure event is a string
             if (typeof event !== 'string') {
                 throw new Error('Event must be a stringified JSON.');
             }
-
             console.log('Event String:', event);
             console.log('Difficulty:', difficulty);
 
-            const minedResult = mine_event(event, difficulty);
+            const minedResult = mine_event(event, difficulty, reportProgress);
             postMessage({ type: 'result', data: minedResult });
         } catch (error) {
             postMessage({ type: 'error', error: error.message });

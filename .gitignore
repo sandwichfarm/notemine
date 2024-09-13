@@ -1,2 +1,5 @@
-nostr_miner
-pkg
+notemine
+target
+
+./pkg
+!./demo/pkg

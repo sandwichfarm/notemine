@@ -147,7 +147,6 @@ pub fn mine_event(
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
     let mut best_pow: u32 = 0;
-    
     #[allow(unused_assignments)]
     let mut best_nonce: u64 = 0;
     #[allow(unused_assignments)]

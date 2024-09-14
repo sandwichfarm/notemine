@@ -34,7 +34,7 @@ self.onmessage = async function (e) {
     
         postMessage(message);
     }
-    
+
     if (type === 'cancel' && mining) {
         console.log('Mining cancellation requested.');
         miningCancelled = true;
@@ -42,9 +42,9 @@ self.onmessage = async function (e) {
     else if (type === 'init') {
         initWasm();
     } else if (type === 'mine' && !mining) {
-        miningCancelled = false; // Reset cancellation flag
-        mining = true;
         try {
+            miningCancelled = false; // Reset cancellation flag
+            mining = true;
             const startNonce = BigInt(workerId);
             const nonceStep = BigInt(totalWorkers);
 

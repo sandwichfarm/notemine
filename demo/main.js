@@ -34,7 +34,7 @@ const neventOutput = document.getElementById('neventOutput');
 
 
 numberOfWorkers.value = totalWorkers;
-numberOfWorkers.max = navigator.hardwareConcurrency || 3;
+// numberOfWorkers.max = navigator.hardwareConcurrency || 3;
 
 minersBestPowOutput.style.display = 'none';
 overallBestPowOutput.style.display = 'none';
@@ -45,7 +45,7 @@ let workerHashRates = {};
 let minersBestPow
 let overallBestPow
 
-let found = false
+let halt = false
 
 function resetBestPow() {   
     minersBestPow = {};
@@ -57,18 +57,41 @@ function resetBestPow() {
     };
 }
 
-for (let i = 0; i < totalWorkers; i++) {
-    const worker = new Worker('./worker.js', { type: 'module' });
-    worker.onmessage = handleWorkerMessage;
-    worker.postMessage({ type: 'init', id: i });
-    workers.push(worker);
+function spawnWorkers(amt=null){
+    amt = amt? amt : totalWorkers
+    console.log('Spawning workers...', totalWorkers);
+    for (let i = 0; i < amt; i++) {
+        const worker = new Worker('./worker.js', { type: 'module' });
+        worker.onmessage = handleWorkerMessage;
+        worker.postMessage({ type: 'init', id: i });
+        workers.push(worker);
+    }
 }
+
+spawnWorkers()
+
+function disableInputs(){
+    mineButton.disabled = true;
+    cancelButton.disabled = true;
+    numberOfWorkers.disabled = true;
+    difficultyInput.disabled = true;
+    eventInput.disabled = true;
+}
+
+function enableInputs(){
+    mineButton.disabled = false;
+    cancelButton.disabled = true;
+    numberOfWorkers.disabled = false;
+    difficultyInput.disabled = false;
+    eventInput.disabled = false;
+}
+
 
 async function handleWorkerMessage(e) {
     const { type, data, error, hashRate, workerId, bestPowData:bestPowDataMap } = e.data;
 
     if (type === 'progress') {
-        if(found && hashRate > 0) {
+        if(halt && hashRate > 0) {
             return workers[workerId].postMessage({ type: 'cancel' });
         }
         
@@ -106,8 +129,8 @@ async function handleWorkerMessage(e) {
         if (data.error) {
             resultOutput.textContent = `Error: ${data.error}\n${JSON.stringify(data, null, 2)}`;
         } else {
-            if(found === false) {
-                found = true
+            if(halt === false) {
+                halt = true
                 try {
                     cancelOtherWorkers(workerId);
                     await publishEvent(data.event);
@@ -120,10 +143,18 @@ async function handleWorkerMessage(e) {
             }
         }
         hashrateOutput.textContent = '0 H/s';
-        mineButton.disabled = false;
-        cancelButton.disabled = true; // Disable the cancel button
+
         isMining = false;
-        workerHashRates = {}; // Reset hash rates after mining
+        workerHashRates = {};
+        mineButton.disabled = false;
+        cancelButton.disabled = true;
+        eventInput.value = '';
+        workers[workerId]?.terminate();
+        workers = []
+        spawnWorkers()
+        
+    } else if (type === 'stopped') {
+        
     } else if (type === 'error') {
         resultOutput.textContent = `Error: ${error}`;
         hashrateOutput.textContent = '0 H/s';
@@ -138,6 +169,7 @@ function cancelOtherWorkers(excludeWorkerId) {
     workers.forEach((worker, index) => {
         if (index !== excludeWorkerId) {
             worker.postMessage({ type: 'cancel' });
+            setTimeout( () => worker.terminate(), 1000);
         }
     });
 }
@@ -155,6 +187,20 @@ function updateBestPowDisplay() {
         overallBestPowOutput.textContent = `Overall Best PoW: ${overallBestPow.bestPow} by Miner #${overallBestPow.workerId} (Nonce: ${overallBestPow.nonce}, Hash: ${overallBestPow.hash})`
     }
 }
+
+numberOfWorkers.addEventListener('change', () => {
+    disableInputs()
+    const c = parseInt(totalWorkers, 10)
+    const n = parseInt(numberOfWorkers.value, 10);
+    const delta = n - c;
+    if (delta > 0) {
+        spawnWorkers(delta)
+    } else {
+        const workersToTerminate = workers.splice(n, Math.abs(delta))
+        workersToTerminate.forEach(worker => worker.terminate())
+    }
+    enableInputs()
+})
 
 mineButton.addEventListener('click', () => {
     if (isMining) return;
@@ -213,13 +259,16 @@ cancelButton.addEventListener('click', () => {
     if (isMining) {
         workers.forEach(worker => {
             worker.postMessage({ type: 'cancel' });
+            worker.terminate();
         });
+        workers = []
         resultOutput.textContent = 'Mining cancellation requested.';
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
         cancelButton.disabled = true; // Disable the cancel button
         isMining = false;
         workerHashRates = {}; // Reset hash rates after cancellation
+        spawnWorkers()
     }
 });
 

@@ -72,6 +72,10 @@
     <input type="number" id="difficulty" value="21" min="1">
     <br><br>
 
+    <label for="difficulty"># of workers:</label>
+    <input type="number" id="numberOfWorkers" value="21" min="1">
+    <br><br>
+
     <button id="mineButton" disabled>Mine & Publish</button> 
     <button id="cancelButton" disabled>Cancel Mining</button>
 
@@ -84,7 +88,7 @@
 
     <pre id="neventOutput"></pre>
 
-    
+    <div id="notes"></div>
     
     <!-- Include main.js as a module -->
     <script src="https://cdn.jsdelivr.net/npm/nostr-zap@0.22.0"></script>

@@ -1,6 +1,7 @@
-import init, { mine_event } from './pkg/notemine.js'; // Ensure correct import path
+import init, { mine_event } from './pkg/notemine.js';
 
 let wasm;
+let mining = false;
 
 async function initWasm() {
     try {
@@ -13,27 +14,30 @@ async function initWasm() {
 
 initWasm();
 
-function reportProgress(hashCount, elapsedTime) {
-    postMessage({ type: 'progress', hashCount, elapsedTime });
+function reportProgress(averageHashRate) {
+    postMessage({ type: 'progress', averageHashRate, workerId });
 }
 
+let workerId;
+
 self.onmessage = async function (e) {
-    const { type, event, difficulty } = e.data;
-    console.log('Worker received message:', e.data); 
-    if (type === 'mine') {
+    const { type, event, difficulty, id } = e.data;
+    if (type === 'init') {
+        workerId = id;
+    } else if (type === 'mine' && !mining) {
+        mining = true;
         try {
             if (typeof event !== 'string') {
                 throw new Error('Event must be a stringified JSON.');
             }
-            console.log('Event String:', event);
-            console.log('Difficulty:', difficulty);
-
             const minedResult = mine_event(event, difficulty, reportProgress);
-            postMessage({ type: 'result', data: minedResult });
+            postMessage({ type: 'result', data: minedResult, workerId });
         } catch (error) {
-            postMessage({ type: 'error', error: error.message });
+            postMessage({ type: 'error', error: error.message, workerId });
+        } finally {
+            mining = false;
         }
-    } else if (type === 'cancel') {
+    } else if (type === 'cancel' && mining) {
         console.log('Mining cancellation requested.');
     }
 };

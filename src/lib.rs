@@ -1,66 +1,75 @@
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use serde::{Deserialize, Serialize};
 use serde_json::to_string;
-
 use sha2::{Digest, Sha256};
-use wasm_bindgen::prelude::*;
 use web_sys::console;
 use console_error_panic_hook;
 use js_sys::Function;
 use serde_wasm_bindgen;
+use hex;
 
-fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    s.serialize_u64(*x)
-}
-
-#[derive(Serialize)]
-struct HashableEvent<'a>(
-    u32,
-    &'a str,
-    #[serde(serialize_with = "serialize_u64_as_number")]
-    u64,
-    u32,
-    &'a Vec<Vec<String>>,
-    &'a str,
-);
-
-#[inline]
-fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
-    let hashable_event = HashableEvent(
-        0u32,
-        &event.pubkey,
-        event.created_at.unwrap_or_else(|| (js_sys::Date::now() / 1000.0) as u64),
-        event.kind,
-        &event.tags,
-        &event.content,
-    );
-
-    let serialized_str = match to_string(&hashable_event) {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-
-    let hash_bytes = Sha256::digest(serialized_str.as_bytes()).to_vec();
-    hash_bytes
-}
-
-#[inline]
-fn get_pow(hash_bytes: &[u8]) -> u32 {
-    let mut count = 0;
-    for &byte in hash_bytes {
-        if byte == 0 {
-            count += 8;
-        } else {
-            count += byte.leading_zeros() as u32;
-            break;
-        }
-    }
-    count
+#[wasm_bindgen(start)]
+pub fn main_js() {
+    console_error_panic_hook::set_once();
 }
 
 pub mod mining {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[derive(Serialize)]
+    struct HashableEvent<'a>(
+        u32,
+        &'a str,
+        #[serde(serialize_with = "serialize_u64_as_number")]
+        u64,
+        u32,
+        &'a Vec<Vec<String>>,
+        &'a str,
+    );
+
+    #[inline]
+    fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        s.serialize_u64(*x)
+    }
+
+    #[inline]
+    fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
+        let hashable_event = HashableEvent(
+            0u32,
+            &event.pubkey,
+            event.created_at.unwrap_or_else(|| (js_sys::Date::now() / 1000.0) as u64),
+            event.kind,
+            &event.tags,
+            &event.content,
+        );
+
+        let serialized_str = match to_string(&hashable_event) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+
+        let hash_bytes = Sha256::digest(serialized_str.as_bytes()).to_vec();
+        hash_bytes
+    }
+
+    #[inline]
+    fn get_pow(hash_bytes: &[u8]) -> u32 {
+        let mut count = 0;
+        for &byte in hash_bytes {
+            if byte == 0 {
+                count += 8;
+            } else {
+                count += byte.leading_zeros() as u32;
+                break;
+            }
+        }
+        count
+    }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct NostrEvent {
@@ -79,9 +88,11 @@ pub mod mining {
         pub khs: f64,
     }
 
-    #[wasm_bindgen(start)]
-    pub fn main_js() {
-        console_error_panic_hook::set_once();
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct BestPowData {
+        pub best_pow: u32,
+        pub nonce: String,
+        pub hash: String,
     }
 
     #[wasm_bindgen]
@@ -90,20 +101,13 @@ pub mod mining {
         difficulty: u32,
         start_nonce_str: &str,
         nonce_step_str: &str,
-        report_progress: JsValue,
-        should_cancel: JsValue,
-    ) -> JsValue {
+        report_progress: &Function,
+        should_cancel: &Function,
+    ) -> Result<JsValue, JsValue> {
         console::log_1(&format!("event_json: {}", event_json).into());
-        let mut event: NostrEvent = match serde_json::from_str(event_json) {
-            Ok(e) => e,
-            Err(err) => {
-                console::log_1(&format!("JSON parsing error: {}", err).into());
-                return serde_wasm_bindgen::to_value(&serde_json::json!({
-                    "error": format!("Invalid event JSON: {}", err)
-                }))
-                .unwrap_or(JsValue::NULL);
-            }
-        };
+        let mut event: NostrEvent = serde_json::from_str(event_json).map_err(|err| {
+            JsValue::from_str(&format!("Invalid event JSON: {}", err))
+        })?;
 
         if event.created_at.is_none() {
             let current_timestamp = (js_sys::Date::now() / 1000.0) as u64;
@@ -126,17 +130,6 @@ pub mod mining {
             nonce_index = Some(event.tags.len() - 1);
         }
 
-        let report_progress = match report_progress.dyn_into::<Function>() {
-            Ok(func) => func,
-            Err(_) => {
-                console::log_1(&"Failed to convert report_progress to Function".into());
-                return serde_wasm_bindgen::to_value(&serde_json::json!({
-                    "error": "Invalid progress callback."
-                }))
-                .unwrap_or(JsValue::NULL);
-            }
-        };
-
         let start_time = js_sys::Date::now();
         let start_nonce: u64 = start_nonce_str.parse().unwrap_or(0);
         let nonce_step: u64 = nonce_step_str.parse().unwrap_or(1);
@@ -146,7 +139,6 @@ pub mod mining {
 
         let report_interval = 200_000;
         let mut last_report_time = start_time;
-        let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
         let mut best_pow: u32 = 0;
         let mut best_nonce: u64 = 0;
@@ -165,10 +157,7 @@ pub mod mining {
             let hash_bytes = get_event_hash(&event);
             if hash_bytes.is_empty() {
                 console::log_1(&"Failed to compute event hash.".into());
-                return serde_wasm_bindgen::to_value(&serde_json::json!({
-                    "error": "Failed to compute event hash."
-                }))
-                .unwrap_or(JsValue::NULL);
+                return Err(JsValue::from_str("Failed to compute event hash."));
             }
 
             let pow = get_pow(&hash_bytes);
@@ -178,18 +167,18 @@ pub mod mining {
                 best_nonce = nonce;
                 best_hash_bytes = hash_bytes.clone();
 
-                let best_pow_data = serde_json::json!({
-                    "best_pow": best_pow,
-                    "nonce": best_nonce.to_string(),
-                    "hash": hex::encode(&best_hash_bytes),
-                });
+                let best_pow_data = BestPowData {
+                    best_pow,
+                    nonce: best_nonce.to_string(),
+                    hash: hex::encode(&best_hash_bytes),
+                };
+
+                let best_pow_data_js = serde_wasm_bindgen::to_value(&best_pow_data).map_err(|err| {
+                    JsValue::from_str(&format!("Failed to serialize best_pow_data: {}", err))
+                })?;
 
                 report_progress
-                    .call2(
-                        &JsValue::NULL,
-                        &JsValue::from_f64(0.0),
-                        &serde_wasm_bindgen::to_value(&best_pow_data).unwrap(),
-                    )
+                    .call2(&JsValue::NULL, &JsValue::from_f64(0.0), &best_pow_data_js)
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),
@@ -212,22 +201,20 @@ pub mod mining {
                 };
 
                 console::log_1(&format!("Mined successfully with nonce: {}", nonce).into());
-                return serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL);
+                let result_js = serde_wasm_bindgen::to_value(&result).map_err(|err| {
+                    JsValue::from_str(&format!("Failed to serialize result: {}", err))
+                })?;
+                return Ok(result_js);
             }
 
             nonce = nonce.wrapping_add(nonce_step);
             total_hashes += 1;
 
-            if let Some(ref should_cancel) = should_cancel {
-                if total_hashes % 10_000 == 0 {
-                    let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
-                    if cancel.is_truthy() {
-                        console::log_1(&"Mining cancelled.".into());
-                        return serde_wasm_bindgen::to_value(&serde_json::json!({
-                            "error": "Mining cancelled."
-                        }))
-                        .unwrap_or(JsValue::NULL);
-                    }
+            if total_hashes % 10_000 == 0 {
+                let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
+                if cancel.is_truthy() {
+                    console::log_1(&"Mining cancelled.".into());
+                    return Err(JsValue::from_str("Mining cancelled."));
                 }
             }
 
@@ -247,32 +234,17 @@ pub mod mining {
                     last_report_time = current_time;
                 }
             }
-
-            // Uncomment if you wish to log nonce progress
-            // if nonce % report_interval == 0 {
-            //     console::log_1(&format!("Checked nonce up to: {}", nonce).into());
-            // }
         }
     }
 }
 
 pub use mining::{mine_event, BestPowData, MinedResult, NostrEvent};
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::mining::{get_event_hash, NostrEvent};
+    use hex;
 
-    //     {
-    //     "id": "bb9727a19e7ed120333e994ada9c3b6e4a360a71739f9ea33def6d69638fff30",
-    //     "pubkey": "e771af0b05c8e95fcdf6feb3500544d2fb1ccd384788e9f490bb3ee28e8ed66f",
-    //     "created_at": 1668680774,
-    //     "kind": 1,
-    //     "tags": [],
-    //     "content": "hello world",
-    //     "sig": "4be1dccd81428990ba56515f2e9fc2ae61c9abc61dc3d977235fd8767f52010e44d36d3c8da30755b6440ccaf888442f7cbbd7a17e34ca3ed31c5e8a33a7df11"
-    //   }
-    
     #[test]
     fn test_get_event_hash() {
         let event = NostrEvent {
@@ -283,14 +255,12 @@ mod tests {
             id: None,
             created_at: Some(1668680774),
         };
-    
+
         let expected_hash = "bb9727a19e7ed120333e994ada9c3b6e4a360a71739f9ea33def6d69638fff30";
-    
+
         let hash_bytes = get_event_hash(&event);
         let hash_hex = hex::encode(&hash_bytes);
-    
+
         assert_eq!(hash_hex, expected_hash);
     }
 }
-
-

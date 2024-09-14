@@ -19,6 +19,7 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = ["console"] }
 serde-wasm-bindgen = "0.6" # Added serde-wasm-bindgen
 console_error_panic_hook = "0.1.6" # Added for better error reporting
+packed_simd_2 = { version = "0.3", features = ["into_bits"] }
 
 [profile.release]
 opt-level = "z" # Optimize for size; alternatively, use "s" for size or "3" for speed

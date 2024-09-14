@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::console;
 use console_error_panic_hook;
 use js_sys::Function;
+use serde_wasm_bindgen;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NostrEvent {
@@ -85,10 +86,12 @@ pub fn main_js() {
 pub fn mine_event(
     event_json: &str,
     difficulty: u32,
+    start_nonce_str: &str,
+    nonce_step_str: &str,
     report_progress: JsValue,
     should_cancel: JsValue,
 ) -> JsValue {
-
+    console::log_1(&format!("event_json: {}", event_json).into());
     let mut event: NostrEvent = match serde_json::from_str(event_json) {
         Ok(e) => e,
         Err(err) => {
@@ -113,7 +116,11 @@ pub fn mine_event(
         }
     }
     if nonce_index.is_none() {
-        event.tags.push(vec!["nonce".to_string(), "0".to_string(), difficulty.to_string()]);
+        event.tags.push(vec![
+            "nonce".to_string(),
+            "0".to_string(),
+            difficulty.to_string(),
+        ]);
         nonce_index = Some(event.tags.len() - 1);
     }
 
@@ -129,12 +136,19 @@ pub fn mine_event(
     };
 
     let start_time = js_sys::Date::now();
-    let mut nonce: u64 = 0;
+    let start_nonce: u64 = start_nonce_str.parse().unwrap_or(0);
+    let nonce_step: u64 = nonce_step_str.parse().unwrap_or(1);
+
+    let mut nonce: u64 = start_nonce;
     let mut total_hashes: u64 = 0;
 
     let report_interval = 200_000;
     let mut last_report_time = start_time;
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
+
+    let mut best_pow: u32 = 0;
+    let mut best_nonce: u64 = 0;
+    let mut best_hash_bytes: Vec<u8> = Vec::new();
 
     loop {
         if let Some(index) = nonce_index {
@@ -157,7 +171,30 @@ pub fn mine_event(
 
         let pow = get_pow(&hash_bytes);
 
-        total_hashes += 1;
+        if pow > best_pow {
+            best_pow = pow;
+            best_nonce = nonce;
+            best_hash_bytes = hash_bytes.clone();
+
+            let best_pow_data = serde_json::json!({
+                "best_pow": best_pow,
+                "nonce": best_nonce.to_string(),
+                "hash": hex::encode(&best_hash_bytes),
+            });
+
+            report_progress
+                .call2(
+                    &JsValue::NULL,
+                    &JsValue::from_f64(0.0),
+                    &serde_wasm_bindgen::to_value(&best_pow_data).unwrap(),
+                )
+                .unwrap_or_else(|err| {
+                    console::log_1(
+                        &format!("Error calling progress callback: {:?}", err).into(),
+                    );
+                    JsValue::NULL
+                });
+        }
 
         if pow >= difficulty {
             let event_hash = hex::encode(&hash_bytes);
@@ -176,10 +213,11 @@ pub fn mine_event(
             return serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL);
         }
 
-        nonce += 1;
+        nonce = nonce.wrapping_add(nonce_step);
+        total_hashes += 1;
 
         if let Some(ref should_cancel) = should_cancel {
-            if nonce % 10_000 == 0 {
+            if total_hashes % 10_000 == 0 {
                 let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
                 if cancel.is_truthy() {
                     console::log_1(&"Mining cancelled.".into());
@@ -191,13 +229,13 @@ pub fn mine_event(
             }
         }
 
-        if nonce % report_interval == 0 {
+        if total_hashes % report_interval == 0 {
             let current_time = js_sys::Date::now();
             let elapsed_time = (current_time - last_report_time) / 1000.0;
             if elapsed_time > 0.0 {
                 let hash_rate = (report_interval as f64) / elapsed_time;
                 report_progress
-                    .call1(&JsValue::NULL, &hash_rate.into())
+                    .call2(&JsValue::NULL, &hash_rate.into(), &JsValue::NULL)
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),
@@ -208,12 +246,12 @@ pub fn mine_event(
             }
         }
 
+        // Uncomment if you wish to log nonce progress
         // if nonce % report_interval == 0 {
         //     console::log_1(&format!("Checked nonce up to: {}", nonce).into());
         // }
     }
 }
-
 
 
 #[cfg(test)]

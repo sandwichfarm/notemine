@@ -11,27 +11,51 @@ const pubkey = window.NostrTools.getPublicKey(secret);
 const pool = new SimplePool();
 let pubs = [];
 
-let NUM_WORKERS = navigator.hardwareConcurrency-1 || 2; // Or set a fixed number
+let totalWorkers = navigator.hardwareConcurrency-1 || 2; // Or set a fixed number
 let workers = [];
 let isWorkerReady = 0;
 let isMining = false;
 
 const mineButton = document.getElementById('mineButton');
 const eventInput = document.getElementById('eventInput');
+
 const difficultyInput = document.getElementById('difficulty');
-const resultOutput = document.getElementById('result');
-const hashrateOutput = document.getElementById('hashrate');
+const numberOfWorkers = document.getElementById('numberOfWorkers')
+
 const cancelButton = document.getElementById('cancelButton');
 const relayStatus = document.getElementById('relayStatus');
-const neventOutput = document.getElementById('neventOutput');
-const numberOfWorkers = document.getElementById('numberOfWorkers');
 
-numberOfWorkers.value = NUM_WORKERS;
+const minersBestPowOutput = document.getElementById('minersBestPow');
+const overallBestPowOutput = document.getElementById('overallBestPow');
+const hashrateOutput = document.getElementById('hashrate');
+
+const resultOutput = document.getElementById('result');
+const neventOutput = document.getElementById('neventOutput');
+
+
+numberOfWorkers.value = totalWorkers;
 numberOfWorkers.max = navigator.hardwareConcurrency || 3;
 
-let workerHashRates = {};
+minersBestPowOutput.style.display = 'none';
+overallBestPowOutput.style.display = 'none';
+neventOutput.style.display = 'none';
+relayStatus.style.display = 'none';
 
-for (let i = 0; i < NUM_WORKERS; i++) {
+let workerHashRates = {};
+let minersBestPow
+let overallBestPow
+
+function resetBestPow() {   
+    minersBestPow = {};
+    overallBestPow = {
+        bestPow: 0,
+        nonce: 0,
+        hash: '',
+        workerId: null,
+    };
+}
+
+for (let i = 0; i < totalWorkers; i++) {
     const worker = new Worker('./worker.js', { type: 'module' });
     worker.onmessage = handleWorkerMessage;
     worker.postMessage({ type: 'init', id: i });
@@ -39,15 +63,36 @@ for (let i = 0; i < NUM_WORKERS; i++) {
 }
 
 function handleWorkerMessage(e) {
-    const { type, data, error, hashRate, workerId } = e.data;
+    const { type, data, error, hashRate, workerId, bestPowData:bestPowDataMap } = e.data;
 
     if (type === 'progress') {
+        
         workerHashRates[workerId] = hashRate;
         const totalHashRate = Object.values(workerHashRates).reduce((a, b) => a + b, 0);
         hashrateOutput.textContent = `${(totalHashRate / 1000).toFixed(2)} kH/s`;
+
+        if (bestPowDataMap?.size > 0) {
+            const bestPowData = Object.fromEntries(bestPowDataMap);
+            const { best_pow, nonce, hash } = bestPowData;
+            minersBestPow[workerId] = {
+                bestPow: best_pow,
+                nonce,
+                hash,
+            };
+            if (best_pow > overallBestPow.bestPow) {
+                overallBestPow = {
+                    bestPow: best_pow,
+                    nonce,
+                    hash,
+                    workerId,
+                };
+            }
+            updateBestPowDisplay();
+        }
+
     } else if (type === 'ready') {
         isWorkerReady++;
-        if (isWorkerReady === NUM_WORKERS) {
+        if (isWorkerReady === totalWorkers) {
             console.log('All workers are ready.');
             mineButton.disabled = false;
             resultOutput.textContent = 'Workers are ready. You can start mining.';
@@ -61,6 +106,7 @@ ${JSON.stringify(data, null, 2)}
         } else {
             try {
                 resultOutput.textContent = JSON.stringify(data, null, 2);
+                neventOutput.style.display = 'block';
                 publishEvent(data.event);
                 cancelOtherWorkers(workerId);
             } catch (e) {
@@ -91,15 +137,31 @@ function cancelOtherWorkers(excludeWorkerId) {
     });
 }
 
+function updateBestPowDisplay() {
+    // Update the UI to display each miner's best PoW
+    let minersPowInfo = '';
+    for (const [workerId, powData] of Object.entries(minersBestPow)) {
+        minersPowInfo += `Miner #${workerId}: Best PoW ${powData.bestPow} (Nonce: ${powData.nonce}, Hash: ${powData.hash})\n`;
+    }
+    minersBestPowOutput.textContent = minersPowInfo;
 
+    // Update the UI to display the overall best PoW
+    if (overallBestPow.workerId !== null) {
+        overallBestPowOutput.textContent = `Overall Best PoW: ${overallBestPow.bestPow} by Miner #${overallBestPow.workerId} (Nonce: ${overallBestPow.nonce}, Hash: ${overallBestPow.hash})`
+    }
+}
 
 mineButton.addEventListener('click', () => {
     if (isMining) return;
 
+    resetBestPow();
+    minersBestPowOutput.style.display = 'block';
+    overallBestPowOutput.style.display = 'block';
+
     const content = eventInput.value.trim();
     const nostrEvent = generateEvent(content);
     const difficulty = parseInt(difficultyInput.value, 10);
-    const NUM_WORKERS = parseInt(numberOfWorkers.value, 10);
+    const totalWorkers = parseInt(numberOfWorkers.value, 10);
 
     relayStatus.textContent = '';
     neventOutput.textContent = '';
@@ -116,7 +178,7 @@ mineButton.addEventListener('click', () => {
         return;
     }
 
-    if (isWorkerReady < NUM_WORKERS) {
+    if (isWorkerReady < totalWorkers) {
         alert('Workers are not ready yet. Please wait.');
         return;
     }
@@ -129,12 +191,15 @@ mineButton.addEventListener('click', () => {
     hashrateOutput.textContent = '0 H/s';
     isMining = true;
 
+    console.log('main: event:', event)
+
     workers.forEach((worker, index) => {
         worker.postMessage({
             type: 'mine',
             event,
             difficulty: difficulty,
             workerId: index,
+            totalWorkers,
         });
     });
 });
@@ -210,6 +275,7 @@ const publishEvent = async (ev) => {
         if (!isGood) throw new Error('Event is not valid');
         pubs = pool.publish(RELAYS, ev);
         await Promise.allSettled(pubs);
+        relayStatus.style.display = '';
         showRelayStatus();
         console.log('Event published successfully.');
         neventOutput.textContent = generateNEvent(ev);
@@ -262,19 +328,19 @@ const showRelayStatus = () => {
 // const neventOutput = document.getElementById('neventOutput');
 // const numberOfWorkers = document.getElementById('numberOfWorkers');
 
-// let NUM_WORKERS = navigator.hardwareConcurrency || 4; // Or set a fixed number
+// let totalWorkers = navigator.hardwareConcurrency || 4; // Or set a fixed number
 // let workers = [];
 // let isWorkerReady = 0;
 // let isMining = false;
 
 // let pubs = [];
 
-// numberOfWorkers.value = NUM_WORKERS;
+// numberOfWorkers.value = totalWorkers;
 
 // const MOVING_AVERAGE_WINDOW = 2;
 // let recentHashRates = [];
 
-// for (let i = 0; i < NUM_WORKERS; i++) {
+// for (let i = 0; i < totalWorkers; i++) {
 //     const worker = new Worker('./worker.js', { type: 'module' });
 //     worker.onmessage = handleWorkerMessage;
 //     worker.postMessage({ type: 'init' });
@@ -286,14 +352,14 @@ const showRelayStatus = () => {
 
 //     if (type === 'progress') {
 //         recentHashRates.push(averageHashRate);
-//         if (recentHashRates.length > MOVING_AVERAGE_WINDOW * NUM_WORKERS) {
+//         if (recentHashRates.length > MOVING_AVERAGE_WINDOW * totalWorkers) {
 //             recentHashRates.shift();
 //         }
 //         const totalHashRate = recentHashRates.reduce((a, b) => a + b, 0);
 //         hashrateOutput.textContent = `${(totalHashRate / 1000).toFixed(2)} kH/s`;
 //     } else if (type === 'ready') {
 //         isWorkerReady++;
-//         if (isWorkerReady === NUM_WORKERS) {
+//         if (isWorkerReady === totalWorkers) {
 //             console.log('All workers are ready.');
 //             mineButton.disabled = false;
 //             resultOutput.textContent = 'Workers are ready. You can start mining.';
@@ -339,7 +405,7 @@ const showRelayStatus = () => {
 //     const content = eventInput.value.trim();
 //     const nostrEvent = generateEvent(content);
 //     const difficulty = parseInt(difficultyInput.value, 10);
-//     NUM_WORKERS = parseInt(numberOfWorkers.value, 10);
+//     totalWorkers = parseInt(numberOfWorkers.value, 10);
 
 //     relayStatus.textContent = '';
 //     neventOutput.textContent = '';
@@ -356,7 +422,7 @@ const showRelayStatus = () => {
 //         return;
 //     }
 
-//     if (isWorkerReady < NUM_WORKERS) {
+//     if (isWorkerReady < totalWorkers) {
 //         alert('Workers are not ready yet. Please wait.');
 //         return;
 //     }

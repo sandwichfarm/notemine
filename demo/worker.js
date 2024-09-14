@@ -14,27 +14,48 @@ async function initWasm() {
     }
 }
 
-function reportProgress(hashRate) {
-    postMessage({ type: 'progress', hashRate, workerId });
-}
+
 
 function shouldCancel() {
     return miningCancelled;
 }
 
 self.onmessage = async function (e) {
-    const { type, event, difficulty, id } = e.data;
+    const { type, event, difficulty, workerId, totalWorkers } = e.data;
+
+    function reportProgress(hashRate, bestPowData) {
+        
+    
+        const message = {
+            type: 'progress',
+            hashRate,
+            workerId,
+        };
+    
+        if (bestPowData && bestPowData !== null) {
+            message.bestPowData = bestPowData;
+        }
+    
+        postMessage(message);
+    }
+    
     if (type === 'init') {
-        workerId = id;
         initWasm();
     } else if (type === 'mine' && !mining) {
         miningCancelled = false; // Reset cancellation flag
         mining = true;
         try {
-            if (typeof event !== 'string') {
-                throw new Error('Event must be a stringified JSON.');
-            }
-            const minedResult = mine_event(event, difficulty, reportProgress, shouldCancel);
+            const startNonce = BigInt(workerId);
+            const nonceStep = BigInt(totalWorkers);
+
+            const minedResult = mine_event(
+                event,
+                difficulty,
+                startNonce.toString(),
+                nonceStep.toString(),
+                reportProgress,
+                shouldCancel
+            );
             postMessage({ type: 'result', data: minedResult, workerId });
         } catch (error) {
             if (error.message !== 'Mining cancelled.') {

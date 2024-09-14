@@ -72,16 +72,19 @@
     <input type="number" id="difficulty" value="21" min="1">
     <br><br>
 
-    <button id="mineButton" disabled>Mine & Publish</button>
+    <button id="mineButton" disabled>Mine & Publish</button> 
+    <button id="cancelButton" disabled>Cancel Mining</button>
 
     <h2>Hash Rate:</h2>
     <pre id="hashrate">0 H/s</pre>
     <h2>Result:</h2>
     <pre id="result">Waiting for worker to initialize...</pre>
 
-    <code id="relayStatus"></code>
+    <pre id="relayStatus"></pre>
 
-    <button id="cancelButton" disabled>Cancel Mining</button>
+    <pre id="neventOutput"></pre>
+
+    
     
     <!-- Include main.js as a module -->
     <script src="https://cdn.jsdelivr.net/npm/nostr-zap@0.22.0"></script>

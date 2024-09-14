@@ -1,5 +1,5 @@
 # ⛏️ notemine
-A wasm miner for nostr events. Variable difficulty and realtime hashrate. See web [demo](https://sandwichfarm.github.io/notemine-wasm) or build it yourself.
+A wasm miner for nostr events. Variable difficulty and realtime hashrate. See web [demo](https://sandwichfarm.github.io/notemine) or build it yourself.
 
 # deps 
 ```

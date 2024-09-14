@@ -18,4 +18,4 @@ cd demo && npx serve
 ```
 
 # license
-public domain.
+GNU General Public License v3.0

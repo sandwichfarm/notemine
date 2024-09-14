@@ -195,14 +195,6 @@ pub fn mine_event(
         if nonce % 100_000 == 0 {
             console::log_1(&format!("Checked nonce up to: {}", nonce).into());
         }
-
-        if nonce >= 10_000_000 {
-            console::log_1(&"Reached maximum nonce limit without finding a valid hash".into());
-            return serde_wasm_bindgen::to_value(&serde_json::json!({
-                "error": "Reached maximum nonce limit without finding a valid hash"
-            }))
-            .unwrap_or(JsValue::NULL);
-        }
     }
 }
 

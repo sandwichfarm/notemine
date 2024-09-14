@@ -35,7 +35,6 @@ jobs:
 
       - name: Build with wasm-pack
         run: |
-          export RUSTFLAGS="-C target-feature=+simd128"
           wasm-pack build --target web --release
 
       - name: Prepare Demo Directory

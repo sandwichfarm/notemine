@@ -1,6 +1,3 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 use serde_json::to_string;
 
@@ -86,14 +83,14 @@ pub fn main_js() {
 }
 
 #[wasm_bindgen]
-pub fn mine_event_wrapper(
+pub fn mine_event(
     event_json: &str,
     difficulty: u32,
     start_nonce_str: &str,
     nonce_step_str: &str,
-    report_progress: &Function,
-    should_cancel: &Function,
-) -> Result<JsValue, JsValue> {
+    report_progress: JsValue,
+    should_cancel: JsValue,
+) -> JsValue {
     console::log_1(&format!("event_json: {}", event_json).into());
     let mut event: NostrEvent = match serde_json::from_str(event_json) {
         Ok(e) => e,
@@ -111,27 +108,32 @@ pub fn mine_event_wrapper(
         event.created_at = Some(current_timestamp);
     }
 
-    // Initialize atomic cancellation flag
-    let cancellation_flag = Arc::new(AtomicBool::new(false));
+    let mut nonce_index = None;
+    for (i, tag) in event.tags.iter().enumerate() {
+        if tag.len() > 0 && tag[0] == "nonce" {
+            nonce_index = Some(i);
+            break;
+        }
+    }
+    if nonce_index.is_none() {
+        event.tags.push(vec![
+            "nonce".to_string(),
+            "0".to_string(),
+            difficulty.to_string(),
+        ]);
+        nonce_index = Some(event.tags.len() - 1);
+    }
 
-    // Clone the flag for the cancellation callback
-    let cancellation_flag_clone = Arc::clone(&cancellation_flag);
-    let should_cancel_callback = Closure::wrap(Box::new(move || -> bool {
-        cancellation_flag_clone.load(Ordering::Relaxed)
-    }) as Box<dyn FnMut() -> bool>);
-
-    // Update the cancellation callback
-    should_cancel.dyn_into::<Function>()
-        .unwrap()
-        .call0(&JsValue::NULL)
-        .unwrap_or(JsValue::FALSE);
-
-    // Wrap the cancellation callback
-    let should_cancel_func = should_cancel_callback.as_ref().unchecked_ref();
-    should_cancel_callback.forget();
-
-    // Initialize report_progress callback
-    let report_progress_func = report_progress.dyn_into::<Function>().unwrap();
+    let report_progress = match report_progress.dyn_into::<Function>() {
+        Ok(func) => func,
+        Err(_) => {
+            console::log_1(&"Failed to convert report_progress to Function".into());
+            return serde_wasm_bindgen::to_value(&serde_json::json!({
+                "error": "Invalid progress callback."
+            }))
+            .unwrap_or(JsValue::NULL);
+        }
+    };
 
     let start_time = js_sys::Date::now();
     let start_nonce: u64 = start_nonce_str.parse().unwrap_or(0);
@@ -142,22 +144,13 @@ pub fn mine_event_wrapper(
 
     let report_interval = 200_000;
     let mut last_report_time = start_time;
+    let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
     let mut best_pow: u32 = 0;
     let mut best_nonce: u64 = 0;
     let mut best_hash_bytes: Vec<u8> = Vec::new();
 
     loop {
-        // Check cancellation flag
-        if cancellation_flag.load(Ordering::Relaxed) {
-            console::log_1(&"Mining cancelled.".into());
-            return serde_wasm_bindgen::to_value(&serde_json::json!({
-                "error": "Mining cancelled."
-            }))
-            .unwrap_or(JsValue::NULL);
-        }
-
-        // Update nonce in the event
         if let Some(index) = nonce_index {
             if let Some(tag) = event.tags.get_mut(index) {
                 if tag.len() >= 3 {
@@ -167,7 +160,6 @@ pub fn mine_event_wrapper(
             }
         }
 
-        // Hash the event
         let hash_bytes = get_event_hash(&event);
         if hash_bytes.is_empty() {
             console::log_1(&"Failed to compute event hash.".into());
@@ -177,10 +169,8 @@ pub fn mine_event_wrapper(
             .unwrap_or(JsValue::NULL);
         }
 
-        // Calculate the PoW
         let pow = get_pow(&hash_bytes);
 
-        // Update the best PoW found so far
         if pow > best_pow {
             best_pow = pow;
             best_nonce = nonce;
@@ -192,7 +182,7 @@ pub fn mine_event_wrapper(
                 "hash": hex::encode(&best_hash_bytes),
             });
 
-            report_progress_func
+            report_progress
                 .call2(
                     &JsValue::NULL,
                     &JsValue::from_f64(0.0),
@@ -206,7 +196,6 @@ pub fn mine_event_wrapper(
                 });
         }
 
-        // If the difficulty target is met, return the result
         if pow >= difficulty {
             let event_hash = hex::encode(&hash_bytes);
             event.id = Some(event_hash.clone());
@@ -227,13 +216,25 @@ pub fn mine_event_wrapper(
         nonce = nonce.wrapping_add(nonce_step);
         total_hashes += 1;
 
-        // Report progress at intervals
+        if let Some(ref should_cancel) = should_cancel {
+            if total_hashes % 10_000 == 0 {
+                let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
+                if cancel.is_truthy() {
+                    console::log_1(&"Mining cancelled.".into());
+                    return serde_wasm_bindgen::to_value(&serde_json::json!({
+                        "error": "Mining cancelled."
+                    }))
+                    .unwrap_or(JsValue::NULL);
+                }
+            }
+        }
+
         if total_hashes % report_interval == 0 {
             let current_time = js_sys::Date::now();
             let elapsed_time = (current_time - last_report_time) / 1000.0;
             if elapsed_time > 0.0 {
                 let hash_rate = (report_interval as f64) / elapsed_time;
-                report_progress_func
+                report_progress
                     .call2(&JsValue::NULL, &hash_rate.into(), &JsValue::NULL)
                     .unwrap_or_else(|err| {
                         console::log_1(
@@ -244,8 +245,14 @@ pub fn mine_event_wrapper(
                 last_report_time = current_time;
             }
         }
+
+        // Uncomment if you wish to log nonce progress
+        // if nonce % report_interval == 0 {
+        //     console::log_1(&format!("Checked nonce up to: {}", nonce).into());
+        // }
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -280,4 +287,3 @@ mod tests {
         assert_eq!(hash_hex, expected_hash);
     }
 }
-

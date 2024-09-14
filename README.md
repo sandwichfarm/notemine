@@ -9,7 +9,7 @@ cargo install wasm-pack
 # build
 ```
 cargo clean
-RUSTFLAGS="-C target-feature=+simd128" wasm-pack build --target web --release
+wasm-pack build --target web --release
 ```
 
 # run demo

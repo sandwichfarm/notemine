@@ -253,6 +253,7 @@ pub fn mine_event(
     }
 }
 
+pub use mining::{mine_event, BestPowData, MinedResult, NostrEvent};
 
 #[cfg(test)]
 mod tests {
@@ -287,3 +288,5 @@ mod tests {
         assert_eq!(hash_hex, expected_hash);
     }
 }
+
+

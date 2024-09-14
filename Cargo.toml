@@ -2,9 +2,9 @@
 name = "notemine"
 version = "0.1.0"
 edition = "2021"
-description = "A Nostr event miner compiled to WebAssembly"
+description = "a nostr note miner compiled to wasm"
 repository = "https://github.com/sandwichfarm/notemine"
-license = "MIT" # Choose an appropriate license
+license = "GPLv3"
 
 [lib]
 crate-type = ["cdylib"]

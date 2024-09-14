@@ -12,7 +12,7 @@ cargo clean
 RUSTFLAGS="-C target-feature=+simd128" wasm-pack build --target web --release
 ```
 
-# use demo
+# run demo
 ```
 cd demo && npx serve 
 ```

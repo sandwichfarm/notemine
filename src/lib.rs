@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::to_value;
+use serde_json::to_string;
 
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::*;
@@ -24,6 +24,13 @@ pub struct MinedResult {
     pub khs: f64,
 }
 
+fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    s.serialize_u64(*x)
+}
+
 #[derive(Serialize)]
 struct HashableEvent<'a>(
     u32,
@@ -34,13 +41,6 @@ struct HashableEvent<'a>(
     &'a Vec<Vec<String>>,
     &'a str,
 );
-
-fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    s.serialize_u64(*x)
-}
 
 #[inline]
 fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
@@ -53,12 +53,10 @@ fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
         &event.content,
     );
 
-    let serialized_str = match serde_json::to_string(&hashable_event) {
+    let serialized_str = match to_string(&hashable_event) {
         Ok(s) => s,
         Err(_) => return vec![],
     };
-
-    println!("Serialized event: {}", serialized_str);
 
     let hash_bytes = Sha256::digest(serialized_str.as_bytes()).to_vec();
     hash_bytes
@@ -93,7 +91,7 @@ pub fn mine_event(
         Ok(e) => e,
         Err(err) => {
             console::log_1(&format!("JSON parsing error: {}", err).into());
-            return to_value(&serde_json::json!({
+            return serde_wasm_bindgen::to_value(&serde_json::json!({
                 "error": format!("Invalid event JSON: {}", err)
             }))
             .unwrap_or(JsValue::NULL);
@@ -121,15 +119,12 @@ pub fn mine_event(
         Ok(func) => func,
         Err(_) => {
             console::log_1(&"Failed to convert report_progress to Function".into());
-            return to_value(&serde_json::json!({
+            return serde_wasm_bindgen::to_value(&serde_json::json!({
                 "error": "Invalid progress callback."
             }))
             .unwrap_or(JsValue::NULL);
         }
     };
-
-    const MOVING_AVERAGE_WINDOW: usize = 5;
-    let mut recent_hash_rates: Vec<f64> = Vec::with_capacity(MOVING_AVERAGE_WINDOW);
 
     let start_time = js_sys::Date::now();
     let mut nonce: u64 = 0;
@@ -151,7 +146,7 @@ pub fn mine_event(
         let hash_bytes = get_event_hash(&event);
         if hash_bytes.is_empty() {
             console::log_1(&"Failed to compute event hash.".into());
-            return to_value(&serde_json::json!({
+            return serde_wasm_bindgen::to_value(&serde_json::json!({
                 "error": "Failed to compute event hash."
             }))
             .unwrap_or(JsValue::NULL);
@@ -175,19 +170,18 @@ pub fn mine_event(
             };
 
             console::log_1(&format!("Mined successfully with nonce: {}", nonce).into());
-            return to_value(&result).unwrap_or(JsValue::NULL);
+            return serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL);
         }
 
         nonce += 1;
 
         if nonce % report_interval == 0 {
             let current_time = js_sys::Date::now();
-            let elapsed_time = (current_time - last_report_time) / 1000.0; // seconds
+            let elapsed_time = (current_time - last_report_time) / 1000.0;
             if elapsed_time > 0.0 {
-                let hash_rate = report_interval as f64; // Number of hashes
-                // Send both hash count and elapsed time
+                let hash_rate = (report_interval as f64) / elapsed_time;
                 report_progress
-                    .call2(&JsValue::NULL, &hash_rate.into(), &elapsed_time.into())
+                    .call1(&JsValue::NULL, &hash_rate.into())
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),
@@ -201,8 +195,17 @@ pub fn mine_event(
         if nonce % 100_000 == 0 {
             console::log_1(&format!("Checked nonce up to: {}", nonce).into());
         }
+
+        if nonce >= 10_000_000 {
+            console::log_1(&"Reached maximum nonce limit without finding a valid hash".into());
+            return serde_wasm_bindgen::to_value(&serde_json::json!({
+                "error": "Reached maximum nonce limit without finding a valid hash"
+            }))
+            .unwrap_or(JsValue::NULL);
+        }
     }
 }
+
 
 
 #[cfg(test)]

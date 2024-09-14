@@ -2,28 +2,26 @@ import init, { mine_event } from './pkg/notemine.js';
 
 let wasm;
 let mining = false;
+let workerId;
 
 async function initWasm() {
     try {
         wasm = await init({});
-        postMessage({ type: 'ready' });
+        postMessage({ type: 'ready', workerId });
     } catch (error) {
-        postMessage({ type: 'error', error: `WASM initialization failed: ${error.message}` });
+        postMessage({ type: 'error', error: `WASM initialization failed: ${error.message}`, workerId });
     }
 }
 
-initWasm();
-
-function reportProgress(averageHashRate) {
-    postMessage({ type: 'progress', averageHashRate, workerId });
+function reportProgress(hashRate) {
+    postMessage({ type: 'progress', hashRate, workerId });
 }
-
-let workerId;
 
 self.onmessage = async function (e) {
     const { type, event, difficulty, id } = e.data;
     if (type === 'init') {
         workerId = id;
+        initWasm();
     } else if (type === 'mine' && !mining) {
         mining = true;
         try {
@@ -39,5 +37,7 @@ self.onmessage = async function (e) {
         }
     } else if (type === 'cancel' && mining) {
         console.log('Mining cancellation requested.');
+        // Implement cancellation logic if possible
+        mining = false;
     }
 };

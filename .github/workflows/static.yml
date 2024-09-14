@@ -27,6 +27,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
+          target: web
 
       - uses: qmaru/wasm-pack-action@v0.5.0
         with:

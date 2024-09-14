@@ -1,5 +1,5 @@
-# ⛏️ notemine
-A wasm miner for nostr events. Variable difficulty and realtime hashrate. See web [demo](https://sandwichfarm.github.io/notemine) or build it yourself.
+# note⛏️ (notemine)
+**notemine** is wasm miner for nostr notes written in rust. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine). It should be easy to import into your project.
 
 # deps 
 ```

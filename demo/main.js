@@ -45,6 +45,8 @@ let workerHashRates = {};
 let minersBestPow
 let overallBestPow
 
+let found = false
+
 function resetBestPow() {   
     minersBestPow = {};
     overallBestPow = {
@@ -62,10 +64,13 @@ for (let i = 0; i < totalWorkers; i++) {
     workers.push(worker);
 }
 
-function handleWorkerMessage(e) {
+async function handleWorkerMessage(e) {
     const { type, data, error, hashRate, workerId, bestPowData:bestPowDataMap } = e.data;
 
     if (type === 'progress') {
+        if(found && hashRate > 0) {
+            return workers[workerId].postMessage({ type: 'cancel' });
+        }
         
         workerHashRates[workerId] = hashRate;
         const totalHashRate = Object.values(workerHashRates).reduce((a, b) => a + b, 0);
@@ -99,19 +104,19 @@ function handleWorkerMessage(e) {
         }
     } else if (type === 'result') {
         if (data.error) {
-            resultOutput.textContent = `
-Error: ${data.error}
-${JSON.stringify(data, null, 2)}
-            `;
+            resultOutput.textContent = `Error: ${data.error}\n${JSON.stringify(data, null, 2)}`;
         } else {
-            try {
-                resultOutput.textContent = JSON.stringify(data, null, 2);
-                neventOutput.style.display = 'block';
-                publishEvent(data.event);
-                cancelOtherWorkers(workerId);
-            } catch (e) {
-                console.error('Error publishing event:', e);
-                resultOutput.textContent = `Error publishing event: ${e.message}`;
+            if(found === false) {
+                found = true
+                try {
+                    cancelOtherWorkers(workerId);
+                    await publishEvent(data.event);
+                    resultOutput.textContent = JSON.stringify(data, null, 2);
+                    neventOutput.style.display = 'block';
+                } catch (e) {
+                    console.error('Error publishing event:', e);
+                    resultOutput.textContent = `Error publishing event: ${e.message}`;
+                }
             }
         }
         hashrateOutput.textContent = '0 H/s';

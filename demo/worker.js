@@ -14,8 +14,6 @@ async function initWasm() {
     }
 }
 
-
-
 function shouldCancel() {
     return miningCancelled;
 }
@@ -24,8 +22,6 @@ self.onmessage = async function (e) {
     const { type, event, difficulty, workerId, totalWorkers } = e.data;
 
     function reportProgress(hashRate, bestPowData) {
-        
-    
         const message = {
             type: 'progress',
             hashRate,
@@ -39,7 +35,11 @@ self.onmessage = async function (e) {
         postMessage(message);
     }
     
-    if (type === 'init') {
+    if (type === 'cancel' && mining) {
+        console.log('Mining cancellation requested.');
+        miningCancelled = true;
+    }
+    else if (type === 'init') {
         initWasm();
     } else if (type === 'mine' && !mining) {
         miningCancelled = false; // Reset cancellation flag
@@ -67,8 +67,5 @@ self.onmessage = async function (e) {
         } finally {
             mining = false;
         }
-    } else if (type === 'cancel' && mining) {
-        console.log('Mining cancellation requested.');
-        miningCancelled = true;
     }
 };

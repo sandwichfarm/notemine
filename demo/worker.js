@@ -3,6 +3,7 @@ import init, { mine_event } from './pkg/notemine.js';
 let wasm;
 let mining = false;
 let workerId;
+let miningCancelled = false;
 
 async function initWasm() {
     try {
@@ -17,27 +18,36 @@ function reportProgress(hashRate) {
     postMessage({ type: 'progress', hashRate, workerId });
 }
 
+function shouldCancel() {
+    return miningCancelled;
+}
+
 self.onmessage = async function (e) {
     const { type, event, difficulty, id } = e.data;
     if (type === 'init') {
         workerId = id;
         initWasm();
     } else if (type === 'mine' && !mining) {
+        miningCancelled = false; // Reset cancellation flag
         mining = true;
         try {
             if (typeof event !== 'string') {
                 throw new Error('Event must be a stringified JSON.');
             }
-            const minedResult = mine_event(event, difficulty, reportProgress);
+            const minedResult = mine_event(event, difficulty, reportProgress, shouldCancel);
             postMessage({ type: 'result', data: minedResult, workerId });
         } catch (error) {
-            postMessage({ type: 'error', error: error.message, workerId });
+            if (error.message !== 'Mining cancelled.') {
+                postMessage({ type: 'error', error: error.message, workerId });
+            } else {
+                console.log('Mining was cancelled.');
+                postMessage({ type: 'cancelled', workerId });
+            }
         } finally {
             mining = false;
         }
     } else if (type === 'cancel' && mining) {
         console.log('Mining cancellation requested.');
-        // Implement cancellation logic if possible
-        mining = false;
+        miningCancelled = true;
     }
 };

@@ -86,7 +86,9 @@ pub fn mine_event(
     event_json: &str,
     difficulty: u32,
     report_progress: JsValue,
+    should_cancel: JsValue,
 ) -> JsValue {
+
     let mut event: NostrEvent = match serde_json::from_str(event_json) {
         Ok(e) => e,
         Err(err) => {
@@ -130,8 +132,9 @@ pub fn mine_event(
     let mut nonce: u64 = 0;
     let mut total_hashes: u64 = 0;
 
-    let report_interval = 100_000;
+    let report_interval = 200_000;
     let mut last_report_time = start_time;
+    let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
     loop {
         if let Some(index) = nonce_index {
@@ -175,6 +178,19 @@ pub fn mine_event(
 
         nonce += 1;
 
+        if let Some(ref should_cancel) = should_cancel {
+            if nonce % 10_000 == 0 {
+                let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
+                if cancel.is_truthy() {
+                    console::log_1(&"Mining cancelled.".into());
+                    return serde_wasm_bindgen::to_value(&serde_json::json!({
+                        "error": "Mining cancelled."
+                    }))
+                    .unwrap_or(JsValue::NULL);
+                }
+            }
+        }
+
         if nonce % report_interval == 0 {
             let current_time = js_sys::Date::now();
             let elapsed_time = (current_time - last_report_time) / 1000.0;
@@ -192,9 +208,9 @@ pub fn mine_event(
             }
         }
 
-        if nonce % 100_000 == 0 {
-            console::log_1(&format!("Checked nonce up to: {}", nonce).into());
-        }
+        // if nonce % report_interval == 0 {
+        //     console::log_1(&format!("Checked nonce up to: {}", nonce).into());
+        // }
     }
 }
 

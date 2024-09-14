@@ -70,12 +70,14 @@ ${JSON.stringify(data, null, 2)}
         }
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
+        cancelButton.disabled = true; // Disable the cancel button
         isMining = false;
         workerHashRates = {}; // Reset hash rates after mining
     } else if (type === 'error') {
         resultOutput.textContent = `Error: ${error}`;
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
+        cancelButton.disabled = true; // Disable the cancel button
         isMining = false;
         workerHashRates = {}; // Reset hash rates on error
     }
@@ -88,6 +90,8 @@ function cancelOtherWorkers(excludeWorkerId) {
         }
     });
 }
+
+
 
 mineButton.addEventListener('click', () => {
     if (isMining) return;
@@ -120,6 +124,7 @@ mineButton.addEventListener('click', () => {
     const event = JSON.stringify(nostrEvent);
 
     mineButton.disabled = true;
+    cancelButton.disabled = false; // Enable the cancel button
     resultOutput.textContent = 'Mining in progress...';
     hashrateOutput.textContent = '0 H/s';
     isMining = true;
@@ -142,10 +147,12 @@ cancelButton.addEventListener('click', () => {
         resultOutput.textContent = 'Mining cancellation requested.';
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
+        cancelButton.disabled = true; // Disable the cancel button
         isMining = false;
         workerHashRates = {}; // Reset hash rates after cancellation
     }
 });
+
 
 const getPow = (hex) => {
     let count = 0;

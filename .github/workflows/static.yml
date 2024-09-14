@@ -27,7 +27,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          target: web
+          target: wasm32-unknown-unknown
 
       - uses: qmaru/wasm-pack-action@v0.5.0
         with:
@@ -35,6 +35,7 @@ jobs:
 
       - name: Build with wasm-pack
         run: |
+          export RUSTFLAGS="-A warnings"
           wasm-pack build --target web --release
 
       - name: Prepare Demo Directory

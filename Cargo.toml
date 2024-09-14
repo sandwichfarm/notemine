@@ -7,11 +7,10 @@ repository = "https://github.com/sandwichfarm/notemine"
 license = "GPL-3.0-only"
 
 [lib]
-crate-type = ["cdylib"]
-#name = "notemine"
-#path = "src/lib.rs"
-
-#crate-type = ["cdylib", "rlib"]
+#crate-type = ["cdylib"]
+name = "notemine"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -24,7 +23,7 @@ web-sys = { version = "0.3", features = ["console"] }
 serde-wasm-bindgen = "0.6" # Added serde-wasm-bindgen
 console_error_panic_hook = "0.1.6" # Added for better error reporting
 
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
+#[profile.release]
+#opt-level = "z"
+#lto = true
+#codegen-units = 1

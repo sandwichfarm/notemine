@@ -1,15 +1,24 @@
-const CLIENT = 'notemine';
-const TOPIC = 'notemine';
-const RELAYS = ['wss://nostr.bitcoiner.social', 'wss://nostr.mom', 'wss://nos.lol', 'wss://powrelay.xyz', 'wss://labour.fiatjaf.com/', 'wss://nostr.lu.ke', 'wss://140.f7z.io'];
+const CLIENT = 'https://sandwichfarm.github.io/notemine';
+const MINER = 'notemine';
+let POW_RELAYS = ['wss://nostr.bitcoiner.social', 'wss://nostr.mom', 'wss://nos.lol', 'wss://powrelay.xyz', 'wss://labour.fiatjaf.com/', 'wss://nostr.lu.ke', 'wss://140.f7z.io'];
+let MY_RELAYS = []
 
 const Relay = window.NostrTools.Relay;
 const SimplePool = window.NostrTools.SimplePool;
 
-const secret = window.NostrTools.generateSecretKey();
-const pubkey = window.NostrTools.getPublicKey(secret);
+let user = { name: 'anon', photo: './lib/img/anon.svg' };
+
+let isAnon = false
+let secret
+let pubkey
+
+let k0
+let k3
+let k10002
 
 const pool = new SimplePool();
 let pubs = [];
+let usub = null;
 
 let totalWorkers = navigator.hardwareConcurrency-1 || 2; // Or set a fixed number
 let workers = [];
@@ -17,13 +26,22 @@ let isWorkerReady = 0;
 let isMining = false;
 
 const mineButton = document.getElementById('mineButton');
+const cancelButton = document.getElementById('cancelButton');
+const loginButton = document.getElementById('loginButton');
+
 const eventInput = document.getElementById('eventInput');
 
 const difficultyInput = document.getElementById('difficulty');
 const numberOfWorkers = document.getElementById('numberOfWorkers')
 
-const cancelButton = document.getElementById('cancelButton');
 const relayStatus = document.getElementById('relayStatus');
+
+const myRelaysContainer = document.getElementById('myRelaysContainer');
+const powRelays = document.getElementById('powRelays');
+const powRelaysEnable = document.getElementById('powRelaysEnable');
+const relaysToggle = document.getElementById('relaysToggle');
+const relaysContainer = document.getElementById('relaysContainer');
+
 
 const minersBestPowOutput = document.getElementById('minersBestPow');
 const overallBestPowOutput = document.getElementById('overallBestPow');
@@ -32,6 +50,8 @@ const hashrateOutput = document.getElementById('hashrate');
 const resultOutput = document.getElementById('result');
 const neventOutput = document.getElementById('neventOutput');
 
+const userName = document.getElementById('userName');
+const userPhoto = document.getElementById('userPhoto');
 
 numberOfWorkers.value = totalWorkers;
 // numberOfWorkers.max = navigator.hardwareConcurrency || 3;
@@ -41,11 +61,102 @@ overallBestPowOutput.style.display = 'none';
 neventOutput.style.display = 'none';
 relayStatus.style.display = 'none';
 
+if(window?.nostr !== undefined) {
+    loginButton.style.display = 'inline-block';
+}
+
+authAnon()
+refreshUserDom()
+refreshRelaysDom()
+
 let workerHashRates = {};
 let minersBestPow
 let overallBestPow
 
 let halt = false
+
+function activeRelays(){
+    let relays = MY_RELAYS
+    if(powRelaysEnable.checked) {
+        relays = [ ...relays, ...POW_RELAYS ]
+    }
+    return relays
+}
+
+
+async function toggleAuth(){
+    const doLogin = isAnon
+    if(doLogin) {
+        await authUser()
+        loginButton.textContent = 'logout'
+    }
+    else { //logout
+        console.log('logouot')
+        authAnon()
+        loginButton.textContent = 'login'
+        powRelaysEnable.checked = true
+    }
+    refreshUserDom()
+    refreshRelaysDom()
+    
+    console.log('active relays:', activeRelays())
+}
+
+loginButton.addEventListener('click', toggleAuth)
+
+function authAnon(){
+    isAnon = true
+    secret = window.NostrTools.generateSecretKey();
+    pubkey = window.NostrTools.getPublicKey(secret);    
+    MY_RELAYS = []
+    user.name = 'anon';
+    user.photo = './lib/img/anon.svg';
+}
+
+async function authUser(){
+    return new Promise( async (resolve, reject) => {
+        loginButton.disabled = true
+        const pubkey = await window.nostr.getPublicKey()
+        const relay = await Relay.connect('wss://purplepag.es')
+        usub = relay.subscribe(
+            [{kinds: [0,3,10002], authors: [pubkey]}],
+            { onevent, oneose, onclose: onclose(resolve) }
+        );
+        
+    })
+}
+
+function refreshUserDom (){
+    console.log(user)
+    userName.textContent = user.name;
+    userPhoto.src = user.photo;
+}
+
+function refreshRelaysDom(){
+    console.log('anon?', isAnon)
+    if(isAnon) {
+        myRelaysContainer.style.display = 'none';
+        powRelaysEnable.style.display = 'none';
+    }
+    else {
+        myRelaysContainer.style.display = 'block';
+        powRelaysEnable.style.display = 'inline';
+    }
+    refreshPowRelaysDom()
+    refreshMyRelaysDom()
+}
+
+function refreshMyRelaysDom (){
+    myRelays.textContent = MY_RELAYS.join(', ');
+}
+
+function refreshPowRelaysDom (){
+    powRelays.textContent = POW_RELAYS.join(', ');
+}
+
+function setMyRelays( relays ){
+    MY_RELAYS = Array.from(new Set([...MY_RELAYS, ...relays]))
+}
 
 function resetBestPow() {   
     minersBestPow = {};
@@ -169,7 +280,7 @@ function cancelOtherWorkers(excludeWorkerId) {
     workers.forEach((worker, index) => {
         if (index !== excludeWorkerId) {
             worker.postMessage({ type: 'cancel' });
-            setTimeout( () => worker.terminate(), 1000);
+            setTimeout( () => worker.terminate(), 1);
         }
     });
 }
@@ -202,8 +313,91 @@ numberOfWorkers.addEventListener('change', () => {
     enableInputs()
 })
 
+function onK0(event){
+    let profile
+    try {
+        profile = JSON.parse(event.content)
+        user.name = profile.name 
+        let photo 
+        if(profile?.photo) photo = profile.photo
+        else if(profile?.picture) photo = profile.picture
+        else if(profile?.avatar) photo = profile.avatar
+        user.photo = photo
+        
+    }
+    catch(e){
+        console.error('Error parsing K0 content:', e)
+    }
+    console.log('K0 profile:', profile)
+    k0 = event
+    refreshUserDom()
+}
+
+function onK3(event){
+    let relays = []
+    try{
+        relays = Object.keys(JSON.parse(event.content))
+    }
+    catch(e){
+        console.error('Error parsing K3 content:', e)
+    }
+    
+    console.log('K3 relays:', relays)
+    setMyRelays(relays)
+    k3 = event  
+    refreshMyRelaysDom()
+}
+
+function onK10002(event){
+    const relays = event.tags.filter( t => t[0] === 'r' ).map( r => r[1] )
+    console.log('K10002 relays:', relays)
+    setMyRelays(relays?.length? relays : [])
+    refreshMyRelaysDom()
+    k10002 = event
+}
+
+
+function onevent(event){ 
+    switch(event.kind){
+        case 0:     return onK0(event)
+        case 3:     return onK3(event)
+        case 10002: return onK10002(event)
+    }
+}
+
+function oneose(){ 
+    try {
+        usub.close() 
+    }
+    catch(e){
+        console.warn('Error closing subscription:', e)
+    }   
+}
+
+function onclose( resolve ){
+    loginButton.disabled = false
+    powRelaysEnable.style.display = 'inline';
+    isAnon = false
+    resolve()
+}
+
+powRelaysEnable.addEventListener('change', () => {
+    console.log('active relays:', activeRelays())
+})
+
+relaysToggle.addEventListener('click', () => {
+    if(relaysContainer.style.display === 'none'){
+        relaysContainer.style.display = 'block'
+    }
+    else {
+        relaysContainer.style.display = 'none'
+    }
+})
+
+
 mineButton.addEventListener('click', () => {
     if (isMining) return;
+    halt = false
 
     resetBestPow();
     minersBestPowOutput.style.display = 'block';
@@ -265,9 +459,9 @@ cancelButton.addEventListener('click', () => {
         resultOutput.textContent = 'Mining cancellation requested.';
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
-        cancelButton.disabled = true; // Disable the cancel button
+        cancelButton.disabled = true;
         isMining = false;
-        workerHashRates = {}; // Reset hash rates after cancellation
+        workerHashRates = {}; 
         spawnWorkers()
     }
 });
@@ -304,14 +498,14 @@ const generateEvent = (content) => {
     return {
         pubkey,
         kind: 1,
-        tags: [['t', TOPIC], ['client', CLIENT]],
+        tags: [['l', MINER, 'miner'],['l', CLIENT, 'client']],
         content,
     }
 }
 
 const generateNEvent = (event) => {
     const { id, pubkey: author } = event;
-    const pointer = { id, pubkey, relays: RELAYS };
+    const pointer = { id, pubkey, relays: POW_RELAYS };
     return window.NostrTools.nip19.neventEncode(pointer);
 }
 
@@ -324,10 +518,15 @@ const publishEvent = async (ev) => {
     }
     console.log('Publishing event:', ev);
     try {
-        ev = window.NostrTools.finalizeEvent(ev, secret);
+        if(isAnon) {
+            ev = window.NostrTools.finalizeEvent(ev, secret);
+        }
+        else {
+            ev = await window.nostr.signEvent(ev)
+        }
         let isGood = window.NostrTools.verifyEvent(ev);
         if (!isGood) throw new Error('Event is not valid');
-        pubs = pool.publish(RELAYS, ev);
+        pubs = pool.publish(activeRelays(), ev);
         await Promise.allSettled(pubs);
         relayStatus.style.display = '';
         showRelayStatus();
@@ -353,7 +552,7 @@ const showRelayStatus = () => {
 
     pubs.forEach((pub, index) => {
         pub.finally(() => {
-            relayStatus.textContent = `Published to all relays [${RELAYS.join(', ')}]`;
+            relayStatus.textContent = `Published to all relays [${POW_RELAYS.join(', ')}]`;
             settled[index] = true;
         });
     });

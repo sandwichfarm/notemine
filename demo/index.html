@@ -30,6 +30,16 @@
         code {
             font-size: 30px;
         }
+
+        #user {
+            max-width: 600px;
+            margin:10px 0
+        }
+
+        #relaysContainer {
+            background:#f0f0f0;
+            padding:4px 6px;
+        }
     </style>
     
     <!-- Include NostrTools library -->
@@ -39,6 +49,11 @@
     <h1><code>note⛏️</code></h1>
 
     <p>this is a demo of <strong>notemine</strong>, a wasm nostr note miner written in rust. </p>
+
+    <!-- Optional: Button for Nostr authentication -->
+    <button id="loginButton" style="display: none">
+        login
+    </button>
     
     <!-- Optional: Button for Nostr authentication -->
     <button
@@ -69,10 +84,25 @@
     >
         📦️ crates
     </button>
-    
     <br/><br/>
 
-    <textarea id="eventInput" rows="10" placeholder="Enter event content here"></textarea>
+    <div id="user">
+        posting as: <img id="userPhoto" width="20" height="20" src="" /> <span id="userName"></span> <small id="relaysToggle" style="cursor: pointer; color:#333;">(relays)</small>
+        
+        <div id="relaysContainer" style="display: none">
+            <small><em> 
+                <span id="myRelaysContainer">
+                    <strong>my relays:</strong> <span id="myRelays"></span>
+                </span>
+                <span style="display:block">
+                    <input checked="true" type="checkbox" id="powRelaysEnable" name="powRelaysEnable"> 
+                    <strong>pow relays: </strong> <span id="powRelays"></span> 
+                </span>
+            </em></small>
+        </div>
+    </div>
+
+    <textarea id="eventInput" rows="10" placeholder="140 characters or less." maxlength="140"></textarea>
     <br><br>
     
     <label for="difficulty">Difficulty:</label>

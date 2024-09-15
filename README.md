@@ -1,5 +1,5 @@
 # note⛏️
-**notemine** mines nostr notes, is written in rust, and compiles to wasm. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine). It should be easy to import into your project.
+**notemine** mines nostr notes, is written in rust, and compiles to wasm. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine).
 
 # deps 
 ```
@@ -19,3 +19,6 @@ cd demo && npx serve
 
 # license
 GNU General Public License v3.0
+
+# related
+check out [`notemine-js`](https://github.com/sandwichfarm/notemine-js) for an npm module that provides observables for use with svelte, react and vue

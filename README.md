@@ -19,3 +19,6 @@ cd demo && npx serve
 
 # license
 GNU General Public License v3.0
+
+# related
+check out [`notemine-js`](https://github.com/sandwichfarm/notemine-js) for an npm module that provides observables for use with svelte, react and vue

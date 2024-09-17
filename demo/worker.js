@@ -18,18 +18,33 @@ function shouldCancel() {
     return miningCancelled;
 }
 
+function destructureMap (map) {
+    return new Proxy(map, {
+      get (obj, prop) {
+        return obj.get(prop)
+      }
+    })
+  }
+
 self.onmessage = async function (e) {
     const { type, event, difficulty, workerId, totalWorkers } = e.data;
 
-    function reportProgress(hashRate, bestPowData) {
+    function reportProgress(progress) {
+        const { hashRate, bestPowData, nonce, event } = destructureMap(progress);
+        console.log(workerId, hashRate, bestPowData, nonce);
         const message = {
             type: 'progress',
             hashRate,
             workerId,
+            nonce: BigInt(nonce)
         };
     
         if (bestPowData && bestPowData !== null) {
             message.bestPowData = bestPowData;
+        }
+
+        if(event && event !== null) {
+            message.event = event;
         }
     
         postMessage(message);
@@ -43,7 +58,7 @@ self.onmessage = async function (e) {
         initWasm();
     } else if (type === 'mine' && !mining) {
         try {
-            miningCancelled = false; // Reset cancellation flag
+            miningCancelled = false;
             mining = true;
             const startNonce = BigInt(workerId);
             const nonceStep = BigInt(totalWorkers);

@@ -1,5 +1,7 @@
-notemine
 target
 
 ./pkg
 !./demo/pkg
+
+notemine/notmine 
+notemine-webgpu/notemine-webgpu

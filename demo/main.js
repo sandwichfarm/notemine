@@ -116,7 +116,7 @@ function authAnon(){
 async function authUser(){
     return new Promise( async (resolve, reject) => {
         loginButton.disabled = true
-        const pubkey = await window.nostr.getPublicKey()
+        pubkey = await window.nostr.getPublicKey()
         const relay = await Relay.connect('wss://purplepag.es')
         usub = relay.subscribe(
             [{kinds: [0,3,10002], authors: [pubkey]}],

@@ -270,7 +270,7 @@ async fn run_mining(
         let event_str = match std::str::from_utf8(&event_bytes) {
             Ok(s) => s.trim_end_matches('\0'),
             Err(e) => {
-                console::log_1(&format!("UTF-8 conversion error: {}", e).into());
+                console::log_1(&format!("Conversion error: {}", e).into());
                 return Err("Failed to convert event data from GPU.".to_string());
             }
         };

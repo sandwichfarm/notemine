@@ -4,29 +4,13 @@ use js_sys::Function;
 use web_sys::console;
 use console_error_panic_hook;
 use serde_wasm_bindgen;
-use std::time::Instant;
+use instant::Instant;
 
 #[wasm_bindgen(start)]
 pub fn main_js() {
     console_error_panic_hook::set_once();
 }
 
-/// Mines note using cpu
-///
-/// # Arguments
-///
-/// * `event_json` - JSON string representing the NostrEvent.
-/// * `difficulty` - The difficulty level for PoW.
-/// * `start_nonce_str` - Starting nonce as a string.
-/// * `nonce_step_str` - Step increment for nonce as a string.
-/// * `report_progress` - JavaScript callback function for reporting progress.
-/// * `should_cancel` - JavaScript callback function to check for cancellation.
-/// * `send_event_with_best_pow` - Whether to send the event data with best PoW.
-/// * `best_pow_threshold` - Optional threshold to decide when to send event data.
-///
-/// # Returns
-///
-/// * `JsValue` - The result of mining or an error message.
 #[wasm_bindgen]
 pub fn mine_event(
     event_json: &str,
@@ -137,7 +121,7 @@ pub fn mine_event(
             let should_send_event = if send_event_with_best_pow {
                 match best_pow_threshold {
                     Some(threshold) => pow > threshold,
-                    None => pow > (difficulty as f32 * 0.8) as u32, // 80% of difficulty
+                    None => pow > (difficulty as f32 * 0.8) as u32,
                 }
             } else {
                 false
@@ -163,7 +147,7 @@ pub fn mine_event(
                 .call2(
                     &JsValue::NULL,
                     &serde_wasm_bindgen::to_value(&serde_json::json!({
-                        "hashRate": 0.0, // Placeholder, will be updated below
+                        "hashRate": 0.0,
                         "bestPowData": best_pow_data,
                         "nonce": best_nonce.to_string(),
                     }))

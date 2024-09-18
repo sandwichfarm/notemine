@@ -399,6 +399,8 @@ mineButton.addEventListener('click', () => {
     if (isMining) return;
     halt = false
 
+    console.log('mining as:', pubkey)
+
     resetBestPow();
     minersBestPowOutput.style.display = 'block';
     overallBestPowOutput.style.display = 'block';

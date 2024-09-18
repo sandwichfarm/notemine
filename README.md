@@ -21,4 +21,4 @@ cd demo && npx serve
 GNU General Public License v3.0
 
 # related
-check out [`notemine-js`](https://github.com/sandwichfarm/notemine-js) for an npm module that provides observables for use with svelte, react and vue
+check out [`notemine-js`](https://github.com/sandwichfarm/notemine-js) for an npm module that wraps the `wasm-bindgen` interfaces as observables for use with svelte, react and vue

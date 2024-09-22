@@ -547,7 +547,8 @@ const generateEvent = (content) => {
     return {
         pubkey,
         kind: 1,
-        tags: [['miner', MINER],['client', CLIENT]],
+        tags: [],
+        // tags: [['miner', MINER],['client', CLIENT]],
         content,
     }
 }

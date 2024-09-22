@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::to_string;
-
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::*;
 use web_sys::console;
 use console_error_panic_hook;
 use js_sys::Function;
 use serde_wasm_bindgen;
+use std::fmt::Write;
 
-// Existing Structs
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NostrEvent {
     pub pubkey: String,
@@ -24,18 +23,17 @@ pub struct MinedResult {
     pub event: NostrEvent,
     pub total_time: f64,
     pub khs: f64,
+    pub best_nonce: u64,
+    pub best_hash: String,
 }
 
-// New Struct for Enhanced Reporting
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BestPowData {
-    pub best_pow: u32,
-    pub nonce: String,
-    pub hash: String,
-    pub event: Option<NostrEvent>, // Optional event data
+fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    s.serialize_u64(*x)
 }
 
-// Hashable Event for PoW Calculation
 #[derive(Serialize)]
 struct HashableEvent<'a>(
     u32,
@@ -47,15 +45,6 @@ struct HashableEvent<'a>(
     &'a str,
 );
 
-// Serializer for U64 as Number
-fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    s.serialize_u64(*x)
-}
-
-// Function to Compute Event Hash
 #[inline]
 fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
     let hashable_event = HashableEvent(
@@ -76,7 +65,6 @@ fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
     hash_bytes
 }
 
-// Function to Calculate Proof of Work
 #[inline]
 fn get_pow(hash_bytes: &[u8]) -> u32 {
     let mut count = 0;
@@ -91,13 +79,11 @@ fn get_pow(hash_bytes: &[u8]) -> u32 {
     count
 }
 
-// Initialize Panic Hook
 #[wasm_bindgen(start)]
 pub fn main_js() {
     console_error_panic_hook::set_once();
 }
 
-// Enhanced mine_event Function
 #[wasm_bindgen]
 pub fn mine_event(
     event_json: &str,
@@ -106,12 +92,8 @@ pub fn mine_event(
     nonce_step_str: &str,
     report_progress: JsValue,
     should_cancel: JsValue,
-    send_event_with_best_pow: bool,
-    best_pow_threshold: Option<u32>,
 ) -> JsValue {
     console::log_1(&format!("event_json: {}", event_json).into());
-    
-    // Deserialize Event
     let mut event: NostrEvent = match serde_json::from_str(event_json) {
         Ok(e) => e,
         Err(err) => {
@@ -123,30 +105,24 @@ pub fn mine_event(
         }
     };
 
-    // Set created_at if missing
     if event.created_at.is_none() {
         let current_timestamp = (js_sys::Date::now() / 1000.0) as u64;
         event.created_at = Some(current_timestamp);
     }
 
-    // Find or Add Nonce Tag
-    let mut nonce_index = None;
-    for (i, tag) in event.tags.iter().enumerate() {
-        if tag.len() > 0 && tag[0] == "nonce" {
-            nonce_index = Some(i);
-            break;
-        }
-    }
-    if nonce_index.is_none() {
+    let nonce_tag_index = event
+        .tags
+        .iter()
+        .position(|tag| tag.get(0).map(|s| s == "nonce").unwrap_or(false));
+
+    if nonce_tag_index.is_none() {
         event.tags.push(vec![
             "nonce".to_string(),
             "0".to_string(),
             difficulty.to_string(),
         ]);
-        nonce_index = Some(event.tags.len() - 1);
     }
 
-    // Convert report_progress to Function
     let report_progress = match report_progress.dyn_into::<Function>() {
         Ok(func) => func,
         Err(_) => {
@@ -158,7 +134,6 @@ pub fn mine_event(
         }
     };
 
-    // Parse Nonce Parameters
     let start_time = js_sys::Date::now();
     let start_nonce: u64 = start_nonce_str.parse().unwrap_or(0);
     let nonce_step: u64 = nonce_step_str.parse().unwrap_or(1);
@@ -166,129 +141,27 @@ pub fn mine_event(
     let mut nonce: u64 = start_nonce;
     let mut total_hashes: u64 = 0;
 
-    let report_interval = 200_000;
+    let report_interval = 500_000;
     let mut last_report_time = start_time;
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
     let mut best_pow: u32 = 0;
     let mut best_nonce: u64 = 0;
     let mut best_hash_bytes: Vec<u8> = Vec::new();
-    let mut best_event: Option<NostrEvent> = None; // To store the event achieving best PoW
+
+    let static_tags: Vec<Vec<String>> = event
+        .tags
+        .iter()
+        .filter(|tag| tag.get(0).map(|s| s != "nonce").unwrap_or(true))
+        .cloned()
+        .collect();
+
+    let serialized_static_event = serialize_event_static(&event, &static_tags);
+
+    let mut hasher = Sha256::new();
+    hasher.update(&serialized_static_event);
 
     loop {
-        // Check for Cancellation at Start of Loop
-        if let Some(ref should_cancel) = should_cancel {
-            let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
-            if cancel.is_truthy() {
-                console::log_1(&"Mining cancelled.".into());
-                return serde_wasm_bindgen::to_value(&serde_json::json!({
-                    "error": "Mining cancelled."
-                }))
-                .unwrap_or(JsValue::NULL);
-            }
-        }
-
-        // Update Nonce in the Event
-        if let Some(index) = nonce_index {
-            if let Some(tag) = event.tags.get_mut(index) {
-                if tag.len() >= 3 {
-                    tag[1] = nonce.to_string();
-                    tag[2] = difficulty.to_string();
-                }
-            }
-        }
-
-        // Compute Hash of the Event
-        let hash_bytes = get_event_hash(&event);
-        if hash_bytes.is_empty() {
-            console::log_1(&"Failed to compute event hash.".into());
-            return serde_wasm_bindgen::to_value(&serde_json::json!({
-                "error": "Failed to compute event hash."
-            }))
-            .unwrap_or(JsValue::NULL);
-        }
-
-        // Calculate Proof of Work
-        let pow = get_pow(&hash_bytes);
-
-        // If Current PoW is Better than Best PoW Found So Far
-        if pow > best_pow {
-            best_pow = pow;
-            best_nonce = nonce;
-            best_hash_bytes = hash_bytes.clone();
-
-            // Check if Event Should be Sent with Best PoW
-            let should_send_event = if send_event_with_best_pow {
-                match best_pow_threshold {
-                    Some(threshold) => pow > threshold,
-                    None => pow > (difficulty as f32 * 0.8) as u32, // 80% of difficulty
-                }
-            } else {
-                false
-            };
-
-            // Prepare Best PoW Data
-            let best_pow_data = if should_send_event {
-                // Include the event data
-                best_event = Some(event.clone());
-                serde_json::json!({
-                    "best_pow": best_pow,
-                    "nonce": best_nonce.to_string(),
-                    "hash": hex::encode(&best_hash_bytes),
-                    "event": best_event,
-                })
-            } else {
-                // Exclude the event data
-                serde_json::json!({
-                    "best_pow": best_pow,
-                    "nonce": best_nonce.to_string(),
-                    "hash": hex::encode(&best_hash_bytes),
-                })
-            };
-
-            // Report Progress with Best PoW and Nonce
-            report_progress
-                .call2(
-                    &JsValue::NULL,
-                    &serde_wasm_bindgen::to_value(&serde_json::json!({
-                        "hashRate": 0.0, 
-                        "bestPowData": best_pow_data,
-                        "nonce": best_nonce.to_string(),
-                    }))
-                    .unwrap(),
-                    &JsValue::NULL,
-                )
-                .unwrap_or_else(|err| {
-                    console::log_1(
-                        &format!("Error calling progress callback: {:?}", err).into(),
-                    );
-                    JsValue::NULL
-                });
-        }
-
-        // If Difficulty is Met or Exceeded
-        if pow >= difficulty {
-            let event_hash = hex::encode(&hash_bytes);
-            event.id = Some(event_hash.clone());
-            let end_time = js_sys::Date::now();
-            let total_time = (end_time - start_time) / 1000.0;
-            let khs = (total_hashes as f64) / 1000.0 / total_time;
-
-            let result = MinedResult {
-                event,
-                total_time,
-                khs,
-            };
-
-            console::log_1(&format!("Mined successfully with nonce: {}", nonce).into());
-            return serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL);
-        }
-
-        // Increment Nonce and Hash Count
-        nonce = nonce.wrapping_add(nonce_step);
-        total_hashes += 1;
-
-        // Periodic Cancellation Check
         if let Some(ref should_cancel) = should_cancel {
             if total_hashes % 10_000 == 0 {
                 let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
@@ -302,25 +175,85 @@ pub fn mine_event(
             }
         }
 
-        // Periodic Hash Rate Reporting
+        let nonce_str = nonce.to_string();
+        let difficulty_str = difficulty.to_string();
+        let nonce_tag = vec!["nonce", &nonce_str, &difficulty_str];
+        let serialized_nonce_tag = serde_json::to_string(&nonce_tag).unwrap();
+
+        let mut hasher_clone = hasher.clone();
+        hasher_clone.update(b",");
+        hasher_clone.update(serialized_nonce_tag.as_bytes());
+        hasher_clone.update(b"]");
+        hasher_clone.update(b",\"");
+        hasher_clone.update(event.content.as_bytes());
+        hasher_clone.update(b"\"]");
+
+        let hash_bytes = hasher_clone.finalize_reset().to_vec();
+
+        let pow = get_pow(&hash_bytes);
+
+        if pow > best_pow {
+            best_pow = pow;
+            best_nonce = nonce;
+            best_hash_bytes = hash_bytes.clone();
+
+            let best_pow_data = serde_json::json!({
+                "best_pow": best_pow,
+                "nonce": best_nonce.to_string(),
+                "hash": hex::encode(&best_hash_bytes),
+            });
+
+            report_progress
+                .call2(
+                    &JsValue::NULL,
+                    &JsValue::from_f64(0.0),
+                    &serde_wasm_bindgen::to_value(&best_pow_data).unwrap(),
+                )
+                .unwrap_or_else(|err| {
+                    console::log_1(
+                        &format!("Error calling progress callback: {:?}", err).into(),
+                    );
+                    JsValue::NULL
+                });
+        }
+
+        if pow >= difficulty {
+            let event_hash = hex::encode(&hash_bytes);
+            let mut final_tags = static_tags.clone();
+            final_tags.push(vec![
+                "nonce".to_string(),
+                nonce_str,
+                difficulty_str.clone(),
+            ]);
+            event.tags = final_tags;
+            event.id = Some(event_hash.clone());
+
+            let end_time = js_sys::Date::now();
+            let total_time = (end_time - start_time) / 1000.0;
+            let khs = (total_hashes as f64) / 1000.0 / total_time;
+
+            let result = MinedResult {
+                event,
+                total_time,
+                khs,
+                best_nonce,
+                best_hash: hex::encode(&best_hash_bytes),
+            };
+
+            console::log_1(&format!("Mined successfully with nonce: {}", nonce).into());
+            return serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL);
+        }
+
+        nonce = nonce.wrapping_add(nonce_step);
+        total_hashes += 1;
+
         if total_hashes % report_interval == 0 {
             let current_time = js_sys::Date::now();
             let elapsed_time = (current_time - last_report_time) / 1000.0;
             if elapsed_time > 0.0 {
                 let hash_rate = (report_interval as f64) / elapsed_time;
-
-                // Report Progress with Updated Hash Rate and Current Nonce
                 report_progress
-                    .call2(
-                        &JsValue::NULL,
-                        &serde_wasm_bindgen::to_value(&serde_json::json!({
-                            "hashRate": hash_rate,
-                            "bestPowData": serde_json::json!({}),
-                            "nonce": nonce.to_string(),
-                        }))
-                        .unwrap(),
-                        &JsValue::NULL,
-                    )
+                    .call2(&JsValue::NULL, &hash_rate.into(), &JsValue::NULL)
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),
@@ -333,10 +266,27 @@ pub fn mine_event(
     }
 }
 
-// Tests remain unchanged
+fn serialize_event_static(event: &NostrEvent, static_tags: &Vec<Vec<String>>) -> Vec<u8> {
+    let mut serialized = String::new();
+    write!(
+        &mut serialized,
+        "[0,\"{}\",{},{}",
+        event.pubkey,
+        event.created_at.unwrap(),
+        event.kind
+    )
+    .unwrap();
+
+    let serialized_tags = serde_json::to_string(&static_tags).unwrap();
+    write!(&mut serialized, ",{}", serialized_tags).unwrap();
+
+    serialized.into_bytes()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
 
     #[test]
     fn test_get_event_hash() {
@@ -348,12 +298,12 @@ mod tests {
             id: None,
             created_at: Some(1668680774),
         };
-    
+
         let expected_hash = "bb9727a19e7ed120333e994ada9c3b6e4a360a71739f9ea33def6d69638fff30";
-    
+
         let hash_bytes = get_event_hash(&event);
         let hash_hex = hex::encode(&hash_bytes);
-    
+
         assert_eq!(hash_hex, expected_hash);
     }
 }

@@ -29,30 +29,20 @@ function destructureMap (map) {
 self.onmessage = async function (e) {
     const { type, event, difficulty, workerId, totalWorkers } = e.data;
 
-    function reportProgress(progress) {
-        const { hashRate, bestPowData, nonce, event } = destructureMap(progress);
-        console.log(workerId, hashRate, bestPowData, nonce);
-        const message = {
-            type: 'progress',
-            hashRate,
-            workerId,
-            nonce: BigInt(nonce)
-        };
-    
-        if (bestPowData && bestPowData !== null) {
-            message.bestPowData = bestPowData;
+    function reportProgress(hashRate = undefined, bestPow = undefined) {
+        let header = { type: 'progress' }
+        if(typeof hashRate == 'number') {
+            postMessage({ ...header, workerId, hashRate });
         }
-
-        if(event && event !== null) {
-            message.event = event;
+        if(bestPow !== null) {
+            const { best_pow, nonce, hash } = destructureMap(bestPow);
+            postMessage({ ...header, workerId, best_pow, nonce, event });
         }
-    
-        postMessage(message);
     }
 
     if (type === 'cancel' && mining) {
         console.log('Mining cancellation requested.');
-        miningCancelled = true;
+        miningCancelled = true;1
     }
     else if (type === 'init') {
         initWasm();

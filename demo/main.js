@@ -20,7 +20,7 @@ const pool = new SimplePool();
 let pubs = [];
 let usub = null;
 
-let totalWorkers = navigator.hardwareConcurrency-1 || 2; // Or set a fixed number
+let totalWorkers = navigator.hardwareConcurrency-1 || 2;
 let workers = [];
 let isWorkerReady = 0;
 let isMining = false;
@@ -46,6 +46,7 @@ const relaysContainer = document.getElementById('relaysContainer');
 const minersBestPowOutput = document.getElementById('minersBestPow');
 const overallBestPowOutput = document.getElementById('overallBestPow');
 const hashrateOutput = document.getElementById('hashrate');
+const minersHashRateOutput = document.getElementById('minerHashrate');
 
 const resultOutput = document.getElementById('result');
 const neventOutput = document.getElementById('neventOutput');
@@ -54,7 +55,6 @@ const userName = document.getElementById('userName');
 const userPhoto = document.getElementById('userPhoto');
 
 numberOfWorkers.value = totalWorkers;
-// numberOfWorkers.max = navigator.hardwareConcurrency || 3;
 
 minersBestPowOutput.style.display = 'none';
 overallBestPowOutput.style.display = 'none';
@@ -70,6 +70,7 @@ refreshUserDom()
 refreshRelaysDom()
 
 let workerHashRates = {};
+let workerMaxHashRates = {};
 let minersBestPow
 let overallBestPow
 
@@ -90,7 +91,7 @@ async function toggleAuth(){
         await authUser()
         loginButton.textContent = 'logout'
     }
-    else { //logout
+    else {
         console.log('logouot')
         authAnon()
         loginButton.textContent = 'login'
@@ -197,22 +198,67 @@ function enableInputs(){
     eventInput.disabled = false;
 }
 
+function averageHashRate(hr) {
+    let sum = 0;
+    for (let i = 0; i < hr.length; i++) {
+        sum += hr[i];
+    }
+    return hr.length === 0 ? 0 : sum / hr.length;
+}
+
+async function recordMaxRate(workerId, hashRate){
+    if (workerMaxHashRates[workerId] === undefined || hashRate > workerMaxHashRates[workerId]) {
+        workerMaxHashRates[workerId] = hashRate;
+    }
+}
+
+function recordHashRate(workerId, hashRate) {
+    if (!(workerHashRates[workerId] instanceof Array)) {
+        workerHashRates[workerId] = [];
+    }
+    workerHashRates[workerId].push(hashRate);
+    if (workerHashRates[workerId].length > 22) {
+        workerHashRates[workerId].shift();
+    }
+    recordMaxRate(workerId, hashRate)
+}
+
+let lastRefresh = 0,
+    refreshEvery = 200
+
+function refreshHashRate() {
+    if (Date.now() - lastRefresh < refreshEvery) {
+        return;
+    }
+    const totalHashRate = Object.values(workerHashRates)
+        .reduce((acc, hrArray) => acc + averageHashRate(hrArray), 0);
+    hashrateOutput.textContent = `${(totalHashRate / 1000).toFixed(2)} kH/s`;
+    updateWorkerHashrateDisplay();
+    lastRefresh = Date.now();
+}
+
+function updateWorkerHashrateDisplay() {
+    let minersHashRate = '';
+    for (const [workerId, hashRate] of Object.entries(workerHashRates)) {
+        minersHashRate += `Miner #${workerId}: ${(averageHashRate(hashRate) / 1000).toFixed(2)} kH/s\n`;
+    }
+    minersHashRateOutput.textContent = minersHashRate;
+}
 
 async function handleWorkerMessage(e) {
-    const { type, data, error, hashRate, workerId, bestPowData:bestPowDataMap } = e.data;
+    const { type, data, error, hashRate, workerId, best_pow, nonce, hash } = e.data;
 
     if (type === 'progress') {
         if(halt && hashRate > 0) {
             return workers[workerId].postMessage({ type: 'cancel' });
         }
-        
-        workerHashRates[workerId] = hashRate;
-        const totalHashRate = Object.values(workerHashRates).reduce((a, b) => a + b, 0);
-        hashrateOutput.textContent = `${(totalHashRate / 1000).toFixed(2)} kH/s`;
 
-        if (bestPowDataMap?.size > 0) {
-            const bestPowData = Object.fromEntries(bestPowDataMap);
-            const { best_pow, nonce, hash } = bestPowData;
+        if(typeof hashRate === `number`) {
+            recordHashRate(workerId, hashRate)
+            refreshHashRate()
+        }
+
+        if (typeof best_pow === 'number') {
             minersBestPow[workerId] = {
                 bestPow: best_pow,
                 nonce,
@@ -257,6 +303,7 @@ async function handleWorkerMessage(e) {
 
         isMining = false;
         workerHashRates = {};
+        workerMaxHashRates = {};
         mineButton.disabled = false;
         cancelButton.disabled = true;
         eventInput.value = '';
@@ -270,9 +317,9 @@ async function handleWorkerMessage(e) {
         resultOutput.textContent = `Error: ${error}`;
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
-        cancelButton.disabled = true; // Disable the cancel button
+        cancelButton.disabled = true;
         isMining = false;
-        workerHashRates = {}; // Reset hash rates on error
+        workerHashRates = {};
     }
 }
 
@@ -286,14 +333,12 @@ function cancelOtherWorkers(excludeWorkerId) {
 }
 
 function updateBestPowDisplay() {
-    // Update the UI to display each miner's best PoW
     let minersPowInfo = '';
     for (const [workerId, powData] of Object.entries(minersBestPow)) {
         minersPowInfo += `Miner #${workerId}: Best PoW ${powData.bestPow} (Nonce: ${powData.nonce}, Hash: ${powData.hash})\n`;
     }
     minersBestPowOutput.textContent = minersPowInfo;
 
-    // Update the UI to display the overall best PoW
     if (overallBestPow.workerId !== null) {
         overallBestPowOutput.textContent = `Overall Best PoW: ${overallBestPow.bestPow} by Miner #${overallBestPow.workerId} (Nonce: ${overallBestPow.nonce}, Hash: ${overallBestPow.hash})`
     }
@@ -356,7 +401,6 @@ function onK10002(event){
     k10002 = event
 }
 
-
 function onevent(event){ 
     switch(event.kind){
         case 0:     return onK0(event)
@@ -395,7 +439,7 @@ relaysToggle.addEventListener('click', () => {
 })
 
 
-mineButton.addEventListener('click', () => {
+mineButton.addEventListener('click', async () => {
     if (isMining) return;
     halt = false
 
@@ -414,6 +458,7 @@ mineButton.addEventListener('click', () => {
     neventOutput.textContent = '';
     resultOutput.textContent = '';
     workerHashRates = {};
+    workerMaxHashRates = {};
 
     if (!content) {
         alert('Please enter content for the Nostr event.');
@@ -433,14 +478,14 @@ mineButton.addEventListener('click', () => {
     const event = JSON.stringify(nostrEvent);
 
     mineButton.disabled = true;
-    cancelButton.disabled = false; // Enable the cancel button
+    cancelButton.disabled = false;
     resultOutput.textContent = 'Mining in progress...';
     hashrateOutput.textContent = '0 H/s';
     isMining = true;
 
     console.log('main: event:', event)
 
-    workers.forEach((worker, index) => {
+    for(const [index, worker] of workers.entries()){
         worker.postMessage({
             type: 'mine',
             event,
@@ -448,7 +493,8 @@ mineButton.addEventListener('click', () => {
             workerId: index,
             totalWorkers,
         });
-    });
+        await new Promise( r => setTimeout(r, 67))
+    }
 });
 
 cancelButton.addEventListener('click', () => {
@@ -464,6 +510,7 @@ cancelButton.addEventListener('click', () => {
         cancelButton.disabled = true;
         isMining = false;
         workerHashRates = {}; 
+        workerMaxHashRates = {};
         spawnWorkers()
     }
 });

@@ -1,6 +1,8 @@
 # note⛏️
 **notemine** mines nostr notes, is written in rust, and compiles to wasm. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine).
 
+If you're looking for a native version of notemine, check out [`notemine-hw`](https://github.com/plebemineira/notemine_hw)
+
 # deps 
 ```
 cargo install wasm-pack

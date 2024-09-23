@@ -208,7 +208,7 @@ function averageHashRate(hr) {
 
 async function recordMaxRate(workerId, hashRate){
     if (workerMaxHashRates[workerId] === undefined || hashRate > workerMaxHashRates[workerId]) {
-        workerMaxHashRates[workerId] = hashRate;
+        workerMaxHashRates[workerId] = Math.round(hashRate);
     }
 }
 
@@ -217,14 +217,14 @@ function recordHashRate(workerId, hashRate) {
         workerHashRates[workerId] = [];
     }
     workerHashRates[workerId].push(hashRate);
-    if (workerHashRates[workerId].length > 22) {
+    if (workerHashRates[workerId].length > 11) {
         workerHashRates[workerId].shift();
     }
     recordMaxRate(workerId, hashRate)
 }
 
 let lastRefresh = 0,
-    refreshEvery = 200
+    refreshEvery = 250
 
 function refreshHashRate() {
     if (Date.now() - lastRefresh < refreshEvery) {
@@ -240,6 +240,7 @@ function refreshHashRate() {
 function updateWorkerHashrateDisplay() {
     let minersHashRate = '';
     for (const [workerId, hashRate] of Object.entries(workerHashRates)) {
+        // minersHashRate += `Miner #${workerId}: ${(averageHashRate(hashRate) / 1000).toFixed(2)} kH/s [Max: ${workerMaxHashRates[workerId] / 1000} kH/s]\n`;
         minersHashRate += `Miner #${workerId}: ${(averageHashRate(hashRate) / 1000).toFixed(2)} kH/s\n`;
     }
     minersHashRateOutput.textContent = minersHashRate;
@@ -547,7 +548,7 @@ const generateEvent = (content) => {
     return {
         pubkey,
         kind: 1,
-        tags: [],
+        tags: [ ["miner", MINER], ["client", CLIENT] ],
         content,
     }
 }

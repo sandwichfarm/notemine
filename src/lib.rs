@@ -23,18 +23,10 @@ pub struct MinedResult {
     pub khs: f64,
 }
 
-fn serialize_u64_as_number<S>(x: &u64, s: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    s.serialize_u64(*x)
-}
-
 #[derive(Serialize)]
 struct HashableEvent<'a>(
     u32,
     &'a str,
-    #[serde(serialize_with = "serialize_u64_as_number")]
     u64,
     u32,
     &'a Vec<Vec<String>>,
@@ -46,7 +38,7 @@ fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
     let hashable_event = HashableEvent(
         0u32,
         &event.pubkey,
-        event.created_at.unwrap_or_else(|| (js_sys::Date::now() / 1000.0) as u64),
+        event.created_at.unwrap(),
         event.kind,
         &event.tags,
         &event.content,
@@ -139,7 +131,7 @@ pub fn mine_event(
     let mut nonce: u64 = start_nonce;
     let mut total_hashes: u64 = 0;
 
-    let report_interval = 500_000;
+    let report_interval = 333_000;
     let mut last_report_time = start_time;
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
 

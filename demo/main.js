@@ -258,7 +258,6 @@ async function handleWorkerMessage(e) {
             recordHashRate(workerId, hashRate)
             refreshHashRate()
         }
-
         if (typeof best_pow === 'number') {
             minersBestPow[workerId] = {
                 bestPow: best_pow,
@@ -386,6 +385,7 @@ function onK3(event){
     }
     catch(e){
         console.error('Error parsing K3 content:', e)
+        console.warn('K3 content:', event.content)
     }
     
     console.log('K3 relays:', relays)

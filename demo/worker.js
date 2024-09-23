@@ -28,7 +28,6 @@ function destructureMap (map) {
 
 self.onmessage = async function (e) {
     const { type, event, difficulty, workerId, totalWorkers } = e.data;
-    console.log(e)
 
     function reportProgress(hashRate = undefined, bestPow = undefined) {
         let header = { type: 'progress' }
@@ -37,7 +36,7 @@ self.onmessage = async function (e) {
         }
         if(bestPow !== null) {
             const { best_pow, nonce, hash } = destructureMap(bestPow);
-            postMessage({ ...header, workerId, best_pow, nonce, event });
+            postMessage({ ...header, workerId, best_pow, nonce, event, hash });
         }
     }
 

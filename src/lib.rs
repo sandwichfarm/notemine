@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::to_string;
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::*;
 use web_sys::console;
@@ -140,7 +139,7 @@ pub fn mine_event(
     let mut nonce: u64 = start_nonce;
     let mut total_hashes: u64 = 0;
 
-    let report_interval = 200_000;
+    let report_interval = 500_000;
     let mut last_report_time = start_time;
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
 

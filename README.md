@@ -1,7 +1,9 @@
 # note⛏️
 **notemine** mines nostr notes, is written in rust, targets web and compiles to wasm. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine).
 
-If you're looking for a native miner that leverages hardware acceleration, check out [`notemine-hw`](https://github.com/plebemineira/notemine_hw)
+# related
+- [`notemine-js`](https://github.com/sandwichfarm/notemine-js) is an npm module that wraps this package with observables for use with modern stacks.
+- [`notemine-hw`](https://github.com/plebemineira/notemine_hw) is a fork ported to a cli application that leverages hardware acceleration
 
 # deps 
 ```
@@ -22,5 +24,3 @@ cd demo && npx serve
 # license
 GNU General Public License v3.0
 
-# related
-check out [`notemine-js`](https://github.com/sandwichfarm/notemine-js) for an npm module that wraps the `wasm-bindgen` interfaces as observables for use with svelte, react and vue

@@ -1,5 +1,2 @@
-notemine
+node_modules
 target
-
-./pkg
-!./demo/pkg

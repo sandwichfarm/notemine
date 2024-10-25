@@ -1,0 +1,64 @@
+{
+  "name": "@notemine/wrapper",
+  "version": "0.0.4",
+  "author": "bread@sandwich.farm",
+  "description": "Nostr note miner wrapper for notemine wasm-bindgen",
+  "repository": "https://github.com/sandwichfarm/notemine-js",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:types": "tsc --project tsconfig.json --emitDeclarationOnly",
+    "build": "yarn clean && yarn build:types && node build.js",
+    "dev": "node build.js",
+    "test": "vitest"
+  },
+  "keywords": [
+    "nostr",
+    "wasm",
+    "miner",
+    "typescript",
+    "rxjs"
+  ],
+  "dependencies": {
+    "@notemine/core": "workspace:*",
+    "nostr-tools": "2.7.2",
+    "notemine": "0.3.2",
+    "rxjs": "7.8.1",
+    "web-worker": "1.3.0"
+  },
+  "peerDependencies": {
+    "nostr-tools": "^2.7.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@jgoz/esbuild-plugin-livereload": "2.1.1",
+    "@sveltejs/vite-plugin-svelte": "4.0.0",
+    "@types/node": "22.5.5",
+    "@vitest/web-worker": "2.1.1",
+    "css-loader": "^6.7.3",
+    "esbuild": "0.24.0",
+    "esbuild-plugin-clean": "1.0.1",
+    "esbuild-plugin-copy": "2.1.1",
+    "esbuild-plugin-inline-worker": "0.1.1",
+    "esbuild-plugin-polyfill-node": "0.3.0",
+    "esbuild-plugin-tsc": "0.4.0",
+    "esbuild-plugin-wasm": "1.1.0",
+    "get-port": "7.1.0",
+    "happy-dom": "15.7.4",
+    "mini-css-extract-plugin": "^2.7.5",
+    "rimraf": "6.0.1",
+    "svelte": "4.2.19",
+    "svelte-loader": "^3.2.0",
+    "terser": "5.36.0",
+    "ts-loader": "9.5.1",
+    "typescript": "5.6.2",
+    "vite": "5.4.10",
+    "vitest": "2.1.1"
+  }
+}

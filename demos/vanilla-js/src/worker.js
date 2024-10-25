@@ -1,4 +1,4 @@
-import init, { mine_event } from './pkg/notemine.js';
+import init, { mine_event } from './lib/notemine/notemine.js';
 
 let wasm;
 let mining = false;

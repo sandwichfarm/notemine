@@ -1,0 +1,19 @@
+{
+  "name": "@notemine/wasm-shim",
+  "version": "0.0.1",
+  "main": "index.js",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "post-build": "node post-build.js"
+  },
+  "dependencies": {
+    "esbuild": "0.24.0"
+  },
+  "files": [
+    "initWasm.bundle.js"
+  ],
+  "exports": {
+    "./initWasm": "./initWasm.bundle.js"
+  }
+}

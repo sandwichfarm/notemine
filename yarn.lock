@@ -680,7 +680,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jspm/core@npm:^2.0.1":
+"@jspm/core@npm:^2.0.1, @jspm/core@npm:^2.1.0":
   version: 2.1.0
   resolution: "@jspm/core@npm:2.1.0"
   checksum: 10c0/4e10f912b60f33d216a68f46351dd430f10a2024ce5b149ac93e4d19f85d0dbf0b929cbb90397ea0e8cef28f1723ea1f94c88b7c5d16ecf1f62e391ea072bc33
@@ -798,9 +798,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@notemine/svelte-demo@workspace:demos/svelte":
+"@notemine/svelte-demo@workspace:demos/svelte-demo":
   version: 0.0.0-use.local
-  resolution: "@notemine/svelte-demo@workspace:demos/svelte"
+  resolution: "@notemine/svelte-demo@workspace:demos/svelte-demo"
   dependencies:
     "@notemine/wrapper": "workspace:*"
     "@rollup/plugin-alias": "npm:5.1.1"
@@ -827,9 +827,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@notemine/vanilla-js-demoo@workspace:demos/vanilla-js":
+"@notemine/vanilla-js-demo@workspace:demos/vanilla-js-demo":
   version: 0.0.0-use.local
-  resolution: "@notemine/vanilla-js-demoo@workspace:demos/vanilla-js"
+  resolution: "@notemine/vanilla-js-demo@workspace:demos/vanilla-js-demo"
   dependencies:
     sirv: "npm:3.0.0"
   languageName: unknown
@@ -840,6 +840,7 @@ __metadata:
   resolution: "@notemine/wrapper@workspace:packages/wrapper"
   dependencies:
     "@jgoz/esbuild-plugin-livereload": "npm:2.1.1"
+    "@jspm/core": "npm:^2.1.0"
     "@notemine/core": "workspace:*"
     "@sveltejs/vite-plugin-svelte": "npm:4.0.0"
     "@types/node": "npm:22.5.5"

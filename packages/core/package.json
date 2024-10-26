@@ -13,9 +13,18 @@
     "notemine.js",
     "notemine.d.ts"
   ],
-  "main": "notemine.js",
-  "types": "notemine.d.ts",
   "sideEffects": [
     "./snippets/*"
-  ]
+  ],
+  "exports": {
+    ".": {
+      "types": "./notemine.d.ts",
+      "import": "./notemine.js",
+      "require": "./notemine.js"
+    },
+    "./wasm": {
+      "import": "./notemine_bg.wasm",
+      "require": "./notemine_bg.wasm"
+    }
+  }
 }

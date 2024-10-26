@@ -15,9 +15,9 @@ describe('Notemine', () => {
   });
 
   it('should initialize with default values', () => {
-    expect(miner.mining).toBe(false);
-    expect(miner.cancelled).toBe(false);
-    expect(miner.result).toBeNull();
+    expect(miner.mining$.getValue()).toBe(false);
+    expect(miner.cancelled$.getValue()).toBe(false);
+    expect(miner.result$.getValue()).toBeNull();
   });
 
   it('should set content', () => {
@@ -42,15 +42,15 @@ describe('Notemine', () => {
 
   it('should start mining', () => {
     miner.mine();
-    expect(miner.mining).toBe(true);
+    expect(miner.mining$.getValue()).toBe(true);
   });
 
   it('should cancel mining', () => {
     miner.mine();
-    expect(miner.mining).toBe(true);
+    expect(miner.mining$.getValue()).toBe(true);
     miner.cancel();
-    expect(miner.mining).toBe(false);
-    expect(miner.cancelled).toBe(true);
+    expect(miner.mining$.getValue()).toBe(false);
+    expect(miner.cancelled$.getValue()).toBe(true);
   });
 
   it('should emit progress events', (done:any) => {

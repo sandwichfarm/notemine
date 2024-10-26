@@ -37,7 +37,7 @@ export interface BestPowData {
 }
 
 export interface WorkerPow extends BestPowData {
-  workerId: number;
+  workerId?: number;
 }
 
 export interface MinedResult {
@@ -138,7 +138,6 @@ export class Notemine {
   }
 
   async mine(): Promise<void> {
-    ////console.log('mine()')
     if (this.mining$.getValue()) return;
 
     if (!this.pubkey) {
@@ -153,7 +152,9 @@ export class Notemine {
     this.cancelled$.next(false);
     this.result$.next(null);
     this.workers$.next([]);
+    //@ts-ignore: pedantic
     this.workersPow$.next({});
+    //@ts-ignore: pedantic
     this.highestPow$.next({});
 
     await this.initializeWorkers();
@@ -178,7 +179,7 @@ export class Notemine {
       ////console.log('Initializing workers...');
       const workers: Worker[] = [];
       for (let i = 0; i < this.numberOfWorkers; i++) {
-        ////console.log(`Creating worker ${i}`);
+        //@ts-ignore: esbuild-inline-worker
         const worker = MineWorker();
         worker.onmessage = this.handleWorkerMessage.bind(this);
         worker.onerror = this.handleWorkerError.bind(this);

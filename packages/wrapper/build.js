@@ -106,7 +106,7 @@ export async function buildWithWatch() {
       }),
       copy({
         assets: {
-          from: '../node_modules/notemine/notemine_bg.wasm',
+          from: '../node_modules/@notemine/core/notemine_bg.wasm',
           to: 'dist',
         },
       }),

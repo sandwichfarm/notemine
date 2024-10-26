@@ -26,6 +26,7 @@
     "rxjs"
   ],
   "dependencies": {
+    "@jspm/core": "^2.1.0",
     "@notemine/core": "workspace:*",
     "nostr-tools": "2.7.2",
     "notemine": "0.3.2",

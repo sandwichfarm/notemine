@@ -1,6 +1,6 @@
 import initWasm, { mine_event } from 'notemine';
 //@ts-ignore: esbuild wasm loader
-import wasm from '../node_modules/notemine/notemine_bg.wasm';
+import wasm from '@notemine/core/wasm';
 
 import type { BestPowData } from './index';
 

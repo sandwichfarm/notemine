@@ -1,36 +1,36 @@
-# name: Deploy Docusaurus site to GitHub Pages
+name: Deploy Docusaurus site to GitHub Pages
 
-# on:
-#   push:
-#     branches:
-#       - main  # or the branch you want to deploy from
+on:
+  push:
+    branches:
+      - main  # or the branch you want to deploy from
 
-# jobs:
-#   build-deploy:
-#     runs-on: ubuntu-latest
-#     defaults:
-#       run:
-#         working-directory: docs
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
 
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v3
-#         with:
-#           submodules: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
 
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v3
-#         with:
-#           node-version: '16.x'  # Ensure this matches your project's Node.js version
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'  # Ensure this matches your project's Node.js version
 
-#       - name: Install dependencies
-#         run: npm install
+      - name: Install dependencies
+        run: npm install
 
-#       - name: Build Docusaurus site
-#         run: npm run build
+      - name: Build Docusaurus site
+        run: npm run build
 
-#       - name: Deploy to GitHub Pages
-#         uses: peaceiris/actions-gh-pages@v3
-#         with:
-#           github_token: ${{ secrets.GITHUB_TOKEN }}
-#           publish_dir: build
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build

@@ -60,7 +60,8 @@ _untested_
   notemine.mine()
 ```
 
-Updates to notemine can be accessed via observables.
+Mining updates can be accessed via observables. 
+
 ```
 notemine.progress$
 notemine.error$
@@ -68,7 +69,13 @@ notemine.cancelled$
 notemine.success$
 ```
 
+for example:
 
+```
+miner.progress$.subscribe( progress => {
+  console.log(progress.workerId, progress)
+});
+```
 
 <details>
 <summary>svelte</summary>
@@ -78,7 +85,6 @@ notemine.success$
   import { onMount } from 'svelte';
   import { type Writable, writable } from 'svelte/store';
   import { type ProgressEvent, Notemine } from '@notemine/wrapper';
-
 
   const numberOfMiners = 8
   let notemine: Notemine;
@@ -239,41 +245,8 @@ export class MinerComponent implements OnInit, OnDestroy {
 ```
 </details>
 
-## build
-The wasm is not included in version control, so to build you'll need rust and it's toolchain. That includes `rustup` and `cargo`
+### build
 
-### install build deps
-
-Install **wasm-pack** with `cargo install wasm-pack` 
-
-### build wasm 
-Build the wasm with `build:wasm` 
-
-**npm**
-
-```bash
-  npm build:wasm
-```
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build:wasm
-```
-</details>
-
-<details>
-<summary>yarn</summary>
-
-```bash
-  yarn build:wasm
-```
-</details>
-
-### build package 
-
-Build the package with `build` 
 **npm**
 
 ```bash
@@ -297,19 +270,15 @@ Build the package with `build`
 </details>
 
 ### test 
-<details>
-<summary>npm</summary>
-
 ```bash
-  npm run build
+  npm run test
 ```
-</details>
 
 <details>
 <summary>pnpm</summary>
 
 ```bash
-  pnpm run build
+  pnpm run test
 ```
 </details>
 
@@ -317,6 +286,6 @@ Build the package with `build`
 <summary>yarn</summary>
 
 ```bash
-  yarn build
+  yarn test
 ```
 </details>

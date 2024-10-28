@@ -1,0 +1,13 @@
+{
+  "name": "@notemine/rust",
+  "version": "1.0.0",
+  "description": "Rust source code for notemine",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "./scripts/build.sh",
+    "publish:rust": "./scripts/publish.sh",
+    "publish:js": "./scripts/publish-js.sh"
+  }
+}

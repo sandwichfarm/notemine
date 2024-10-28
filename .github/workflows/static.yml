@@ -20,8 +20,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Delete demo/pkg symlink
-        run: rm -fr demo/pkg
+      # - name: Delete demos/vanilla-js/pkg symlink
+      #   run: rm -fr demos/vanilla-js/pkg
 
       - name: Setup Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -36,14 +36,15 @@ jobs:
 
       - name: Clean and Build with wasm-pack
         run: |
+          cd packages/rust
           cargo clean
           wasm-pack build --target web --release
 
       - name: Prepare Demo Directory
-        run: mkdir -p demo/pkg
+        run: mkdir -p demos/vanilla-js/pkg
 
       - name: Copy Build Artifacts to Demo
-        run: cp -r pkg/* demo/pkg/
+        run: cp -r packages/rust/pkg/* demos/vanilla-js/pkg/
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5

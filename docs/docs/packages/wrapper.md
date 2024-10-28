@@ -4,7 +4,7 @@
 [![build](https://github.com/sandwichfarm/notemine-js/actions/workflows/build.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/build.yaml ) 
 [![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml )
 
-`@notemine/wrapper` is a typescript module that wraps [@notemine/core](../core/README.md) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
+`@notemine/wrapper` is a typescript module that wraps [notemine](https://github.com/sandwichfarm/notemine) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
 
 ## install
 package name: `@notemine/wrapper`
@@ -60,8 +60,7 @@ _untested_
   notemine.mine()
 ```
 
-Mining updates can be accessed via observables. 
-
+Updates to notemine can be accessed via observables.
 ```
 notemine.progress$
 notemine.error$
@@ -69,13 +68,7 @@ notemine.cancelled$
 notemine.success$
 ```
 
-for example:
 
-```
-miner.progress$.subscribe( progress => {
-  console.log(progress.workerId, progress)
-});
-```
 
 <details>
 <summary>svelte</summary>
@@ -85,6 +78,7 @@ miner.progress$.subscribe( progress => {
   import { onMount } from 'svelte';
   import { type Writable, writable } from 'svelte/store';
   import { type ProgressEvent, Notemine } from '@notemine/wrapper';
+
 
   const numberOfMiners = 8
   let notemine: Notemine;
@@ -245,8 +239,41 @@ export class MinerComponent implements OnInit, OnDestroy {
 ```
 </details>
 
-### build
+## build
+The wasm is not included in version control, so to build you'll need rust and it's toolchain. That includes `rustup` and `cargo`
 
+### install build deps
+
+Install **wasm-pack** with `cargo install wasm-pack` 
+
+### build wasm 
+Build the wasm with `build:wasm` 
+
+**npm**
+
+```bash
+  npm build:wasm
+```
+
+<details>
+<summary>pnpm</summary>
+
+```bash
+  pnpm build:wasm
+```
+</details>
+
+<details>
+<summary>yarn</summary>
+
+```bash
+  yarn build:wasm
+```
+</details>
+
+### build package 
+
+Build the package with `build` 
 **npm**
 
 ```bash
@@ -270,15 +297,19 @@ export class MinerComponent implements OnInit, OnDestroy {
 </details>
 
 ### test 
+<details>
+<summary>npm</summary>
+
 ```bash
-  npm run test
+  npm run build
 ```
+</details>
 
 <details>
 <summary>pnpm</summary>
 
 ```bash
-  pnpm run test
+  pnpm run build
 ```
 </details>
 
@@ -286,6 +317,6 @@ export class MinerComponent implements OnInit, OnDestroy {
 <summary>yarn</summary>
 
 ```bash
-  yarn test
+  yarn build
 ```
 </details>

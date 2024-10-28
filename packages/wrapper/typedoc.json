@@ -1,0 +1,10 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "entryPointStrategy": "expand",
+  "out": "../../docs/docs/api/wrapper",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "none",
+  "name": "@notemine/wrapper API",
+  "includeVersion": true,
+  "hideBreadcrumbs": true
+}

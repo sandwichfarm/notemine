@@ -1,0 +1,23 @@
+{
+  "id": "api/package-name/classes/Notemine",
+  "title": "Notemine",
+  "description": "package-name API v0.0.4 • Docs",
+  "source": "@site/docs/api/package-name/classes/Notemine.md",
+  "sourceDirName": "api/package-name/classes",
+  "slug": "/api/package-name/classes/Notemine",
+  "permalink": "/api/package-name/classes/Notemine",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "README",
+    "permalink": "/api/package-name/"
+  },
+  "next": {
+    "title": "BestPowData",
+    "permalink": "/api/package-name/interfaces/BestPowData"
+  }
+}

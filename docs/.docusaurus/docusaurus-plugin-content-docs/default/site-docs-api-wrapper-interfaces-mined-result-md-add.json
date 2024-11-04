@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/interfaces/MinedResult",
+  "title": "MinedResult",
+  "description": "@notemine/wrapper API v0.0.4 • Docs",
+  "source": "@site/docs/api/wrapper/interfaces/MinedResult.md",
+  "sourceDirName": "api/wrapper/interfaces",
+  "slug": "/api/wrapper/interfaces/MinedResult",
+  "permalink": "/api/wrapper/interfaces/MinedResult",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "ErrorEvent",
+    "permalink": "/api/wrapper/interfaces/ErrorEvent"
+  },
+  "next": {
+    "title": "MinerOptions",
+    "permalink": "/api/wrapper/interfaces/MinerOptions"
+  }
+}

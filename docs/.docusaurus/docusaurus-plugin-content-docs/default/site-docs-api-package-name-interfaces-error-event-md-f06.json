@@ -1,0 +1,23 @@
+{
+  "id": "api/package-name/interfaces/ErrorEvent",
+  "title": "ErrorEvent",
+  "description": "package-name API v0.0.4 • Docs",
+  "source": "@site/docs/api/package-name/interfaces/ErrorEvent.md",
+  "sourceDirName": "api/package-name/interfaces",
+  "slug": "/api/package-name/interfaces/ErrorEvent",
+  "permalink": "/api/package-name/interfaces/ErrorEvent",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "CancelledEvent",
+    "permalink": "/api/package-name/interfaces/CancelledEvent"
+  },
+  "next": {
+    "title": "MinedResult",
+    "permalink": "/api/package-name/interfaces/MinedResult"
+  }
+}

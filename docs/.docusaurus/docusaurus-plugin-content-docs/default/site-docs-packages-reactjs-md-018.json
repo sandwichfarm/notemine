@@ -1,0 +1,23 @@
+{
+  "id": "packages/reactjs",
+  "title": "@notemine/reactjs",
+  "description": "Future home of notemine for ReactJS.",
+  "source": "@site/docs/packages/reactjs.md",
+  "sourceDirName": "packages",
+  "slug": "/packages/reactjs",
+  "permalink": "/packages/reactjs",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "@notemine/core",
+    "permalink": "/packages/core"
+  },
+  "next": {
+    "title": "@notemine/rust",
+    "permalink": "/packages/rust"
+  }
+}

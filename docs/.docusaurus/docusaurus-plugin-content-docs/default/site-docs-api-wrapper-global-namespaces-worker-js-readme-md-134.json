@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/global/namespaces/*.worker.js/README",
+  "title": "README",
+  "description": "@notemine/wrapper • Docs",
+  "source": "@site/docs/api/wrapper/global/namespaces/*.worker.js/README.md",
+  "sourceDirName": "api/wrapper/global/namespaces/*.worker.js",
+  "slug": "/api/wrapper/global/namespaces/*.worker.js/",
+  "permalink": "/api/wrapper/global/namespaces/*.worker.js/",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "README",
+    "permalink": "/api/wrapper/global/"
+  },
+  "next": {
+    "title": "default",
+    "permalink": "/api/wrapper/global/namespaces/*.worker.js/functions/default"
+  }
+}

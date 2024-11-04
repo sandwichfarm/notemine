@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/index/interfaces/BestPowData",
+  "title": "BestPowData",
+  "description": "@notemine/wrapper • Docs",
+  "source": "@site/docs/api/wrapper/index/interfaces/BestPowData.md",
+  "sourceDirName": "api/wrapper/index/interfaces",
+  "slug": "/api/wrapper/index/interfaces/BestPowData",
+  "permalink": "/api/wrapper/index/interfaces/BestPowData",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Notemine",
+    "permalink": "/api/wrapper/index/classes/Notemine"
+  },
+  "next": {
+    "title": "CancelledEvent",
+    "permalink": "/api/wrapper/index/interfaces/CancelledEvent"
+  }
+}

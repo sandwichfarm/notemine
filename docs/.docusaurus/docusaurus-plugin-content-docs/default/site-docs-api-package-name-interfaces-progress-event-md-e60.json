@@ -1,0 +1,23 @@
+{
+  "id": "api/package-name/interfaces/ProgressEvent",
+  "title": "ProgressEvent",
+  "description": "package-name API v0.0.4 • Docs",
+  "source": "@site/docs/api/package-name/interfaces/ProgressEvent.md",
+  "sourceDirName": "api/package-name/interfaces",
+  "slug": "/api/package-name/interfaces/ProgressEvent",
+  "permalink": "/api/package-name/interfaces/ProgressEvent",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "MinerOptions",
+    "permalink": "/api/package-name/interfaces/MinerOptions"
+  },
+  "next": {
+    "title": "SuccessEvent",
+    "permalink": "/api/package-name/interfaces/SuccessEvent"
+  }
+}

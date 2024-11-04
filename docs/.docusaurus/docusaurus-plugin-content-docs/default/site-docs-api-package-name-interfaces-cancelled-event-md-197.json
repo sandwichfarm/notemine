@@ -1,0 +1,23 @@
+{
+  "id": "api/package-name/interfaces/CancelledEvent",
+  "title": "CancelledEvent",
+  "description": "package-name API v0.0.4 • Docs",
+  "source": "@site/docs/api/package-name/interfaces/CancelledEvent.md",
+  "sourceDirName": "api/package-name/interfaces",
+  "slug": "/api/package-name/interfaces/CancelledEvent",
+  "permalink": "/api/package-name/interfaces/CancelledEvent",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "BestPowData",
+    "permalink": "/api/package-name/interfaces/BestPowData"
+  },
+  "next": {
+    "title": "ErrorEvent",
+    "permalink": "/api/package-name/interfaces/ErrorEvent"
+  }
+}

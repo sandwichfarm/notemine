@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/index/interfaces/ProgressEvent",
+  "title": "ProgressEvent",
+  "description": "@notemine/wrapper • Docs",
+  "source": "@site/docs/api/wrapper/index/interfaces/ProgressEvent.md",
+  "sourceDirName": "api/wrapper/index/interfaces",
+  "slug": "/api/wrapper/index/interfaces/ProgressEvent",
+  "permalink": "/api/wrapper/index/interfaces/ProgressEvent",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "MinerOptions",
+    "permalink": "/api/wrapper/index/interfaces/MinerOptions"
+  },
+  "next": {
+    "title": "SuccessEvent",
+    "permalink": "/api/wrapper/index/interfaces/SuccessEvent"
+  }
+}

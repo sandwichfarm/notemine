@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/interfaces/WorkerPow",
+  "title": "WorkerPow",
+  "description": "@notemine/wrapper API v0.0.4 • Docs",
+  "source": "@site/docs/api/wrapper/interfaces/WorkerPow.md",
+  "sourceDirName": "api/wrapper/interfaces",
+  "slug": "/api/wrapper/interfaces/WorkerPow",
+  "permalink": "/api/wrapper/interfaces/WorkerPow",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "SuccessEvent",
+    "permalink": "/api/wrapper/interfaces/SuccessEvent"
+  },
+  "next": {
+    "title": "notemine⛏️",
+    "permalink": "/packages/"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/worker-types/README",
+  "title": "README",
+  "description": "@notemine/wrapper • Docs",
+  "source": "@site/docs/api/wrapper/worker-types/README.md",
+  "sourceDirName": "api/wrapper/worker-types",
+  "slug": "/api/wrapper/worker-types/",
+  "permalink": "/api/wrapper/worker-types/",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "modules",
+    "permalink": "/api/wrapper/modules"
+  },
+  "next": {
+    "title": "default",
+    "permalink": "/api/wrapper/worker-types/variables/default"
+  }
+}

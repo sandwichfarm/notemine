@@ -375,7 +375,6 @@ export class Notemine {
    * @param hashRate - The hash rate to record
    */
   private async recordMaxRate(workerId: number, hashRate: number){
-    //console.log(`Worker ${workerId} hash rate: ${Math.round(hashRate/1000)}`);
     const maxHashRate = this._workerMaxHashRates.get(workerId);
     if (maxHashRate === undefined || hashRate > maxHashRate) {
       this._workerMaxHashRates.set(workerId, Math.round(hashRate));

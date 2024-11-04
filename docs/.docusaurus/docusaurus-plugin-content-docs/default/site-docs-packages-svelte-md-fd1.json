@@ -1,0 +1,23 @@
+{
+  "id": "packages/svelte",
+  "title": "@notemine/svelte",
+  "description": "Future home of notemine for svelte.",
+  "source": "@site/docs/packages/svelte.md",
+  "sourceDirName": "packages",
+  "slug": "/packages/svelte",
+  "permalink": "/packages/svelte",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "@notemine/rust",
+    "permalink": "/packages/rust"
+  },
+  "next": {
+    "title": "@notemine/wrapper",
+    "permalink": "/packages/wrapper"
+  }
+}

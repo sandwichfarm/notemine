@@ -1,0 +1,158 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/",
+          "mainDocId": "api/package-name/README",
+          "docs": [
+            {
+              "id": "api/package-name/classes/Notemine",
+              "path": "/api/package-name/classes/Notemine",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/BestPowData",
+              "path": "/api/package-name/interfaces/BestPowData",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/CancelledEvent",
+              "path": "/api/package-name/interfaces/CancelledEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/ErrorEvent",
+              "path": "/api/package-name/interfaces/ErrorEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/MinedResult",
+              "path": "/api/package-name/interfaces/MinedResult",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/MinerOptions",
+              "path": "/api/package-name/interfaces/MinerOptions",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/ProgressEvent",
+              "path": "/api/package-name/interfaces/ProgressEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/SuccessEvent",
+              "path": "/api/package-name/interfaces/SuccessEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/interfaces/WorkerPow",
+              "path": "/api/package-name/interfaces/WorkerPow",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/package-name/README",
+              "path": "/api/package-name/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/classes/Notemine",
+              "path": "/api/wrapper/classes/Notemine",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/BestPowData",
+              "path": "/api/wrapper/interfaces/BestPowData",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/CancelledEvent",
+              "path": "/api/wrapper/interfaces/CancelledEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/ErrorEvent",
+              "path": "/api/wrapper/interfaces/ErrorEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/MinedResult",
+              "path": "/api/wrapper/interfaces/MinedResult",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/MinerOptions",
+              "path": "/api/wrapper/interfaces/MinerOptions",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/ProgressEvent",
+              "path": "/api/wrapper/interfaces/ProgressEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/SuccessEvent",
+              "path": "/api/wrapper/interfaces/SuccessEvent",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/interfaces/WorkerPow",
+              "path": "/api/wrapper/interfaces/WorkerPow",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/wrapper/README",
+              "path": "/api/wrapper/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "packages/core",
+              "path": "/packages/core",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "packages/index",
+              "path": "/packages/",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "packages/reactjs",
+              "path": "/packages/reactjs",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "packages/rust",
+              "path": "/packages/rust",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "packages/svelte",
+              "path": "/packages/svelte",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "packages/wrapper",
+              "path": "/packages/wrapper",
+              "sidebar": "tutorialSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "tutorialSidebar": {
+              "link": {
+                "path": "/api/package-name/",
+                "label": "README"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "api/wrapper/index/README",
+  "title": "README",
+  "description": "@notemine/wrapper • Docs",
+  "source": "@site/docs/api/wrapper/index/README.md",
+  "sourceDirName": "api/wrapper/index",
+  "slug": "/api/wrapper/index/",
+  "permalink": "/api/wrapper/index/",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "default",
+    "permalink": "/api/wrapper/global/namespaces/*.worker.ts/functions/default"
+  },
+  "next": {
+    "title": "Notemine",
+    "permalink": "/api/wrapper/index/classes/Notemine"
+  }
+}

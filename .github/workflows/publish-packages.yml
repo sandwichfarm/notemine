@@ -100,6 +100,7 @@ jobs:
           zip -r "${{ steps.meta.outputs.release_slug }}.zip" "${{ steps.find_package.outputs.the_path }}"
 
       - name: Create Release ${{ steps.meta.outputs.release_slug }}
+        id: create_release
         uses: actions/create-release@latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

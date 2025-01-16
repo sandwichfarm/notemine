@@ -1,8 +1,9 @@
 # @notemine/wrapper
 
 [![npm](https://img.shields.io/npm/v/notemine)]( https://www.npmjs.com/package/notemine )
-[![build](https://github.com/sandwichfarm/notemine-js/actions/workflows/build.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/build.yaml ) 
-[![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml )
+[![build](https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml ) 
+[![docs](https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml ) 
+<!-- [![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml ) -->
 
 `@notemine/wrapper` is a typescript module that wraps [@notemine/core](../core/README.md) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
 

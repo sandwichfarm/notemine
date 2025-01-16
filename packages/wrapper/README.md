@@ -9,26 +9,9 @@
 ## install
 package name: `@notemine/wrapper`
 
-**npm**
-```bash
-  npm install @notemine/wrapper
-```
-
-<details>
-<summary>pnpm</summary>
-
 ```bash
   pnpm install @notemine/wrapper
 ```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm install @notemine/wrapper
-```
-</details>
 
 ## usage 
 _untested_
@@ -253,70 +236,14 @@ Install **wasm-pack** with `cargo install wasm-pack`
 ### build wasm 
 Build the wasm with `build:wasm` 
 
-**npm**
-
-```bash
-  npm build:wasm
-```
-
-<details>
-<summary>pnpm</summary>
-
 ```bash
   pnpm build:wasm
 ```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build:wasm
-```
-</details>
 
 ### build package 
 
 Build the package with `build` 
-**npm**
-
-```bash
-  npm run build
-```
-
-<details>
-<summary>pnpm</summary>
 
 ```bash
   pnpm run build
 ```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build
-```
-</details>
-
-### test 
-```bash
-  npm run test
-```
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm run test
-```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build
-```
-</details>

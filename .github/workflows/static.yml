@@ -38,13 +38,15 @@ jobs:
           version: 'latest'
 
       - name: Clean and Build with wasm-pack
-        run: pnpm install --frozen-lockfile
+        run: | 
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm --filter @notemine/rust build
 
       - name: Prepare Demo Directory
         run: mkdir -p demos/vanilla-js/pkg
 
       - name: Copy Build Artifacts to Demo
-        run: cp -r packages/rust/pkg/* demos/vanilla-js/pkg/
+        run: cp -r packages/rust/dist/* demos/vanilla-js/dist/
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5

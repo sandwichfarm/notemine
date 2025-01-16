@@ -15,12 +15,12 @@ import { minify } from 'terser';
 import { handleWasmUrl } from './handleWasmUrl.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const production = process.env.NODE_ENV === 'production';
+const args = process.argv.slice(2);
+const watchMode = args.includes('--watch');
+const production = process.env.NODE_ENV === 'production' && !watchMode;
 
 export async function buildWithWatch() {
   await fs.mkdir(path.resolve(__dirname, 'dist'), { recursive: true });
-  const watch = !production;
   const livereloadPort = await getPort({ port: 53100 });
 
   const workerBuildOptions = {
@@ -122,11 +122,13 @@ export async function buildWithWatch() {
   };
 
   try {
-    if (watch) {
+    if (watchMode) {
       const mainContext = await esbuild.context(mainBuildOptions);
       await mainContext.watch();
+      console.log('Watching for changes...');
     } else {
       await esbuild.build(mainBuildOptions);
+      console.log('Build completed.');
     }
   } catch (error) {
     console.error('Main build failed:', error);

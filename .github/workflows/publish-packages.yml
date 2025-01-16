@@ -1,4 +1,4 @@
-name: GH Release and NPM Publish
+name: release + publish
 on:
   workflow_dispatch:
   push:

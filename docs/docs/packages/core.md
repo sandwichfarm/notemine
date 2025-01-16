@@ -1,4 +1,4 @@
-# @notemine/core
+# note⛏️
 **notemine** mines nostr notes, is written in rust, targets web and compiles to wasm. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine).
 
 # related

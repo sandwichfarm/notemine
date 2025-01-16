@@ -66,6 +66,8 @@ notemine.progress$
 notemine.error$
 notemine.cancelled$
 notemine.success$
+notemine.workersPow$
+notemine.highestPow$
 ```
 
 for example:

@@ -248,36 +248,3 @@ Build the package with `build`
 ```bash
   pnpm run build
 ```
-<<<<<<< HEAD
-=======
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build
-```
-</details>
-
-### test 
-```bash
-  npm run test
-```
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm run test
-```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build
-```
-</details>
->>>>>>> docs

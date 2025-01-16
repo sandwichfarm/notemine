@@ -23,10 +23,10 @@ package name: `@notemine/wrapper`
 </details>
 
 <details>
-<summary>yarn</summary>
+<summary>pnpm</summary>
 
 ```bash
-  yarn install @notemine/wrapper
+  pnpm install @notemine/wrapper
 ```
 </details>
 
@@ -45,7 +45,6 @@ _untested_
   const difficulty = 21
   const numberOfWorkers = 7
  
-
   const notemine = new Notemine({
     content,
     tags,
@@ -264,10 +263,10 @@ Build the wasm with `build:wasm`
 </details>
 
 <details>
-<summary>yarn</summary>
+<summary>pnpm</summary>
 
 ```bash
-  yarn build:wasm
+  pnpm build:wasm
 ```
 </details>
 
@@ -289,10 +288,10 @@ Build the package with `build`
 </details>
 
 <details>
-<summary>yarn</summary>
+<summary>pnpm</summary>
 
 ```bash
-  yarn build
+  pnpm build
 ```
 </details>
 
@@ -314,9 +313,9 @@ Build the package with `build`
 </details>
 
 <details>
-<summary>yarn</summary>
+<summary>pnpm</summary>
 
 ```bash
-  yarn build
+  pnpm build
 ```
 </details>

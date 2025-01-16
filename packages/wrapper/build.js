@@ -81,7 +81,7 @@ export async function buildWithWatch() {
     format: 'esm',
     platform: 'browser',
     target: ['esnext'],
-    sourcemap: true,
+    sourcemap: !production,
     minify: production,
     plugins: [
       esbuildPluginTsc({

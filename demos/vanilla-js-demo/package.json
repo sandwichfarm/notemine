@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "sirv public --port 1372",
     "prebuild": "./scripts/copy-notemine.sh",
-    "build": "yarn prebuild"
+    "build": "pnpm prebuild"
   },
   "dependencies": {
     "sirv": "3.0.0"

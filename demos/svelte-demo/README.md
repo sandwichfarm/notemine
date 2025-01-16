@@ -3,16 +3,16 @@
 The vanilla-js demo ported to Svelte with `@notemine/wrapper` as the dependency instead of `@notemine/core` 
 
 ```
-yarn install
+pnpm install
 ```
 
 ## Usage
 Run development server 
 ```
-yarn dev
+pnpm dev
 ```
 
 Build package
 ```
-yarn build
+pnpm build
 ```

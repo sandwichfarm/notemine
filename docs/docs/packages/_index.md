@@ -13,12 +13,12 @@
 - [`@notemine/svelte-demo`](./demos/svelte/) - Vanilla JS Demo Ported to Svelte that implements `@notemine/wrapper` (note: will implement `@notemine/svelte` when ready) 
 
 ## Contrib
-`@notemine` monorepo presently uses `yarn workspaces` without any monorepo toolkit (pending). Recommended to use `yarn v2 (berry)` until monorepo is fully configured.
+`@notemine` monorepo presently uses `pnpm workspaces` without any monorepo toolkit (pending). Recommended to use `pnpm v2 (berry)` until monorepo is fully configured.
 ```
-yarn install 
+pnpm install 
 ```
 
 Use workspace commands: 
 ```
-yarn workspace @notemine/wrapper ...
+pnpm workspace @notemine/wrapper ...
 ```

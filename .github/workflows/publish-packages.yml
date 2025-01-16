@@ -24,10 +24,6 @@ jobs:
         with:
           version: 9
 
-      # - uses: jetli/wasm-pack-action@v0.4.0
-      #   with:
-      #       version: 'latest'
-
       - name: Install wasm-pack
         run: cargo install wasm-pack
 
@@ -82,8 +78,21 @@ jobs:
           PKG_PATH=$(find packages -type d -name "${{ matrix.package }}" -print -quit)
           echo "the_path=$PKG_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Check NPM Version
+        id: check_version
+        run: |
+          PACKAGE_JSON="${{ steps.find_package.outputs.the_path }}/package.json"
+          PACKAGE_NAME=$(jq -r .name "$PACKAGE_JSON")
+          PACKAGE_VERSION=$(jq -r .version "$PACKAGE_JSON")
+          if npm show "$PACKAGE_NAME@$PACKAGE_VERSION" > /dev/null 2>&1; then
+            echo "version_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish Package
         id: publish
+        if: steps.check_version.outputs.version_exists == 'false'
         uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}

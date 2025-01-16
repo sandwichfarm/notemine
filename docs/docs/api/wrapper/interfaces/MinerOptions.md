@@ -1,8 +1,10 @@
-[**@notemine/wrapper API v0.0.6**](../README.md) • **Docs**
+[**@notemine/wrapper API v0.0.7**](../README.md)
 
 ***
 
 # Interface: MinerOptions
+
+Defined in: [index.ts:6](https://github.com/sandwichfarm/minnote-wasm/blob/c53ea6e3fe1020d36f0ea791d4601bdf2a247981/packages/wrapper/src/index.ts#L6)
 
 Options for configuring the miner
 
@@ -12,11 +14,9 @@ Options for configuring the miner
 
 > `optional` **content**: `string`
 
+Defined in: [index.ts:8](https://github.com/sandwichfarm/minnote-wasm/blob/c53ea6e3fe1020d36f0ea791d4601bdf2a247981/packages/wrapper/src/index.ts#L8)
+
 The content to include in the mined event
-
-#### Defined in
-
-[index.ts:8](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L8)
 
 ***
 
@@ -24,11 +24,9 @@ The content to include in the mined event
 
 > `optional` **difficulty**: `number`
 
+Defined in: [index.ts:14](https://github.com/sandwichfarm/minnote-wasm/blob/c53ea6e3fe1020d36f0ea791d4601bdf2a247981/packages/wrapper/src/index.ts#L14)
+
 Difficulty level for mining
-
-#### Defined in
-
-[index.ts:14](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L14)
 
 ***
 
@@ -36,11 +34,9 @@ Difficulty level for mining
 
 > `optional` **numberOfWorkers**: `number`
 
+Defined in: [index.ts:16](https://github.com/sandwichfarm/minnote-wasm/blob/c53ea6e3fe1020d36f0ea791d4601bdf2a247981/packages/wrapper/src/index.ts#L16)
+
 Number of workers to use for mining
-
-#### Defined in
-
-[index.ts:16](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L16)
 
 ***
 
@@ -48,11 +44,9 @@ Number of workers to use for mining
 
 > `optional` **pubkey**: `string`
 
+Defined in: [index.ts:12](https://github.com/sandwichfarm/minnote-wasm/blob/c53ea6e3fe1020d36f0ea791d4601bdf2a247981/packages/wrapper/src/index.ts#L12)
+
 Public key used for the event
-
-#### Defined in
-
-[index.ts:12](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L12)
 
 ***
 
@@ -60,8 +54,6 @@ Public key used for the event
 
 > `optional` **tags**: `string`[][]
 
+Defined in: [index.ts:10](https://github.com/sandwichfarm/minnote-wasm/blob/c53ea6e3fe1020d36f0ea791d4601bdf2a247981/packages/wrapper/src/index.ts#L10)
+
 Tags associated with the mined event
-
-#### Defined in
-
-[index.ts:10](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L10)

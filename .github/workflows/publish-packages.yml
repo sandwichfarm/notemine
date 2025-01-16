@@ -101,17 +101,20 @@ jobs:
           access: public
 
       - name: Set Meta
+        if: steps.check_version.outputs.version_exists == 'false'
         id: meta
         run: |
           RELEASE_SLUG="${{ matrix.package }}@v${{ steps.publish.outputs.version }}"
           echo "release_slug=$RELEASE_SLUG" >> "$GITHUB_OUTPUT"
 
       - name: Archive Subdirectory
+        if: steps.check_version.outputs.version_exists == 'false'
         id: archive
         run: |
           zip -r "${{ steps.meta.outputs.release_slug }}.zip" "${{ steps.find_package.outputs.the_path }}"
 
       - name: Create Release ${{ steps.meta.outputs.release_slug }}
+        if: steps.check_version.outputs.version_exists == 'false'
         id: create_release
         uses: actions/create-release@latest
         env:
@@ -124,6 +127,7 @@ jobs:
           prerelease: true
 
       - name: Upload Release Asset
+        if: steps.check_version.outputs.version_exists == 'false'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

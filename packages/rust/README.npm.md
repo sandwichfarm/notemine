@@ -9,7 +9,7 @@
 ```js
 npm install notemine
 pnpm install notemine
-yarn add notemine
+pnpm add notemine
 ```
 
 # usage

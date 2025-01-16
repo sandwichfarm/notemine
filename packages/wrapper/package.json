@@ -14,7 +14,7 @@
   "scripts": {
     "clean": "rimraf dist",
     "build:types": "tsc --project tsconfig.json --emitDeclarationOnly",
-    "build": "yarn clean && yarn build:types && node build.js",
+    "build": "pnpm clean && pnpm build:types && node build.js",
     "dev": "node build.js",
     "test": "vitest"
   },

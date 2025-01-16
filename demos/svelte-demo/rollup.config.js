@@ -24,7 +24,7 @@ function serve() {
   return {
     writeBundle() {
       if (server) return;
-      server = spawn('yarn', ['start', '--', '--dev'], {
+      server = spawn('pnpm', ['start', '--', '--dev'], {
         stdio: ['ignore', 'inherit', 'inherit'],
         shell: true,
       });

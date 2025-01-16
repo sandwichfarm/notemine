@@ -47,7 +47,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - package: 'rust'
+          - package: 'core'
           - package: 'wrapper'
 
     steps:
@@ -75,7 +75,7 @@ jobs:
       - name: Find Package
         id: find_package
         run: |
-          PKG_PATH=$(find libraries internal apps -type d -name "${{ matrix.package }}" -print -quit)
+          PKG_PATH=$(find packages -type d -name "${{ matrix.package }}" -print -quit)
           echo "the_path=$PKG_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Publish Package

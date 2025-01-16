@@ -1,4 +1,4 @@
-[**@notemine/wrapper API v0.0.4**](../README.md) • **Docs**
+[**@notemine/wrapper API v0.0.6**](../README.md) • **Docs**
 
 ***
 
@@ -16,7 +16,7 @@ The content to include in the mined event
 
 #### Defined in
 
-[index.ts:8](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L8)
+[index.ts:8](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L8)
 
 ***
 
@@ -28,7 +28,7 @@ Difficulty level for mining
 
 #### Defined in
 
-[index.ts:14](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L14)
+[index.ts:14](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L14)
 
 ***
 
@@ -40,7 +40,7 @@ Number of workers to use for mining
 
 #### Defined in
 
-[index.ts:16](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L16)
+[index.ts:16](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L16)
 
 ***
 
@@ -52,7 +52,7 @@ Public key used for the event
 
 #### Defined in
 
-[index.ts:12](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L12)
+[index.ts:12](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L12)
 
 ***
 
@@ -64,4 +64,4 @@ Tags associated with the mined event
 
 #### Defined in
 
-[index.ts:10](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L10)
+[index.ts:10](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L10)

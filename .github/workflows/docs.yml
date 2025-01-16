@@ -3,7 +3,10 @@ name: Deploy Docusaurus site to GitHub Pages
 on:
   push:
     branches:
-      - main  # or the branch you want to deploy from
+      - master
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
 
 jobs:
   build-deploy:

@@ -1,4 +1,4 @@
-[**@notemine/wrapper API v0.0.4**](../README.md) • **Docs**
+[**@notemine/wrapper API v0.0.6**](../README.md) • **Docs**
 
 ***
 
@@ -16,4 +16,4 @@ The result of the mining operation
 
 #### Defined in
 
-[index.ts:46](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L46)
+[index.ts:46](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L46)

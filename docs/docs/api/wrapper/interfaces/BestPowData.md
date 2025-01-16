@@ -1,4 +1,4 @@
-[**@notemine/wrapper API v0.0.4**](../README.md) • **Docs**
+[**@notemine/wrapper API v0.0.6**](../README.md) • **Docs**
 
 ***
 
@@ -20,7 +20,7 @@ Best proof-of-work value
 
 #### Defined in
 
-[index.ts:52](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L52)
+[index.ts:52](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L52)
 
 ***
 
@@ -32,7 +32,7 @@ Hash that met the proof-of-work requirements
 
 #### Defined in
 
-[index.ts:56](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L56)
+[index.ts:56](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L56)
 
 ***
 
@@ -44,4 +44,4 @@ Nonce used to achieve the proof-of-work
 
 #### Defined in
 
-[index.ts:54](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L54)
+[index.ts:54](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L54)

@@ -1,4 +1,4 @@
-[**@notemine/wrapper API v0.0.4**](../README.md) • **Docs**
+[**@notemine/wrapper API v0.0.6**](../README.md) • **Docs**
 
 ***
 
@@ -16,7 +16,7 @@ The mined event data
 
 #### Defined in
 
-[index.ts:68](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L68)
+[index.ts:68](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L68)
 
 ***
 
@@ -28,7 +28,7 @@ Hash rate achieved during mining
 
 #### Defined in
 
-[index.ts:72](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L72)
+[index.ts:72](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L72)
 
 ***
 
@@ -40,4 +40,4 @@ Total time taken to mine (in milliseconds)
 
 #### Defined in
 
-[index.ts:70](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L70)
+[index.ts:70](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L70)

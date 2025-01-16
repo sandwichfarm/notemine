@@ -2,3 +2,4 @@ packages:
     - "packages/rust"
     - "packages/core"
     - "packages/wrapper"
+    - "docs"

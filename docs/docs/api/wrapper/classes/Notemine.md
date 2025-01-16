@@ -1,4 +1,4 @@
-[**@notemine/wrapper API v0.0.4**](../README.md) • **Docs**
+[**@notemine/wrapper API v0.0.6**](../README.md) • **Docs**
 
 ***
 
@@ -26,7 +26,7 @@ Configuration options for the miner
 
 #### Defined in
 
-[index.ts:121](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L121)
+[index.ts:121](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L121)
 
 ## Properties
 
@@ -38,7 +38,7 @@ Observable indicating if mining was cancelled
 
 #### Defined in
 
-[index.ts:93](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L93)
+[index.ts:93](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L93)
 
 ***
 
@@ -50,7 +50,7 @@ Observable for mining cancellations
 
 #### Defined in
 
-[index.ts:113](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L113)
+[index.ts:113](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L113)
 
 ***
 
@@ -62,7 +62,7 @@ Observable for errors encountered during mining
 
 #### Defined in
 
-[index.ts:111](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L111)
+[index.ts:111](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L111)
 
 ***
 
@@ -74,7 +74,7 @@ Observable for the worker that found the best proof-of-work
 
 #### Defined in
 
-[index.ts:101](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L101)
+[index.ts:101](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L101)
 
 ***
 
@@ -86,7 +86,7 @@ Observable indicating whether mining is currently active
 
 #### Defined in
 
-[index.ts:91](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L91)
+[index.ts:91](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L91)
 
 ***
 
@@ -98,7 +98,7 @@ Observable for mining progress updates
 
 #### Defined in
 
-[index.ts:109](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L109)
+[index.ts:109](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L109)
 
 ***
 
@@ -110,7 +110,7 @@ Observable for the result of the mining operation
 
 #### Defined in
 
-[index.ts:95](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L95)
+[index.ts:95](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L95)
 
 ***
 
@@ -122,7 +122,7 @@ Observable for successful mining results
 
 #### Defined in
 
-[index.ts:115](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L115)
+[index.ts:115](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L115)
 
 ***
 
@@ -134,7 +134,7 @@ Observable for the list of active workers
 
 #### Defined in
 
-[index.ts:97](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L97)
+[index.ts:97](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L97)
 
 ***
 
@@ -146,7 +146,7 @@ Observable tracking the proof-of-work data for each worker
 
 #### Defined in
 
-[index.ts:99](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L99)
+[index.ts:99](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L99)
 
 ***
 
@@ -156,7 +156,7 @@ Observable tracking the proof-of-work data for each worker
 
 #### Defined in
 
-[index.ts:88](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L88)
+[index.ts:88](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L88)
 
 ## Accessors
 
@@ -180,7 +180,7 @@ Sets the content to be used in the mining event
 
 #### Defined in
 
-[index.ts:135](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L135)
+[index.ts:135](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L135)
 
 ***
 
@@ -204,7 +204,7 @@ Sets the mining difficulty
 
 #### Defined in
 
-[index.ts:165](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L165)
+[index.ts:165](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L165)
 
 ***
 
@@ -228,7 +228,7 @@ Sets the last refresh interval
 
 #### Defined in
 
-[index.ts:185](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L185)
+[index.ts:185](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L185)
 
 ***
 
@@ -252,7 +252,7 @@ Sets the number of workers for mining
 
 #### Defined in
 
-[index.ts:175](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L175)
+[index.ts:175](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L175)
 
 ***
 
@@ -276,7 +276,7 @@ Sets the public key for the event
 
 #### Defined in
 
-[index.ts:155](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L155)
+[index.ts:155](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L155)
 
 ***
 
@@ -300,7 +300,7 @@ Sets the tags to be used in the mining event
 
 #### Defined in
 
-[index.ts:145](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L145)
+[index.ts:145](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L145)
 
 ***
 
@@ -316,7 +316,7 @@ Gets the total hash rate achieved
 
 #### Defined in
 
-[index.ts:190](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L190)
+[index.ts:190](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L190)
 
 ## Methods
 
@@ -332,7 +332,7 @@ Cancels the mining process
 
 #### Defined in
 
-[index.ts:226](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L226)
+[index.ts:226](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L226)
 
 ***
 
@@ -348,7 +348,7 @@ Starts the mining process. Throws an error if pubkey or content is not set.
 
 #### Defined in
 
-[index.ts:197](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L197)
+[index.ts:197](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L197)
 
 ***
 
@@ -364,4 +364,4 @@ Stops the mining process
 
 #### Defined in
 
-[index.ts:221](https://github.com/sandwichfarm/minnote-wasm/blob/dc6f370600c3d4348f40a1c0bba1ae3cb37dbb5a/packages/wrapper/src/index.ts#L221)
+[index.ts:221](https://github.com/sandwichfarm/minnote-wasm/blob/cc13d787d1ac8e5a3bda1b41bbeb5a31feed0328/packages/wrapper/src/index.ts#L221)

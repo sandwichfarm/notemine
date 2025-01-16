@@ -1,34 +1,18 @@
 # @notemine/wrapper
 
 [![npm](https://img.shields.io/npm/v/notemine)]( https://www.npmjs.com/package/notemine )
-[![build](https://github.com/sandwichfarm/notemine-js/actions/workflows/build.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/build.yaml ) 
-[![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml )
+[![build](https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml ) 
+[![docs](https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml ) 
+<!-- [![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml ) -->
 
-`@notemine/wrapper` is a typescript module that wraps [notemine](https://github.com/sandwichfarm/notemine) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
+`@notemine/wrapper` is a typescript module that wraps [@notemine/core](../core/README.md) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
 
 ## install
 package name: `@notemine/wrapper`
 
-**npm**
-```bash
-  npm install @notemine/wrapper
-```
-
-<details>
-<summary>pnpm</summary>
-
 ```bash
   pnpm install @notemine/wrapper
 ```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm install @notemine/wrapper
-```
-</details>
 
 ## usage 
 _untested_
@@ -45,7 +29,6 @@ _untested_
   const difficulty = 21
   const numberOfWorkers = 7
  
-
   const notemine = new Notemine({
     content,
     tags,
@@ -60,7 +43,8 @@ _untested_
   notemine.mine()
 ```
 
-Updates to notemine can be accessed via observables.
+Mining updates can be accessed via observables. 
+
 ```
 notemine.progress$
 notemine.error$
@@ -68,7 +52,13 @@ notemine.cancelled$
 notemine.success$
 ```
 
+for example:
 
+```
+miner.progress$.subscribe( progress => {
+  console.log(progress.workerId, progress)
+});
+```
 
 <details>
 <summary>svelte</summary>
@@ -78,7 +68,6 @@ notemine.success$
   import { onMount } from 'svelte';
   import { type Writable, writable } from 'svelte/store';
   import { type ProgressEvent, Notemine } from '@notemine/wrapper';
-
 
   const numberOfMiners = 8
   let notemine: Notemine;
@@ -239,84 +228,23 @@ export class MinerComponent implements OnInit, OnDestroy {
 ```
 </details>
 
-## build
-The wasm is not included in version control, so to build you'll need rust and it's toolchain. That includes `rustup` and `cargo`
+### build
 
-### install build deps
+### deps
 
 Install **wasm-pack** with `cargo install wasm-pack` 
 
 ### build wasm 
 Build the wasm with `build:wasm` 
 
-**npm**
-
-```bash
-  npm build:wasm
-```
-
-<details>
-<summary>pnpm</summary>
-
 ```bash
   pnpm build:wasm
 ```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build:wasm
-```
-</details>
 
 ### build package 
 
 Build the package with `build` 
-**npm**
-
-```bash
-  npm run build
-```
-
-<details>
-<summary>pnpm</summary>
 
 ```bash
   pnpm run build
 ```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build
-```
-</details>
-
-### test 
-<details>
-<summary>npm</summary>
-
-```bash
-  npm run build
-```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm run build
-```
-</details>
-
-<details>
-<summary>pnpm</summary>
-
-```bash
-  pnpm build
-```
-</details>

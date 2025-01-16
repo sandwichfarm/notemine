@@ -4,7 +4,7 @@
 
 ## Packages:
 - [`@notemine/rust`](./packages/core/) - Rust source code for miner and build scripts.
-- [`@notemine/core`](./packages/core/) - This package contains the `wasm-bindgen` build artifacts from `@notemine/rust` and is the low-level for Notemine.
+- [`@notemine/core`](./packages/core/) - This package contains the `wasm-bindgen` build artifacts from `@notemine/rust`. This is a low-level interface for the Notemine WASM miner.
 - [`@notemine/wrapper`](./packages/wrapper/) - A user-friendly wrapper for `@notemine/core` that greatly simplifies usage in modern stacks and deployments with modern bundlers. Provides observables, manages workers, tracks internal state and bundles wasm as _inline base64_ within _inline_ web-workers for hassle-free use in modern apps targeted for the browser.
 - _[`@notemine/svelte`](./packages/svelte-demo/)_ [coming soon]  - Library optimized for Svelte that exports stores and components for hassle-free use in svelte projects.
 - _[`@notemine/reactjs`](./packages/reactjs/)_ [coming soon] -  Library optimized for ReactJS that exports stores and components for hassle-free use in svelte projects.

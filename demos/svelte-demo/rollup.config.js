@@ -39,7 +39,7 @@ export default {
   input: 'src/main.js',
   output: {
     sourcemap: true,
-    format: 'iife',  // IIFE format works well in the browser context
+    format: 'iife',
     name: 'app',
     file: 'public/build/bundle.js',
   },
@@ -57,7 +57,7 @@ export default {
     }),
 
     commonjs({
-      include: 'node_modules/**',  // Ensure CommonJS modules are properly handled
+      include: 'node_modules/**',
       sourceMap: !production,
     }),
 
@@ -67,22 +67,16 @@ export default {
       ]
     }),
 
-    // typescript({ 
-    //   include: ['src/**/*', 'node_modules/@notemine/wrapper/dist/**/*'], 
-    // }),
 
-    wasm(), // Handle WASM files
+    wasm(),
 
-    // Add PostCSS for CSS handling
     postcss({
       extract: true,
     }),
 
-    // Auto-reload in development mode
     !production && serve(),
     !production && livereload('public'),
 
-    // Minify for production
     production && terser(),
   ],
 

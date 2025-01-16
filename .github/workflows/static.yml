@@ -20,6 +20,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       # - name: Delete demos/vanilla-js/pkg symlink
       #   run: rm -fr demos/vanilla-js/pkg
 

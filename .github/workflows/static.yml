@@ -30,6 +30,7 @@ jobs:
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
+          override: true
 
       - name: Install wasm-pack
         uses: qmaru/wasm-pack-action@v0.5.0

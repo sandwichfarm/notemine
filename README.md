@@ -24,5 +24,5 @@ pnpm install
 
 Use workspace commands: 
 ```
-pnpm workspace @notemine/wrapper ...
+pnpm --filter @notemine/wrapper ...
 ```

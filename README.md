@@ -16,10 +16,15 @@
 ## Forks:
 - [`notemine-hw`](https://github.com/plebemineira/notemine_hw) is a fork of `@notemine/rust` ported to a cli application that leverages hardware acceleration
 
-## Contrib
-`@notemine` monorepo presently uses `pnpm workspaces` without any monorepo toolkit (pending). Recommended to use `pnpm v2` until monorepo is fully configured.
+## Build
+Will build all packages.
 ```
 pnpm install 
+```
+
+Install without building all packages
+```
+pnpm install --ignore-scripts
 ```
 
 Use workspace commands: 

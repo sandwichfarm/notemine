@@ -9,8 +9,6 @@ import { sveltePreprocess } from 'svelte-preprocess';
 import livereload from 'rollup-plugin-livereload';
 import { spawn } from 'child_process';
 import copy from 'rollup-plugin-copy'
-import alias from '@rollup/plugin-alias';
-
 
 const production = !process.env.ROLLUP_WATCH;
 

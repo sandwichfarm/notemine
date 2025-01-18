@@ -1,6 +1,6 @@
 # notemine⛏️ 
 
-**notemine** mines nostr notes, the miner is written in rust, targets web and compiles to wasm. Variable difficulty and realtime hashrate. There's some [demos](https://sandwichfarm.github.io/notemine).
+**notemine** mines nostr notes, the miner is written in rust, targets web and compiles to wasm. Variable difficulty and realtime hashrate. There's some [demos](https://sandwichfarm.github.io/notemine). There are [low-level js wasm bindings](./packages/core/) and an [easy-to-use typescript wrapper](./packages/wrapper/)
 
 ## Packages:
 - [`@notemine/rust`](./packages/rust/) - Rust source code for miner and build scripts.

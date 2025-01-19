@@ -2,7 +2,7 @@
   "name": "@notemine/core",
   "type": "module",
   "description": "a nostr note miner compiled to wasm",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -10,6 +10,7 @@
   },
   "files": [
     "notemine_bg.wasm",
+    "notemine_bg.wasm.d.ts",
     "notemine.js",
     "notemine.d.ts"
   ],
@@ -23,6 +24,7 @@
       "require": "./dist/notemine.js"
     },
     "./wasm": {
+      "types": "./dist/notemine_bg.wasm.d.ts",
       "import": "./dist/notemine_bg.wasm",
       "require": "./dist/notemine_bg.wasm"
     }

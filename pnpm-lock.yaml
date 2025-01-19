@@ -24,6 +24,9 @@ importers:
 
   demos/svelte-demo:
     dependencies:
+      '@notemine/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@notemine/wrapper':
         specifier: workspace:*
         version: link:../../packages/wrapper
@@ -48,6 +51,9 @@ importers:
       rollup-plugin-web-worker-loader:
         specifier: 1.6.1
         version: 1.6.1(rollup@3.29.5)
+      rxjs:
+        specifier: 7.8.1
+        version: 7.8.1
       sirv-cli:
         specifier: ^2.0.0
         version: 2.0.2
@@ -94,6 +100,9 @@ importers:
 
   demos/vanilla-js-demo:
     dependencies:
+      '@notemine/core':
+        specifier: workspace:^
+        version: link:../../packages/core
       sirv:
         specifier: 3.0.0
         version: 3.0.0
@@ -146,8 +155,6 @@ importers:
 
   packages/core: {}
 
-  packages/rust: {}
-
   packages/wrapper:
     dependencies:
       '@jspm/core':
@@ -156,11 +163,8 @@ importers:
       '@notemine/core':
         specifier: workspace:*
         version: link:../core
-      notemine:
-        specifier: 0.3.2
-        version: 0.3.2
       rxjs:
-        specifier: 7.8.1
+        specifier: ^7.8.1
         version: 7.8.1
     devDependencies:
       '@jgoz/esbuild-plugin-livereload':
@@ -4898,9 +4902,6 @@ packages:
 
   nostr-wasm@0.1.0:
     resolution: {integrity: sha512-78BTryCLcLYv96ONU8Ws3Q1JzjlAt+43pWQhIl86xZmWeegYCNLPml7yQ+gG3vR6V5h4XGj+TxO+SS5dsThQIA==}
-
-  notemine@0.3.2:
-    resolution: {integrity: sha512-4ZLWGCdRb2NHMEWP3KHdr2zC22MjBwhQCFhcjOi64QF6xLFvWlysEsvbnZNhhbjDoZLDmeiVRpLKNtPKeoYqBQ==}
 
   npm-run-path@4.0.1:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}
@@ -13132,8 +13133,6 @@ snapshots:
 
   nostr-wasm@0.1.0:
     optional: true
-
-  notemine@0.3.2: {}
 
   npm-run-path@4.0.1:
     dependencies:

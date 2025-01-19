@@ -24,6 +24,13 @@ jobs:
         with:
           version: 9
 
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
       - name: Install wasm-pack
         run: cargo install wasm-pack
 

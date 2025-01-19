@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@notemine/wrapper": "workspace:*",
+    "@notemine/core": "workspace:*",
     "@rollup/plugin-alias": "5.1.1",
     "@rollup/plugin-url": "8.0.2",
     "@rollup/plugin-wasm": "6.2.2",
@@ -17,7 +18,8 @@
     "rollup-plugin-typescript2": "0.36.0",
     "rollup-plugin-web-worker-loader": "1.6.1",
     "sirv-cli": "^2.0.0",
-    "webpack-env": "0.8.0"
+    "webpack-env": "0.8.0",
+    "rxjs": "7.8.1"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "28.0.0",

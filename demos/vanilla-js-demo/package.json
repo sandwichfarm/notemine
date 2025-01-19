@@ -10,6 +10,7 @@
     "build": "./scripts/copy-notemine.sh"
   },
   "dependencies": {
-    "sirv": "3.0.0"
+    "sirv": "3.0.0",
+    "@notemine/core": "workspace:^"
   }
 }

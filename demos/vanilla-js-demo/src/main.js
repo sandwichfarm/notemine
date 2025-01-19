@@ -61,7 +61,7 @@ overallBestPowOutput.style.display = 'none';
 neventOutput.style.display = 'none';
 relayStatus.style.display = 'none';
 
-if(window?.nostr !== undefined) {
+if(window?.nostr && typeof window?.nostr !== undefined) {
     loginButton.style.display = 'inline-block';
 }
 

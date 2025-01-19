@@ -38,6 +38,9 @@ jobs:
         env: 
           DEPS_AUTO_DENY: "true"
         run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -r build
     
       - name: Check Artifact Size
         run: du -sh packages/**/dist

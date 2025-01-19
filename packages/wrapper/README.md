@@ -1,6 +1,6 @@
 # @notemine/wrapper
 
-[![npm](https://img.shields.io/npm/v/notemine)]( https://www.npmjs.com/package/notemine )
+[![npm](https://img.shields.io/npm/v/@notemine/wrapper)](https://www.npmjs.com/package/@notemine/wrapper)
 [![build](https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml ) 
 [![docs](https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml ) 
 <!-- [![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml ) -->

@@ -1,6 +1,6 @@
 {
   "name": "@notemine/wrapper",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": "bread@sandwich.farm",
   "description": "Nostr note miner wrapper for notemine wasm-bindgen",
   "repository": "https://github.com/sandwichfarm/notemine",
@@ -15,7 +15,6 @@
     "clean": "rimraf dist",
     "build:types": "tsc --project tsconfig.json --emitDeclarationOnly",
     "build": "pnpm clean && pnpm build:types && node build.js",
-    "prepare": "pnpm build",
     "dev": "node build.js",
     "test": "vitest"
   },

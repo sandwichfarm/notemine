@@ -1,6 +1,6 @@
 packages:
     - "packages/core"
     - "packages/wrapper"
-    - "docs"
+    # - "docs"
     - "demos/vanilla-js-demo"
     - "demos/svelte-demo"

@@ -6,7 +6,6 @@
   "license": "MIT",
   "scripts": {
     "dev": "sirv public --port 1372",
-    "prepare": "pnpm build",
     "build": "./scripts/copy-notemine.sh"
   },
   "dependencies": {

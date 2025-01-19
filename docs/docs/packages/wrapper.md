@@ -1,11 +1,17 @@
 # @notemine/wrapper
 
-[![npm](https://img.shields.io/npm/v/notemine)]( https://www.npmjs.com/package/notemine )
+[![npm](https://img.shields.io/npm/v/@notemine/wrapper)](https://www.npmjs.com/package/@notemine/wrapper)
 [![build](https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/publish-packages.yml ) 
 [![docs](https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml/badge.svg)]( https://github.com/sandwichfarm/notemine/actions/workflows/docs.yml ) 
 <!-- [![test](https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml/badge.svg)]( https://github.com/sandwichfarm/notemine-js/actions/workflows/test.yaml ) -->
 
 `@notemine/wrapper` is a typescript module that wraps [@notemine/core](../core/README.md) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
+
+# related
+- [`@notemine/core`](https://github.com/sandwichfarm/notemine/tree/master/packages/core) is the low-level js bindings and interface for Notemine wasm.
+- [`@notemine/vanilla-js-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/vanilla-js-demo) is a demo written with HTML, Vanilla JS and CSS, with no bundlers, that implements `@notemine/core`
+- [`@notemine/svelte-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/svelte-demo) is a demo built with `svelte` and `vite` that implements `@notemine/wrapper`
+- [`@notemine/rust`](https://github.com/sandwichfarm/notemine/tree/master/packages/rust) is the rust source code for `notemine`. 
 
 ## install
 package name: `@notemine/wrapper`

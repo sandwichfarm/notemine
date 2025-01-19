@@ -1,6 +1,8 @@
 > Note: You most likely want to use [`@notemine/wrapper`](https://github.com/sandwichfarm/notemine/tree/master/packages/wrapper)
 
 # @notemine/core
+[![npm](https://img.shields.io/npm/v/@notemine/core)](https://www.npmjs.com/package/@notemine/core)
+
 WASM js bindings for Notemine.
 
 # related

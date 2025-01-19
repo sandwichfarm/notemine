@@ -1,8 +1,8 @@
-**@notemine/wrapper API v0.0.7**
+**@notemine/wrapper API v0.1.0**
 
 ***
 
-# @notemine/wrapper API v0.0.7
+# @notemine/wrapper API v0.1.0
 
 ## Classes
 

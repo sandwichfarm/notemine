@@ -8,8 +8,8 @@
     "start": "sirv public --no-clear"
   },
   "dependencies": {
-    "@notemine/wrapper": "workspace:*",
     "@notemine/core": "workspace:*",
+    "@notemine/wrapper": "workspace:*",
     "@rollup/plugin-alias": "5.1.1",
     "@rollup/plugin-url": "8.0.2",
     "@rollup/plugin-wasm": "6.2.2",
@@ -17,14 +17,15 @@
     "rollup-plugin-terser": "7.0.2",
     "rollup-plugin-typescript2": "0.36.0",
     "rollup-plugin-web-worker-loader": "1.6.1",
+    "rxjs": "7.8.1",
     "sirv-cli": "^2.0.0",
-    "webpack-env": "0.8.0",
-    "rxjs": "7.8.1"
+    "webpack-env": "0.8.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "28.0.0",
     "@rollup/plugin-node-resolve": "15.3.0",
     "@rollup/plugin-terser": "^0.4.0",
+    "picomatch": "^4.0.2",
     "rollup": "^3.15.0",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-css-only": "^4.3.0",

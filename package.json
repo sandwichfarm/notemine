@@ -10,6 +10,9 @@
   "dependencies": {
     "@changesets/cli": "2.27.9"
   },
+  "scripts": {
+    "build": "pnpm -r build"
+  },
   "devDependencies": {
     "changeset": "^0.2.6",
     "fs-extra": "^11.2.0",

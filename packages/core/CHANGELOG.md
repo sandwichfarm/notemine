@@ -1,5 +1,11 @@
 # @notemine/core
 
+## 0.4.2
+
+### Patch Changes
+
+- Fix links in READMEs
+
 ## 0.4.1
 
 ### Patch Changes

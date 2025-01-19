@@ -1,12 +1,20 @@
 #!/bin/bash
 
 AUTO_CONFIRM=false
-if [ "$CI_ENV" == "true" ]; then
+AUTO_DENY=false
+if [ "$DEPS_AUTO_CONFIRM" == "true" ]; then
     AUTO_CONFIRM=true
+fi
+if [ "$DEPS_AUTO_DENY" == "true" ]; then
+    AUTO_DENY=true
 fi
 for arg in "$@"; do
     if [ "$arg" == "-y" ]; then
         AUTO_CONFIRM=true
+        break
+    fi
+    if [ "$arg" == "--deny" ]; then
+        AUTO_DENY=true
         break
     fi
 done
@@ -18,6 +26,9 @@ function is_installed() {
 function confirm_installation() {
     if [ "$AUTO_CONFIRM" == true ]; then
         return 0
+    fi
+    if [ "$AUTO_DENY" == true ]; then
+        return 1
     fi
     read -p "$1 (y/n): " choice
     case "$choice" in

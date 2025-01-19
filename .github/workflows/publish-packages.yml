@@ -35,6 +35,8 @@ jobs:
         run: cargo install wasm-pack
 
       - name: Install
+        env: 
+          DEPS_AUTO_DENY: "true"
         run: pnpm install --frozen-lockfile
     
       - name: Check Artifact Size

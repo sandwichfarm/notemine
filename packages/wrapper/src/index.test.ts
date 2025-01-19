@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Notemine } from './index';
+import { Notemine } from './index.js';
 import { Observable } from 'rxjs';
 
 describe('Notemine', () => {

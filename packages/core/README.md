@@ -1,15 +1,16 @@
-# note⛏️
-**notemine** mines nostr notes, is written in rust, targets web and compiles to wasm. Variable difficulty and realtime hashrate. There's a [demo](https://sandwichfarm.github.io/notemine).
+> Note: You most likely want to use [`@notemine/wrapper`](https://github.com/sandwichfarm/notemine/tree/master/packages/wrapper)
+
+# @notemine/core
+WASM js bindings for Notemine.
 
 # related
-- [`notemine-js`](https://github.com/sandwichfarm/notemine-js) is an npm module that wraps this package with observables for use with modern stacks.
-- [`notemine-hw`](https://github.com/plebemineira/notemine_hw) is a fork ported to a cli application that leverages hardware acceleration
+- [`@notemine/wrapper`](https://github.com/sandwichfarm/notemine/tree/master/packages/wrapper) - A user-friendly wrapper for `@notemine/core` that greatly simplifies usage in modern stacks and deployments with modern bundlers. Provides observables, manages workers, tracks internal state and bundles wasm as _inline base64_ within _inline_ web-workers for hassle-free use in modern apps targeted for the browser.
+- [`@notemine/vanilla-js-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/vanilla-js-demo) is a demo written with HTML, Vanilla JS and CSS, with no bundlers, that implements `@notemine/core`
+- [`@notemine/svelte-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/svelte-demo) is a demo built with `svelte` and `vite` that implements `@notemine/wrapper`
 
 # install 
 ```js
-npm install notemine
-pnpm install notemine
-pnpm add notemine
+pnpm install @notemine/core
 ```
 
 # usage
@@ -57,22 +58,7 @@ await init({});
 ```
 
 # build
-
-## deps 
-```
-cargo install wasm-pack
-```
-
-## build
-```
-cargo clean
-wasm-pack build --target web --release
-```
-
-## run demo
-```
-cd demo && npx serve 
-```
+Refer to the [Readme on Github](https://github.com/sandwichfarm/notemine/tree/master/packages/core) for WASM build instructions
 
 # license
 GNU General Public License v3.0

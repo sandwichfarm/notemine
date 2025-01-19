@@ -1,8 +1,8 @@
-import initWasm, { mine_event } from 'notemine';
+import initWasm, { mine_event } from '@notemine/core';
 //@ts-ignore: esbuild wasm loader
 import wasm from '@notemine/core/wasm';
 
-import type { BestPowData } from './index';
+import type { BestPowData } from './index.js';
 
 type BestPowDataMap = Map<'best_pow' | 'nonce' | 'hash', number | string>;
 

@@ -3,7 +3,7 @@ name = "notemine"
 version = "0.3.2"
 edition = "2021"
 description = "a nostr note miner compiled to wasm"
-repository = "https://github.com/sandwichfarm/notemine"
+repository = "https://github.com/sandwichfarm/notemine/tree/master/packages/core"
 license = "GPL-3.0-only"
 
 [lib]

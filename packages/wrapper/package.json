@@ -27,12 +27,10 @@
     "rxjs"
   ],
   "dependencies": {
-    "@jspm/core": "^2.1.0",
-    "@notemine/core": "workspace:*",
-    "notemine": "0.3.2",
-    "rxjs": "7.8.1"
+    "@jspm/core": "^2.1.0"
   },
   "peerDependencies": {
+    "@notemine/core": "workspace:*",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

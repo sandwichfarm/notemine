@@ -1,5 +1,13 @@
 # @notemine/wrapper
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated docs
+- Updated dependencies
+  - @notemine/core@0.4.1
+
 ## 0.1.0
 
 ### Minor Changes

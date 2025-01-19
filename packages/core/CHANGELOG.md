@@ -1,5 +1,11 @@
 # @notemine/core
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated docs
+
 ## 0.4.0
 
 ### Minor Changes

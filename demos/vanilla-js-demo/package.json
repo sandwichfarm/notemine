@@ -1,6 +1,6 @@
 {
   "name": "@notemine/vanilla-js-demo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A notemine demo app written in vanilla JS, HTML and CSS with minimal dependendencies",
   "main": "src/index.html",
   "license": "MIT",

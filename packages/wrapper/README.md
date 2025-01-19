@@ -8,9 +8,9 @@
 `@notemine/wrapper` is a typescript module that wraps [@notemine/core](../core/README.md) `wasm-bindgen` interfaces. More convenient and has added observables for more consistent use throughout modern web stacks. 
 
 # related
-- [`@notemine/core`](./packages/core/) - This package contains the `wasm-bindgen` build artifacts from `@notemine/rust`. This is a low-level interface for the Notemine WASM miner.
-- [`@notemine/vanilla-js-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/vanilla-js-demo) is a demo written with HTML, Vanilla JS and CSS, with no bundlers, that implements `@notemine/core`
-- [`@notemine/svelte-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/svelte-demo) is a demo built with `svelte` and `vite` that implements `@notemine/wrapper`
+- `@notemine/core` [`git`](https://github.com/sandwichfarm/notemine/tree/master/packages/core) [`npm`](https://www.npmjs.com/package/@notemine/core) - This package contains the `wasm-bindgen` build artifacts from `@notemine/rust`. This is a low-level interface for the Notemine WASM miner.
+- `@notemine/vanilla-js-demo` [`git`](https://github.com/sandwichfarm/notemine/tree/master/demos/vanilla-js-demo) is a demo written with HTML, Vanilla JS and CSS, with no bundlers, that implements `@notemine/core`
+- `@notemine/svelte-demo` [`git`](https://github.com/sandwichfarm/notemine/tree/master/demos/svelte-demo) is a demo built with `svelte` and `vite` that implements `@notemine/wrapper`
 
 ## install
 package name: `@notemine/wrapper`

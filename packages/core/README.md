@@ -6,9 +6,9 @@
 WASM js bindings for Notemine.
 
 # related
-- [`@notemine/wrapper`](https://github.com/sandwichfarm/notemine/tree/master/packages/wrapper) - A user-friendly wrapper for `@notemine/core` that greatly simplifies usage in modern stacks and deployments with modern bundlers. Provides observables, manages workers, tracks internal state and bundles wasm as _inline base64_ within _inline_ web-workers for hassle-free use in modern apps targeted for the browser.
-- [`@notemine/vanilla-js-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/vanilla-js-demo) is a demo written with HTML, Vanilla JS and CSS, with no bundlers, that implements `@notemine/core`
-- [`@notemine/svelte-demo`](https://github.com/sandwichfarm/notemine/tree/master/demos/svelte-demo) is a demo built with `svelte` and `vite` that implements `@notemine/wrapper`
+- `@notemine/wrapper` [`git`](https://github.com/sandwichfarm/notemine/tree/master/packages/wrapper) [`npm`](https://www.npmjs.com/package/@notemine/wrapper) - A user-friendly wrapper for `@notemine/core` that simplifies usage in modern stacks and deployments with modern bundlers. Provides observables, manages workers, tracks internal state and bundles wasm as _inline base64_ within _inline_ web-workers for hassle-free use in modern apps targeted for the browser.
+- `@notemine/vanilla-js-demo` [`git`](https://github.com/sandwichfarm/notemine/tree/master/demos/vanilla-js-demo) is a demo written with HTML, Vanilla JS and CSS, with no bundlers, that implements `@notemine/core`
+- `@notemine/svelte-demo` [`git`](https://github.com/sandwichfarm/notemine/tree/master/demos/svelte-demo) is a demo built with `svelte` and `vite` that implements `@notemine/wrapper`
 
 # install 
 ```js

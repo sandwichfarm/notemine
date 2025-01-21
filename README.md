@@ -3,7 +3,7 @@
 **notemine** mines nostr notes, the miner is written in rust, targets web and compiles to wasm. Variable difficulty and realtime hashrate. There's some [demos](https://sandwichfarm.github.io/notemine). There are [low-level js wasm bindings](./packages/core/) and an [easy-to-use typescript wrapper](./packages/wrapper/)
 
 ## Packages
-- `@notemine/core` [`git`](https://github.com/sandwichfarm/notemine/tree/master/packages/core) [npm](https://www.npmjs.com/package/@notemine/core) - This package contains the `wasm-bindgen` build artifacts from `@notemine/rust`. This is a low-level interface for the Notemine WASM miner.
+- `@notemine/core` [`git`](https://github.com/sandwichfarm/notemine/tree/master/packages/core) [npm](https://www.npmjs.com/package/@notemine/core) - Low-level js bindings and interface for Notemine WASM.
 - `@notemine/wrapper` [`git`](https://github.com/sandwichfarm/notemine/tree/master/packages/wrapper) [`npm`](https://www.npmjs.com/package/@notemine/wrapper) - A user-friendly wrapper for `@notemine/core` that greatly simplifies usage in modern stacks and deployments with modern bundlers. Provides observables, manages workers, tracks internal state and bundles wasm as _inline base64_ within _inline_ web-workers for hassle-free use in modern apps targeted for the browser.
 
 ## Demos
@@ -15,7 +15,7 @@
 - _`@notemine/reactjs`_ Module that extends `@notemine/wrapper`, optimized for ReactJS that exports stores and components for hassle-free use in svelte projects.
 
 ## Forks:
-- [`notemine-hw`](https://github.com/plebemineira/notemine_hw) is a fork of `@notemine/rust` ported to a cli application that leverages hardware acceleration
+- [`notemine-hw`](https://github.com/plebemineira/notemine_hw) is a fork of `@notemine/core` ported to a cli application that leverages hardware acceleration
 
 ## Build
 Will build all packages.

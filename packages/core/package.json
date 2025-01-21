@@ -9,10 +9,10 @@
     "url": "https://github.com/sandwichfarm/notemine"
   },
   "files": [
-    "notemine_bg.wasm",
-    "notemine_bg.wasm.d.ts",
-    "notemine.js",
-    "notemine.d.ts"
+    "./dist/notemine_bg.wasm",
+    "./dist/notemine_bg.wasm.d.ts",
+    "./dist/notemine.js",
+    "./dist/notemine.d.ts"
   ],
   "sideEffects": [
     "./snippets/*"

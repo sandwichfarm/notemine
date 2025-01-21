@@ -1,5 +1,12 @@
 # @notemine/vanilla-js-demo
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @notemine/core@0.4.3
+
 ## 0.1.3
 
 ### Patch Changes

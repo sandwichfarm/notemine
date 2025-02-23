@@ -41,7 +41,7 @@ _untested_
     numberOfWorkers    
   })
 
-  //you can also set content, tags and pubkey via assessors after initialization. 
+  //you can also set content, tags and pubkey via accessors after initialization. 
   notemine.pubkey = pubkey
 
   //start notemine

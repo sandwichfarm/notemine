@@ -86,26 +86,75 @@ export class StatePersistenceService {
   }
   
   /**
-   * Save complete interface state
+   * Save complete interface state with per-pane workspace state
    */
   saveInterfaceState(state: WindowManagerState, windowContents: Map<string, any>): void {
     if (!browser) return;
     
-    console.log('💾 Saving interface state...');
+    console.log('💾 Saving interface state with per-pane workspace state...');
+    
+    // Find which workspace each window belongs to
+    const windowToWorkspace = new Map<string, number>();
+    for (const [workspaceId, workspace] of state.workspaces) {
+      for (const windowId of workspace.windows) {
+        windowToWorkspace.set(windowId, workspaceId);
+      }
+    }
     
     const persistedState: PersistedState = {
-      windows: Array.from(state.windows.values()).map(window => ({
-        id: window.id,
-        class: window.class,
-        title: window.title,
-        focused: window.focused,
-        floating: window.floating,
-        fullscreen: window.fullscreen,
-        pinned: window.pinned,
-        content: windowContents.get(window.id)?.content || '',
-        scrollPosition: windowContents.get(window.id)?.scrollPosition || 0,
-        customData: windowContents.get(window.id)?.customData || {}
-      })),
+      version: 2, // Increment version for new pane state format
+      windows: Array.from(state.windows.values()).map(window => {
+        const contents = windowContents.get(window.id) || {};
+        const workspaceId = windowToWorkspace.get(window.id) || state.activeWorkspace;
+        
+        // Extract pane-specific state based on window class
+        const paneState: PersistedPaneState = {
+          scrollPosition: contents.scrollPosition || 0,
+          customData: contents.customData || {}
+        };
+        
+        // Add class-specific state
+        switch (window.class) {
+          case 'feed':
+            paneState.activeFeedId = contents.activeFeedId;
+            paneState.feedConfigs = contents.feedConfigs;
+            paneState.selectedRelays = contents.selectedRelays;
+            paneState.exclusiveMode = contents.exclusiveMode;
+            paneState.feedEvents = contents.feedEvents;
+            break;
+          case 'compose':
+            paneState.content = contents.content || '';
+            paneState.difficulty = contents.difficulty;
+            paneState.replyTo = contents.replyTo;
+            break;
+          case 'mining':
+          case 'mining-overview':
+            paneState.targetDifficulty = contents.targetDifficulty;
+            paneState.miningThreads = contents.miningThreads;
+            break;
+          case 'radio':
+            paneState.selectedStation = contents.selectedStation;
+            paneState.volume = contents.volume;
+            paneState.isPlaying = contents.isPlaying;
+            break;
+          case 'profile':
+            paneState.pubkey = contents.pubkey;
+            paneState.profileData = contents.profileData;
+            break;
+        }
+        
+        return {
+          id: window.id,
+          class: window.class,
+          title: window.title,
+          focused: window.focused,
+          floating: window.type === 'floating',
+          fullscreen: window.fullscreen,
+          pinned: window.pinned,
+          workspaceId: workspaceId,
+          paneState: paneState
+        };
+      }),
       workspaces: Object.fromEntries(
         Array.from(state.workspaces.entries()).map(([id, workspace]) => [
           id,
@@ -113,7 +162,10 @@ export class StatePersistenceService {
             id: workspace.id,
             name: workspace.name,
             windows: workspace.windows,
-            focused: workspace.focused
+            focused: workspace.focused,
+            lastActiveWindowId: workspace.focused ? state.focusedWindowId : undefined,
+            createdAt: Date.now(), // Will be overridden on load for existing workspaces
+            lastActiveAt: workspace.focused ? Date.now() : Date.now() - 1000 // Recent but not current
           }
         ])
       ),

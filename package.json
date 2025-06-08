@@ -19,5 +19,9 @@
     "typedoc": "^0.27.6",
     "typedoc-plugin-markdown": "^4.2.9"
   },
-  "packageManager": "pnpm@9"
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
 }

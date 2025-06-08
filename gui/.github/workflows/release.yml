@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test -- --run
+
+      - name: Build for production
+        run: pnpm build
+        env:
+          PUBLIC_VERSION: ${{ github.ref_name }}
+
+      - name: Create release archive
+        run: |
+          cd build
+          tar -czf ../notemine-gui-${{ github.ref_name }}.tar.gz .
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: notemine-gui-${{ github.ref_name }}.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      - name: Deploy to Bunny.net
+        env:
+          BUNNY_STORAGE_KEY: ${{ secrets.BUNNY_STORAGE_KEY }}
+          BUNNY_STORAGE_ZONE: ${{ secrets.BUNNY_STORAGE_ZONE }}
+          BUNNY_CDN_URL: ${{ secrets.BUNNY_CDN_URL }}
+        run: |
+          # Deploy versioned release
+          echo "Deploying version ${{ github.ref_name }} to Bunny.net"
+          # Add actual deployment commands here

@@ -1,0 +1,19 @@
+{
+  "name": "Hypergate",
+  "short_name": "Hypergate",
+  "description": "Your portal to the decentralized future",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#8b5cf6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["social", "productivity"],
+  "prefer_related_applications": false
+}

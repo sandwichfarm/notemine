@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<link rel="manifest" href="%sveltekit.assets%/manifest.json" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#8b5cf6" />
+		<meta name="description" content="Hypergate - Your portal to the decentralized future" />
+		<title>Hypergate</title>
+		
+		<!-- PWA Meta Tags -->
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="Hypergate" />
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/favicon.png" />
+		
+		%sveltekit.head%
+	</head>
+	<body>
+		<div style="display: contents">%sveltekit.body%</div>
+		
+		<script>
+			// Suppress fetch errors for WebSocket URLs (NIP-11 attempts)
+			window.addEventListener('unhandledrejection', function(event) {
+				if (event.reason && event.reason.message && 
+				    (event.reason.message.includes('URL scheme "wss" is not supported') ||
+				     event.reason.message.includes('URL scheme "ws" is not supported'))) {
+					console.log('Suppressed WebSocket fetch error (NIP-11 attempt):', event.reason.message);
+					event.preventDefault();
+				}
+			});
+			
+			// Override console.error to suppress specific fetch errors
+			const originalConsoleError = console.error;
+			console.error = function(...args) {
+				const message = args.join(' ');
+				if (message.includes('Fetch API cannot load wss://') || 
+				    message.includes('Fetch API cannot load ws://')) {
+					// Suppress these specific errors
+					return;
+				}
+				originalConsoleError.apply(console, args);
+			};
+		</script>
+	</body>
+</html>

@@ -211,7 +211,7 @@
   }
 </style>
 
-<h1><code>note⛏️</code></h1>
+<h1><code>nnnnote⛏️</code></h1>
 <p>This is a demo of <strong>Notemine</strong>, a wasm Nostr note miner written in Rust.</p>
 
 <button on:click={toggleAuth}>

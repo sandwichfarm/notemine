@@ -1,0 +1,9 @@
+node_modules
+build
+.svelte-kit
+dist
+coverage
+package-lock.json
+pnpm-lock.yaml
+*.min.js
+*.min.css

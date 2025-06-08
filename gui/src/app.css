@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Minimal interface styles */
+@layer base {
+  html, body {
+    @apply bg-black text-white;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  #app {
+    height: 100%;
+    width: 100%;
+  }
+  
+  /* Custom scrollbars to match green theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgb(20, 83, 45); /* green-900 */
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgb(34, 197, 94); /* green-400 */
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(74, 222, 128); /* green-300 */
+  }
+  
+  ::-webkit-scrollbar-corner {
+    background: rgb(20, 83, 45); /* green-900 */
+  }
+  
+  /* Retro mining animations */
+  @keyframes matrix-rain {
+    0% { transform: translateY(-100%); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(100%); opacity: 0; }
+  }
+  
+  @keyframes glow-pulse {
+    0%, 100% { 
+      text-shadow: 0 0 5px rgb(34, 197, 94), 0 0 10px rgb(34, 197, 94);
+      opacity: 1;
+    }
+    50% { 
+      text-shadow: 0 0 10px rgb(74, 222, 128), 0 0 20px rgb(74, 222, 128);
+      opacity: 0.8;
+    }
+  }
+  
+  @keyframes typewriter {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  
+  @keyframes blink-cursor {
+    0%, 50% { border-right-color: rgb(34, 197, 94); }
+    51%, 100% { border-right-color: transparent; }
+  }
+  
+  .mining-glow {
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+  
+  .matrix-char {
+    animation: matrix-rain 3s linear infinite;
+  }
+  
+  .typewriter-effect {
+    overflow: hidden;
+    border-right: 2px solid rgb(34, 197, 94);
+    white-space: nowrap;
+    animation: typewriter 2s steps(10) 1s both, blink-cursor 1s infinite;
+  }
+  
+  /* Remove default focus outlines */
+  *:focus {
+    outline: none;
+  }
+  
+  /* Smooth all transitions */
+  * {
+    transition-property: opacity, transform;
+    transition-duration: 300ms;
+    transition-timing-function: ease-out;
+  }
+  
+  /* Window visual settings */
+  .hyprland-window {
+    --window-rounding: 0px;
+    --window-blur: none;
+    --window-shadow: 0 0 10px rgba(0, 0, 0, 0.8), 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  }
+  
+  .hyprland-window.rounded {
+    border-radius: var(--window-rounding);
+  }
+  
+  .hyprland-window.blur {
+    backdrop-filter: var(--window-blur);
+  }
+  
+  .hyprland-window.shadow {
+    box-shadow: var(--window-shadow);
+  }
+}

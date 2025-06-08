@@ -4,3 +4,4 @@ packages:
     # - "docs"
     - "demos/vanilla-js-demo"
     - "demos/svelte-demo"
+    - "gui"

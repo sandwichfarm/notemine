@@ -1,6 +1,6 @@
 {
   "name": "@notemine/wrapper",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": "bread@sandwich.farm",
   "description": "Nostr note miner wrapper for notemine wasm-bindgen",
   "repository": "https://github.com/sandwichfarm/notemine",

@@ -1,6 +1,6 @@
 {
   "name": "@notemine/wrapper",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": "bread@sandwich.farm",
   "description": "Nostr note miner wrapper for notemine wasm-bindgen",
   "repository": "https://github.com/sandwichfarm/notemine",
@@ -16,7 +16,8 @@
     "build:types": "tsc --project tsconfig.json --emitDeclarationOnly",
     "build": "pnpm clean && pnpm build:types && node build.js",
     "dev": "node build.js",
-    "test": "vitest"
+    "test": "vitest",
+    "publish": "pnpm build && npm publish --access=public"
   },
   "keywords": [
     "nostr",

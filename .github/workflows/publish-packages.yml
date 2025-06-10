@@ -49,8 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: built-packages
-          path: |
-            packages/**/dist/
+          path: packages/*/dist/
 
   publish:
     runs-on: ubuntu-latest

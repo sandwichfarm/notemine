@@ -1,0 +1,22 @@
+{
+  "bunkerPubkey": "f7acbdb8e9251141bf63f19d478167eb7988ed30ce7cd94ef338d4cca168ce30",
+  "fallback": "index.html",
+  "relays": [
+    "wss://relay.nsite.lol",
+    "wss://relay.nostr.band",
+    "wss://relay.primal.net",
+    "wss://relay.damus.io"
+  ],
+  "servers": [
+    "https://cdn.hzrd149.com",
+    "https://nosto.re"
+  ],
+  "profile": {
+    "name": "notemine example (svelte)",
+    "display_name": "notemine example (svelte)",
+    "about": "shows how to implement the WASM note miner into a svelte project."
+  },
+  "publishProfile": true,
+  "publishRelayList": true,
+  "publishServerList": true
+}

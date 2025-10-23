@@ -1,0 +1,37 @@
+{
+  "name": "@notemine/core",
+  "type": "module",
+  "description": "a nostr note miner compiled to wasm",
+  "version": "0.4.4",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sandwichfarm/notemine"
+  },
+  "files": [
+    "./dist/notemine_bg.wasm",
+    "./dist/notemine_bg.wasm.d.ts",
+    "./dist/notemine.js",
+    "./dist/notemine.d.ts"
+  ],
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/notemine.d.ts",
+      "import": "./dist/notemine.js",
+      "require": "./dist/notemine.js"
+    },
+    "./wasm": {
+      "types": "./dist/notemine_bg.wasm.d.ts",
+      "import": "./dist/notemine_bg.wasm",
+      "require": "./dist/notemine_bg.wasm"
+    }
+  },
+  "scripts": {
+    "build": "./scripts/build.sh",
+    "publish:rust": "./scripts/publish.sh",
+    "publish:js": "./scripts/publish-js.sh"
+  }
+}

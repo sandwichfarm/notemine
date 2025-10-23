@@ -1,6 +1,7 @@
 const CLIENT = 'https://sandwichfarm.github.io/notemine';
 const MINER = 'notemine';
-let POW_RELAYS = ['wss://nostr.bitcoiner.social', 'wss://nostr.mom', 'wss://nos.lol', 'wss://powrelay.xyz', 'wss://labour.fiatjaf.com/', 'wss://nostr.lu.ke', 'wss://140.f7z.io'];
+
+let POW_RELAYS = [];
 let MY_RELAYS = []
 
 const Relay = window.NostrTools.Relay;
@@ -65,9 +66,11 @@ if(window?.nostr && typeof window?.nostr !== undefined) {
     loginButton.style.display = 'inline-block';
 }
 
-authAnon()
-refreshUserDom()
-refreshRelaysDom()
+fetchNip66Relays(()=>{
+    authAnon();
+    refreshUserDom();
+    refreshRelaysDom();
+});
 
 let workerHashRates = {};
 let workerMaxHashRates = {};
@@ -82,6 +85,42 @@ function activeRelays(){
         relays = [ ...relays, ...POW_RELAYS ]
     }
     return relays
+}
+
+async function fetchNip66Relays(callback = () => {}){
+    return new Promise( (resolve) => {
+        const NIP66_RELAYS = [
+            'wss://relay.nostr.watch'
+        ]
+        const nip66pool = new window.NostrTools.SimplePool();
+        const relays = new Set()
+        let events = 0
+        nip66pool.subscribe(
+            NIP66_RELAYS,
+            {
+                since: Math.floor(Date.now()/1000)-24*60*60,
+                "#R": [ "pow" ]
+            },
+            {
+                onevent(event) {
+                    try {
+                        const powTag = event.tags.find(t => t[0] === 'R' && t[1].includes('pow'))
+                        const ispow = (powTag[1] === 'pow' && !powTag?.[2]) || (powTag[1] === 'pow' && powTag?.[2] > 0)
+                        if(!ispow) return;
+                        const relayUrl = new URL(event.tags.find( t => t[0] === 'd')?.[1]).toString()
+                        if(relays.has(relayUrl)) return;
+                        relays.add(relayUrl)
+                        console.log(events++, relayUrl)
+                    }
+                    catch(e){}
+                },
+                oneose(){
+                    POW_RELAYS = Array.from(relays)
+                    callback()
+                }
+            }
+        );
+    });
 }
 
 
@@ -118,9 +157,11 @@ async function authUser(){
     return new Promise( async (resolve, reject) => {
         loginButton.disabled = true
         pubkey = await window.nostr.getPublicKey()
-        const relay = await Relay.connect('wss://purplepag.es')
-        usub = relay.subscribe(
-            [{kinds: [0,3,10002], authors: [pubkey]}],
+        const metapool = new SimplePool();
+        // const relay = await Relay.connect('wss://purplepag.es')
+        usub = metapool.subscribe(
+            ['wss://purplepag.es', 'wss://user.kindpag.es', 'wss://profiles.nostr1.com'],
+            {kinds: [0,3,10002], authors: [pubkey]},
             { onevent, oneose, onclose: onclose(resolve) }
         );
         

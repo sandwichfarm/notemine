@@ -3,8 +3,8 @@
   import { generateSecretKey, getPublicKey } from 'nostr-tools'; 
   import { onMount, onDestroy } from 'svelte';
   import { Notemine } from '@notemine/wrapper';
-  import { user, relaySettings, miningState, contentState, activeRelays, usub, powRelays } from './lib/stores/index';
-  import { publishEvent } from './lib/nostr';
+  import { user, relaySettings, miningState, contentState, activeRelays, usub, powRelays, fetchNip66Relays } from './lib/stores/index';
+  import { publishEvent, } from './lib/nostr';
   import { pool, onevent, oneose, onclose } from './lib/nostr';
 
   let notemine;
@@ -155,7 +155,9 @@
   }
 
   onMount(() => {
-    authAnon();
+    fetchNip66Relays().then( () => {
+      authAnon();
+    })
   });
 
   onDestroy(() => {
@@ -211,7 +213,7 @@
   }
 </style>
 
-<h1><code>nnnnote⛏️</code></h1>
+<h1><code>note⛏️</code></h1>
 <p>This is a demo of <strong>Notemine</strong>, a wasm Nostr note miner written in Rust.</p>
 
 <button on:click={toggleAuth}>
@@ -225,7 +227,7 @@
 
 <button
   data-npub="npub1uac67zc9er54ln0kl6e4qp2y6ta3enfcg7ywnayshvlw9r5w6ehsqq99rx"
-  data-relays="wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol,wss://nostr.fmt.wiz.biz,wss://nostr.mutinywallet.com,wss://nostr.mywire.org,wss://relay.primal.net"
+  data-relays="wss://relay.damus.io,wss://relay.snort.social,wss://nos.lol,wss://nostr.fmt.wiz.biz,wss://relay.primal.net,wss://relay.nostr.band"
   style="inline-block"
 >
     ⚡️ zap me
@@ -239,7 +241,7 @@
 </button>
 
 <button
-  onclick="document.location.href='https://github.com/sandwichfarm/minnote-wasm'"
+  onclick="document.location.href='https://github.com/sandwichfarm/notemine'"
   style="display: inline-block; cursor: pointer;"
 >
     🤖 git

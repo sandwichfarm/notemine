@@ -1,30 +1,58 @@
-import { derived, readable, writable } from "svelte/store";
+import { derived, readable, writable, get } from "svelte/store";
 import { relaySettings } from "./relay-settings";
+import { SimplePool } from 'nostr-tools'
 
-const POW_RELAYS = [
-  'wss://nostr.bitcoiner.social',
-  'wss://nostr.mom',
-  'wss://nos.lol',
-  'wss://powrelay.xyz',
-  'wss://labour.fiatjaf.com/',
-  'wss://nostr.lu.ke',
-  'wss://140.f7z.io'
-]
-
+export const powRelays = new writable([]);
 export const usub = new writable(null)
-
 export const activeRelays = derived(
-  relaySettings,
-  ($relaySettings) => {
+  [relaySettings, powRelays],
+  ([$relaySettings, $powRelays]) => {
     let relays = [];
     if ($relaySettings.myRelays && $relaySettings.myRelays.length > 0) {
       relays.push(...$relaySettings.myRelays);
     }
     if ($relaySettings.powRelaysEnabled) {
-      relays.push(...POW_RELAYS);
+      relays.push(...$powRelays);
     }
     return relays;
   }
 );
 
-export const powRelays = new readable(POW_RELAYS);
+export const fetchNip66Relays = async () => {
+  return new Promise( (resolve) => {
+      const NIP66_RELAYS = [
+          'wss://relay.nostr.watch'
+      ]
+      const nip66pool = new SimplePool();
+      const relays = new Set()
+      let events = 0
+      nip66pool.subscribeMany(
+          NIP66_RELAYS,
+          [
+            {
+              since: Math.floor(Date.now()/1000)-24*60*60,
+              kinds: [30166],
+              "#R": [ "pow" ]
+            }
+          ],
+          {
+              onevent(event) {
+                  try {
+                      const powTag = event.tags.find(t => t[0] === 'R' && t[1].includes('pow'))
+                      const ispow = (powTag[1] === 'pow' && !powTag?.[2]) || (powTag[1] === 'pow' && powTag?.[2] > 0)
+                      if(!ispow) return;
+                      const relayUrl = new URL(event.tags.find( t => t[0] === 'd')?.[1]).toString()
+                      if(relays.has(relayUrl)) return;
+                      relays.add(relayUrl)
+                      console.log(events++, relayUrl)
+                  }
+                  catch(e){}
+              },
+              oneose(){
+                  powRelays.update( $powRelays => $powRelays = Array.from(relays) )
+                  resolve(get(powRelays))
+              }
+          }
+      );
+  });
+}

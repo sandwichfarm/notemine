@@ -3,6 +3,9 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import rollupConfig from './rollup.config.js';
 
 export default defineConfig({
+  server: {
+    port: 5174,
+  },
   plugins: [svelte(), ...rollupConfig.plugins],
   resolve: {
     alias: {

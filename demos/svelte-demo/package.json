@@ -5,7 +5,7 @@
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
-    "start": "sirv public --no-clear"
+    "start": "sirv public --no-clear --port 5174"
   },
   "dependencies": {
     "@notemine/core": "workspace:*",
@@ -25,6 +25,7 @@
     "@rollup/plugin-commonjs": "28.0.0",
     "@rollup/plugin-node-resolve": "15.3.0",
     "@rollup/plugin-terser": "^0.4.0",
+    "@rollup/rollup-darwin-arm64": "^4.52.5",
     "picomatch": "^4.0.2",
     "rollup": "^3.15.0",
     "rollup-plugin-copy": "3.5.0",

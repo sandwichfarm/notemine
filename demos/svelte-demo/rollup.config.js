@@ -9,6 +9,10 @@ import { sveltePreprocess } from 'svelte-preprocess';
 import livereload from 'rollup-plugin-livereload';
 import { spawn } from 'child_process';
 import copy from 'rollup-plugin-copy'
+import gzip from 'rollup-plugin-gzip'
+import brotli from "rollup-plugin-brotli";
+
+
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -76,6 +80,10 @@ export default {
     !production && livereload('public'),
 
     production && terser(),
+
+    production && gzip(),
+    production && brotli()
+
   ],
 
   watch: {

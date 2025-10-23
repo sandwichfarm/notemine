@@ -49,7 +49,7 @@
     const currentUser = get(user);
     return new Promise( async (resolve, reject) => {
       $usub = pool.subscribeMany(
-        ['wss://purplepag.es', 'wss://user.kindpag.es'],
+        ['wss://purplepag.es', 'wss://user.kindpag.es', 'wss://relay.nostr.band', 'wss://relay.primal.net', 'wss://relay.damus.io'],
         [{kinds: [0,3,10002], authors: [currentUser.pubkey]}],
         { onevent, oneose, onclose: onclose(resolve) }
       );

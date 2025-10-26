@@ -177,12 +177,10 @@ export class RelatrClient implements Relatr {
 }
 
 /**
- * Default singleton instance of RelatrClient.
- * This instance uses the default configuration and can be used directly
- * without creating a new instance.
+ * Default singleton instance of RelatrClient is not exported here.
+ * Use the useRelatr() hook instead, which creates a properly configured instance.
  *
  * @example
- * import { relatr } from './RelatrClient';
- * const result = await relatr.SomeMethod();
+ * import { useRelatrSearch } from '../hooks/useRelatr';
+ * const { searchProfiles } = useRelatrSearch();
  */
-export const relatr = new RelatrClient();

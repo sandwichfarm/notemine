@@ -1,10 +1,7 @@
 import { Component, createSignal, Show, For } from 'solid-js';
-import { usePowMining } from '../hooks/usePowMining';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
-import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
-import { finalizeEvent } from 'nostr-tools/pure';
-import type { NostrEvent } from 'nostr-tools/core';
+import { useQueue } from '../providers/QueueProvider';
 
 interface ReactionPickerProps {
   eventId: string;
@@ -26,14 +23,12 @@ const COMMON_REACTIONS = [
 export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
   const { preferences, updatePreference } = usePreferences();
 
-  const [selectedReaction, setSelectedReaction] = createSignal<string>('');
   const [customEmoji, setCustomEmoji] = createSignal('');
   const [difficulty, setDifficulty] = createSignal(preferences().powDifficultyReaction);
-  const [publishing, setPublishing] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  const [queueSuccess, setQueueSuccess] = createSignal(false);
 
   const { user } = useUser();
-  const { state: miningState, startMining } = usePowMining();
+  const { addToQueue } = useQueue();
 
   // Save difficulty preference when changed
   const handleDifficultyChange = (newDifficulty: number) => {
@@ -42,20 +37,20 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
   };
 
   const handleReact = async (emoji: string) => {
-    setError(null);
-    setSelectedReaction(emoji);
+    setQueueSuccess(false);
 
     const currentUser = user();
     if (!currentUser) {
-      setError('No user authenticated');
+      console.error('[ReactionPicker] No user authenticated');
       return;
     }
 
     try {
-      console.log('[ReactionPicker] Mining reaction with POW...');
+      console.log('[ReactionPicker] Adding reaction to mining queue...');
 
-      // Mine reaction with POW
-      const minedEvent = await startMining({
+      // Add to queue
+      addToQueue({
+        type: 'reaction',
         content: emoji,
         pubkey: currentUser.pubkey,
         difficulty: difficulty(),
@@ -65,54 +60,20 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
           ['client', 'notemine.io'],
         ],
         kind: 7, // kind 7 is reaction
+        metadata: {
+          targetEventId: props.eventId,
+          targetAuthor: props.eventAuthor,
+          reactionContent: emoji,
+        },
       });
 
-      if (!minedEvent) {
-        throw new Error('Mining failed: no event returned');
-      }
+      console.log('[ReactionPicker] Reaction added to queue');
 
-      console.log('[ReactionPicker] POW mining complete, publishing...');
-      console.log('[ReactionPicker] Mined event kind:', minedEvent.kind);
-      console.log('[ReactionPicker] Mined event:', minedEvent);
-
-      // Sign the event
-      let signedEvent: NostrEvent;
-      if (currentUser.isAnon && currentUser.secret) {
-        signedEvent = finalizeEvent(minedEvent as any, currentUser.secret);
-      } else if (currentUser.signer) {
-        signedEvent = await currentUser.signer.signEvent(minedEvent as any);
-      } else if (window.nostr) {
-        signedEvent = await window.nostr.signEvent(minedEvent);
-      } else {
-        throw new Error('Cannot sign event: no signing method available');
-      }
-
-      console.log('[ReactionPicker] Signed event kind:', signedEvent.kind);
-      console.log('[ReactionPicker] Signed event:', signedEvent);
-
-      // Publish to relays (using NIP-65 outbox relays or localhost in dev)
-      setPublishing(true);
-      const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
-      const publishRelays = getPublishRelays(outboxRelays);
-      console.log('[ReactionPicker] Publishing to relays:', publishRelays);
-
-      const promises = publishRelays.map(async (relayUrl) => {
-        const relay = relayPool.relay(relayUrl);
-        return relay.publish(signedEvent);
-      });
-
-      await Promise.allSettled(promises);
-
-      console.log('[ReactionPicker] Reaction published successfully');
-
-      // Close modal after success
+      // Show success and close modal
+      setQueueSuccess(true);
       setTimeout(() => props.onClose(), 500);
     } catch (err) {
       console.error('[ReactionPicker] Error:', err);
-      setError(String(err));
-    } finally {
-      setPublishing(false);
-      setSelectedReaction('');
     }
   };
 
@@ -146,8 +107,7 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
                 {(reaction) => (
                   <button
                     onClick={() => handleReact(reaction.emoji)}
-                    disabled={miningState().mining || publishing()}
-                    class="p-3 text-2xl hover:bg-bg-secondary dark:hover:bg-bg-tertiary rounded-lg transition-colors border border-border disabled:opacity-50"
+                    class="p-3 text-2xl hover:bg-bg-secondary dark:hover:bg-bg-tertiary rounded-lg transition-colors border border-border"
                     title={reaction.label}
                   >
                     {reaction.emoji}
@@ -167,14 +127,13 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
                 onInput={(e) => setCustomEmoji(e.currentTarget.value)}
                 placeholder="Enter any emoji"
                 class="flex-1 px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                disabled={miningState().mining || publishing()}
               />
               <button
                 onClick={handleCustomReact}
-                disabled={!customEmoji().trim() || miningState().mining || publishing()}
+                disabled={!customEmoji().trim()}
                 class="btn-primary"
               >
-                React
+                Add to Queue
               </button>
             </div>
           </div>
@@ -187,42 +146,21 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
             <input
               type="range"
               min="16"
-              max="24"
+              max="42"
               step="1"
               value={difficulty()}
               onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
               class="w-full"
-              disabled={miningState().mining || publishing()}
             />
             <div class="text-xs text-text-secondary mt-1">
               Reactions typically use lower difficulty than posts
             </div>
           </div>
 
-          {/* Mining status */}
-          <Show when={miningState().mining}>
-            <div class="p-3 bg-bg-primary dark:bg-bg-tertiary border border-border rounded-lg">
-              <div class="text-sm space-y-1">
-                <div>⛏️ Mining reaction with POW...</div>
-                <div>Hash rate: {miningState().hashRate.toFixed(2)} H/s</div>
-                <Show when={miningState().overallBestPow !== null}>
-                  <div>Best POW: {miningState().overallBestPow}</div>
-                </Show>
-              </div>
-            </div>
-          </Show>
-
-          {/* Error */}
-          <Show when={error()}>
-            <div class="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-              Error: {error()}
-            </div>
-          </Show>
-
-          {/* Mining error */}
-          <Show when={miningState().error}>
-            <div class="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-              Mining error: {miningState().error}
+          {/* Success message */}
+          <Show when={queueSuccess()}>
+            <div class="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 text-green-700 dark:text-green-400 rounded-lg text-sm">
+              ✅ Reaction added to mining queue!
             </div>
           </Show>
         </div>

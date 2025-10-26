@@ -35,12 +35,19 @@ export const PROFILE_RELAYS = [
   'wss://relay.nostr.band',
 ];
 
+import { createSignal } from 'solid-js';
+
 // NIP-66 POW relays (from svelte demo)
-export let powRelays: string[] = [];
+const [powRelays, setPowRelaysSignal] = createSignal<string[]>([]);
+
+// Export getter for reactive access
+export const getPowRelays = powRelays;
 
 // Set POW relays from NIP-66 discovery
 export function setPowRelays(relays: string[]) {
-  powRelays = relays;
+  setPowRelaysSignal(relays);
+  // Connect to newly discovered relays immediately
+  connectToRelays(relays);
 }
 
 // Create loaders with EventStore integration
@@ -78,15 +85,15 @@ export const reactionsLoader = createReactionsLoader(relayPool, {
   bufferSize: 100,
 });
 
-// Helper to get active relay list
+// Helper to get active relay list (reactive - will update when powRelays changes)
 export function getActiveRelays(userRelays: string[] = []): string[] {
   const relays = new Set<string>();
 
   // Always include default POW relay
   relays.add(DEFAULT_POW_RELAY);
 
-  // Add NIP-66 discovered POW relays
-  powRelays.forEach(r => relays.add(r));
+  // Add NIP-66 discovered POW relays (reactive)
+  powRelays().forEach(r => relays.add(r));
 
   // Add user relays if logged in
   userRelays.forEach(r => relays.add(r));

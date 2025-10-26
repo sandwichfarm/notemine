@@ -6,6 +6,8 @@ import { UserProvider } from './providers/UserProvider';
 import { MiningProvider } from './providers/MiningProvider';
 import { PreferencesProvider } from './providers/PreferencesProvider';
 import { TooltipProvider } from './providers/TooltipProvider';
+import { QueueProvider } from './providers/QueueProvider';
+import { QueueProcessor } from './components/QueueProcessor';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -65,7 +67,23 @@ const AppInit: ParentComponent = (props) => {
     setRelaysReady(true);
   });
 
-  return <Show when={relaysReady()}>{props.children}</Show>;
+  return (
+    <Show
+      when={relaysReady()}
+      fallback={
+        <div class="fixed inset-0 flex items-center justify-center bg-bg-primary dark:bg-bg-secondary">
+          <div class="text-center">
+            <div class="text-9xl animate-[swing_0.8s_ease-in-out_infinite]" style={{ "transform-origin": "center top" }}>
+              ⛏️
+            </div>
+            <div class="text-text-secondary text-sm mt-4">Loading notemine.io...</div>
+          </div>
+        </div>
+      }
+    >
+      {props.children}
+    </Show>
+  );
 };
 
 const App: Component = () => {
@@ -76,17 +94,20 @@ const App: Component = () => {
           <EventStoreProvider>
             <UserProvider>
               <MiningProvider>
-                <AppInit>
-                  <Router root={Layout}>
-                    <Route path="/" component={Home} />
-                    <Route path="/about" component={About} />
-                    <Route path="/stats" component={Stats} />
-                    <Route path="/preferences" component={Preferences} />
-                    <Route path="/n/:id" component={NoteDetail} />
-                    <Route path="/e/:id" component={NoteDetail} />
-                    <Route path="/p/:identifier" component={ProfileDetail} />
-                  </Router>
-                </AppInit>
+                <QueueProvider>
+                  <QueueProcessor />
+                  <AppInit>
+                    <Router root={Layout}>
+                      <Route path="/" component={Home} />
+                      <Route path="/about" component={About} />
+                      <Route path="/stats" component={Stats} />
+                      <Route path="/preferences" component={Preferences} />
+                      <Route path="/n/:id" component={NoteDetail} />
+                      <Route path="/e/:id" component={NoteDetail} />
+                      <Route path="/p/:identifier" component={ProfileDetail} />
+                    </Router>
+                  </AppInit>
+                </QueueProvider>
               </MiningProvider>
             </UserProvider>
           </EventStoreProvider>

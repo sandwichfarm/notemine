@@ -1,6 +1,6 @@
-import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, getActiveRelays, relayPool, eventStore, batchFetchMetadata } from '../lib/applesauce';
+import { createTimelineStream, getActiveRelays, relayPool, eventStore, batchFetchMetadata, getPowRelays } from '../lib/applesauce';
 import { calculatePowScore, getPowDifficulty, hasValidPow } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
@@ -185,12 +185,14 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
     });
 
     // Fallback timeout - if relays don't respond within 10 seconds, stop loading
-    setTimeout(() => {
+    const timeoutHandle = setTimeout(() => {
       if (!hasSetLoadingFalse) {
-        console.log('[InfiniteTimeline] Timeout reached, stopping loading');
+        console.log('[InfiniteTimeline] Timeout reached, stopping loading and unsubscribing');
         hasSetLoadingFalse = true;
         setLoading(false);
         setLoadingMore(false);
+        // Unsubscribe from all relay subscriptions on timeout
+        relaySubscriptions.forEach(sub => sub.unsubscribe());
       }
     }, 10000);
 
@@ -269,36 +271,49 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
     }
   };
 
-  onMount(() => {
-    try {
-      const relays = getActiveRelays();
-      console.log('[InfiniteTimeline] Initializing with relays:', relays);
+  // Watch for relay changes and reload timeline when NIP-66 relays are discovered
+  let isInitialized = false;
+  createEffect(() => {
+    // Track reactive dependency on powRelays
+    const powRelaysList = getPowRelays();
+    const relays = getActiveRelays();
 
-      if (relays.length === 0) {
-        setError('No relays connected');
-        setLoading(false);
-        return;
-      }
+    console.log('[InfiniteTimeline] Relay change detected, relays:', relays);
 
-      // Create the timeline loader function
-      timelineLoader = (since?: number) => {
-        return createTimelineStream(
-          relays,
-          [{ kinds: [1], limit: batchSize, ...(since ? { until: since } : {}) }],
-          { limit: batchSize }
-        );
-      };
-
-      // Load initial events
-      loadEvents();
-
-      // Add scroll listener to window
-      window.addEventListener('scroll', handleScroll);
-    } catch (err) {
-      console.error('[InfiniteTimeline] Setup error:', err);
-      setError(String(err));
+    if (relays.length === 0) {
+      setError('No relays connected');
       setLoading(false);
+      return;
     }
+
+    // Unsubscribe from previous subscription
+    currentSubscription?.unsubscribe();
+
+    // Clear cache and reset state for fresh load
+    eventCache.clear();
+    reactionsCache.clear();
+    repliesCache.clear();
+    setNotes([]);
+    setOldestTimestamp(undefined);
+    setHasMore(true);
+
+    // Create the timeline loader function with new relays
+    timelineLoader = (since?: number) => {
+      return createTimelineStream(
+        relays,
+        [{ kinds: [1], limit: batchSize, ...(since ? { until: since } : {}) }],
+        { limit: batchSize }
+      );
+    };
+
+    // Load initial events
+    console.log('[InfiniteTimeline] Reloading with updated relays:', relays);
+    loadEvents();
+  });
+
+  onMount(() => {
+    // Add scroll listener to window
+    window.addEventListener('scroll', handleScroll);
   });
 
   onCleanup(() => {

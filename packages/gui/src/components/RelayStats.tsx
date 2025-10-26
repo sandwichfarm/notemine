@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, For, Show, createEffect } from 'solid-js';
-import { relayPool, powRelays, DEFAULT_POW_RELAY } from '../lib/applesauce';
+import { relayPool, getPowRelays, DEFAULT_POW_RELAY } from '../lib/applesauce';
 import { relayStatsTracker } from '../lib/relay-stats';
 
 interface RelayStatus {
@@ -15,7 +15,7 @@ export const RelayStats: Component = () => {
 
   const updateRelayStats = async () => {
     // Get all relay URLs
-    const allRelays = [DEFAULT_POW_RELAY, ...powRelays];
+    const allRelays = [DEFAULT_POW_RELAY, ...getPowRelays()];
 
     // Check status of each relay
     const statuses = await Promise.all(
@@ -230,7 +230,7 @@ export const RelayStats: Component = () => {
           <span class="px-2 py-1 bg-accent/20 rounded font-mono">kind: 30166</span>
           <span class="px-2 py-1 bg-accent/20 rounded font-mono">#R: pow</span>
           <span class="text-text-tertiary">→</span>
-          <span class="text-accent">{powRelays.length} relays discovered</span>
+          <span class="text-accent">{getPowRelays().length} relays discovered</span>
         </div>
       </div>
     </div>

@@ -1,0 +1,82 @@
+---
+- name: Deploy notemine GUI
+  hosts: notemine_vps
+  become: yes
+  vars:
+    gui_dist_path: "{{ gui_dist_path }}"
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - debian-keyring
+          - debian-archive-keyring
+          - apt-transport-https
+          - curl
+        state: present
+        update_cache: yes
+
+    - name: Add Caddy GPG key
+      shell: |
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+      args:
+        creates: /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+
+    - name: Add Caddy repository
+      shell: |
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+      args:
+        creates: /etc/apt/sources.list.d/caddy-stable.list
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Caddy
+      apt:
+        name: caddy
+        state: present
+
+    - name: Create GUI deployment directory
+      file:
+        path: "{{ gui_deploy_path }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Sync GUI files
+      synchronize:
+        src: "{{ gui_dist_path }}/"
+        dest: "{{ gui_deploy_path }}/"
+        delete: yes
+        recursive: yes
+      delegate_to: localhost
+
+    - name: Set ownership of GUI files
+      file:
+        path: "{{ gui_deploy_path }}"
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: Deploy Caddyfile
+      template:
+        src: templates/Caddyfile.j2
+        dest: /etc/caddy/Caddyfile
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload Caddy
+
+    - name: Enable Caddy service
+      systemd:
+        name: caddy
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Reload Caddy
+      systemd:
+        name: caddy
+        state: reloaded

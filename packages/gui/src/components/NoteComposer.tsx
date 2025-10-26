@@ -1,10 +1,7 @@
-import { Component, createSignal, Show, createEffect } from 'solid-js';
-import { usePowMining } from '../hooks/usePowMining';
+import { Component, createSignal, Show } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
-import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
-import { finalizeEvent } from 'nostr-tools/pure';
-import type { NostrEvent } from 'nostr-tools/core';
+import { useQueue } from '../providers/QueueProvider';
 import { MentionAutocomplete } from './MentionAutocomplete';
 
 const CLIENT_TAG = 'notemine.io';
@@ -15,9 +12,7 @@ export const NoteComposer: Component = () => {
 
   const [content, setContent] = createSignal('');
   const [difficulty, setDifficulty] = createSignal(preferences().powDifficultyRootNote);
-  const [publishing, setPublishing] = createSignal(false);
-  const [publishError, setPublishError] = createSignal<string | null>(null);
-  const [publishSuccess, setPublishSuccess] = createSignal(false);
+  const [queueSuccess, setQueueSuccess] = createSignal(false);
   const [showMentionAutocomplete, setShowMentionAutocomplete] = createSignal(false);
   const [mentionQuery, setMentionQuery] = createSignal('');
   const [mentionPosition, setMentionPosition] = createSignal({ top: 0, left: 0 });
@@ -25,16 +20,14 @@ export const NoteComposer: Component = () => {
   let textareaRef: HTMLTextAreaElement | undefined;
 
   const { user } = useUser();
-  const { state: miningState, startMining, stopMining } = usePowMining();
+  const { addToQueue } = useQueue();
 
   const remainingChars = () => maxContentLength() - content().length;
   const canSubmit = () => {
     return (
       content().trim().length > 0 &&
       content().length <= maxContentLength() &&
-      user() &&
-      !miningState().mining &&
-      !publishing()
+      user()
     );
   };
 
@@ -46,68 +39,36 @@ export const NoteComposer: Component = () => {
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    setPublishError(null);
-    setPublishSuccess(false);
+    setQueueSuccess(false);
 
     const currentUser = user();
     if (!currentUser) {
-      setPublishError('No user authenticated');
+      console.error('[NoteComposer] No user authenticated');
       return;
     }
 
     try {
-      console.log('[NoteComposer] Starting POW mining...');
+      console.log('[NoteComposer] Adding note to mining queue...');
 
-      // Start mining with POW
-      const minedEvent = await startMining({
+      // Add to queue
+      addToQueue({
+        type: 'note',
         content: content().trim(),
         pubkey: currentUser.pubkey,
         difficulty: difficulty(),
         tags: [['client', CLIENT_TAG]],
+        kind: 1,
       });
-
-      if (!minedEvent) {
-        throw new Error('Mining failed: no event returned');
-      }
-
-      console.log('[NoteComposer] POW mining complete, publishing...');
-
-      // Sign the event if user is anonymous (has secret key)
-      let signedEvent: NostrEvent;
-      if (currentUser.isAnon && currentUser.secret) {
-        signedEvent = finalizeEvent(minedEvent as any, currentUser.secret);
-      } else if (window.nostr) {
-        // Use NIP-07 extension for signing
-        signedEvent = await window.nostr.signEvent(minedEvent);
-      } else {
-        throw new Error('Cannot sign event: no signing method available');
-      }
-
-      // Publish to relays (using NIP-65 outbox relays or localhost in dev)
-      setPublishing(true);
-      const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
-      const publishRelays = getPublishRelays(outboxRelays);
-      console.log('[NoteComposer] Publishing to relays:', publishRelays);
-
-      const promises = publishRelays.map(async (relayUrl) => {
-        const relay = relayPool.relay(relayUrl);
-        return relay.publish(signedEvent);
-      });
-
-      await Promise.allSettled(promises);
 
       // Success!
-      setPublishSuccess(true);
+      setQueueSuccess(true);
       setContent('');
-      console.log('[NoteComposer] Note published successfully');
+      console.log('[NoteComposer] Note added to queue');
 
-      // Reset success message after 3 seconds
-      setTimeout(() => setPublishSuccess(false), 3000);
+      // Reset success message after 2 seconds
+      setTimeout(() => setQueueSuccess(false), 2000);
     } catch (error) {
       console.error('[NoteComposer] Error:', error);
-      setPublishError(String(error));
-    } finally {
-      setPublishing(false);
     }
   };
 
@@ -187,7 +148,7 @@ export const NoteComposer: Component = () => {
   };
 
   // Handle mention selection
-  const handleMentionSelect = (npub: string, displayName: string) => {
+  const handleMentionSelect = (npub: string) => {
     const currentContent = content();
     const startIdx = mentionStartIndex();
 
@@ -222,7 +183,6 @@ export const NoteComposer: Component = () => {
             value={content()}
             onInput={handleContentChange}
             maxLength={maxContentLength()}
-            disabled={miningState().mining || publishing()}
           />
 
           {/* Mention Autocomplete */}
@@ -260,21 +220,13 @@ export const NoteComposer: Component = () => {
             value={difficulty()}
             onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
             class="w-full"
-            disabled={miningState().mining || publishing()}
           />
         </div>
 
-        {/* Error message */}
-        <Show when={publishError()}>
-          <div class="mb-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-            Error: {publishError()}
-          </div>
-        </Show>
-
         {/* Success message */}
-        <Show when={publishSuccess()}>
+        <Show when={queueSuccess()}>
           <div class="mb-4 p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 text-green-700 dark:text-green-400 rounded-lg text-sm">
-            ✅ Note published successfully!
+            ✅ Note added to mining queue!
           </div>
         </Show>
 
@@ -285,29 +237,10 @@ export const NoteComposer: Component = () => {
             disabled={!canSubmit()}
             class="flex-1 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Show when={!miningState().mining && !publishing()} fallback="Mining...">
-              Post
-            </Show>
+            Add to Queue
           </button>
-
-          <Show when={miningState().mining}>
-            <button
-              type="button"
-              onClick={stopMining}
-              class="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-            >
-              Cancel
-            </button>
-          </Show>
         </div>
       </form>
-
-      {/* Mining error */}
-      <Show when={miningState().error}>
-        <div class="mt-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-          Mining error: {miningState().error}
-        </div>
-      </Show>
     </div>
   );
 };

@@ -91,13 +91,13 @@ export const Note: Component<NoteProps> = (props) => {
 
   return (
     <div
-      class="p-5 mb-4 rounded-lg border-l-2 transition-all"
+      class="p-5 mb-4 rounded-lg dark:bg-white/5 transition-all"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
         'border-l-gray-500/30 bg-bg-secondary/50 dark:bg-bg-tertiary/50 opacity-60': !hasPow(),
       }}
     >
-      {/* Header - Low contrast metadata */}
+      {/* Header - Low contrast msetadata */}
       <div class="flex items-start justify-between mb-2 opacity-60">
         <div class="flex items-center gap-2 min-w-0 flex-1">
           <ProfileName pubkey={props.event.pubkey} asLink={true} />

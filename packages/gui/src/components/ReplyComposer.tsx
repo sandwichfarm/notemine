@@ -1,9 +1,7 @@
-import { Component, createSignal, Show, createEffect } from 'solid-js';
-import { usePowMining } from '../hooks/usePowMining';
+import { Component, createSignal, Show } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
-import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
-import { finalizeEvent } from 'nostr-tools/pure';
+import { useQueue } from '../providers/QueueProvider';
 import type { NostrEvent } from 'nostr-tools/core';
 import { MentionAutocomplete } from './MentionAutocomplete';
 
@@ -21,9 +19,7 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
 
   const [content, setContent] = createSignal('');
   const [difficulty, setDifficulty] = createSignal(preferences().powDifficultyReply);
-  const [publishing, setPublishing] = createSignal(false);
-  const [publishError, setPublishError] = createSignal<string | null>(null);
-  const [publishSuccess, setPublishSuccess] = createSignal(false);
+  const [queueSuccess, setQueueSuccess] = createSignal(false);
   const [showMentionAutocomplete, setShowMentionAutocomplete] = createSignal(false);
   const [mentionQuery, setMentionQuery] = createSignal('');
   const [mentionPosition, setMentionPosition] = createSignal({ top: 0, left: 0 });
@@ -31,16 +27,14 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
   let textareaRef: HTMLTextAreaElement | undefined;
 
   const { user } = useUser();
-  const { state: miningState, startMining, stopMining } = usePowMining();
+  const { addToQueue } = useQueue();
 
   const remainingChars = () => maxContentLength() - content().length;
   const canSubmit = () => {
     return (
       content().trim().length > 0 &&
       content().length <= maxContentLength() &&
-      user() &&
-      !miningState().mining &&
-      !publishing()
+      user()
     );
   };
 
@@ -52,17 +46,16 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    setPublishError(null);
-    setPublishSuccess(false);
+    setQueueSuccess(false);
 
     const currentUser = user();
     if (!currentUser) {
-      setPublishError('No user authenticated');
+      console.error('[ReplyComposer] No user authenticated');
       return;
     }
 
     try {
-      console.log('[ReplyComposer] Starting POW mining for reply...');
+      console.log('[ReplyComposer] Adding reply to mining queue...');
 
       // Build reply tags
       const replyTags: string[][] = [
@@ -81,50 +74,24 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
         }
       }
 
-      // Start mining with POW
-      const minedEvent = await startMining({
+      // Add to queue
+      addToQueue({
+        type: 'reply',
         content: content().trim(),
         pubkey: currentUser.pubkey,
         difficulty: difficulty(),
         tags: replyTags,
         kind: 1,
+        metadata: {
+          targetEventId: props.parentEvent.id,
+          targetAuthor: props.parentEvent.pubkey,
+        },
       });
-
-      if (!minedEvent) {
-        throw new Error('Mining failed: no event returned');
-      }
-
-      console.log('[ReplyComposer] POW mining complete, publishing...');
-
-      // Sign the event
-      let signedEvent: NostrEvent;
-      if (currentUser.isAnon && currentUser.secret) {
-        signedEvent = finalizeEvent(minedEvent as any, currentUser.secret);
-      } else if (currentUser.signer) {
-        signedEvent = await currentUser.signer.signEvent(minedEvent as any);
-      } else if (window.nostr) {
-        signedEvent = await window.nostr.signEvent(minedEvent);
-      } else {
-        throw new Error('Cannot sign event: no signing method available');
-      }
-
-      // Publish to relays (using NIP-65 outbox relays or localhost in dev)
-      setPublishing(true);
-      const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
-      const publishRelays = getPublishRelays(outboxRelays);
-      console.log('[ReplyComposer] Publishing to relays:', publishRelays);
-
-      const promises = publishRelays.map(async (relayUrl) => {
-        const relay = relayPool.relay(relayUrl);
-        return relay.publish(signedEvent);
-      });
-
-      await Promise.allSettled(promises);
 
       // Success!
-      setPublishSuccess(true);
+      setQueueSuccess(true);
       setContent('');
-      console.log('[ReplyComposer] Reply published successfully');
+      console.log('[ReplyComposer] Reply added to queue');
 
       props.onSuccess?.();
 
@@ -132,9 +99,6 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
       setTimeout(() => props.onClose(), 1500);
     } catch (error) {
       console.error('[ReplyComposer] Error:', error);
-      setPublishError(String(error));
-    } finally {
-      setPublishing(false);
     }
   };
 
@@ -214,7 +178,7 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
   };
 
   // Handle mention selection
-  const handleMentionSelect = (npub: string, displayName: string) => {
+  const handleMentionSelect = (npub: string) => {
     const currentContent = content();
     const startIdx = mentionStartIndex();
 
@@ -272,7 +236,6 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
               value={content()}
               onInput={handleContentChange}
               maxLength={maxContentLength()}
-              disabled={miningState().mining || publishing()}
               autofocus
             />
 
@@ -311,34 +274,13 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
               value={difficulty()}
               onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
               class="w-full"
-              disabled={miningState().mining || publishing()}
             />
           </div>
 
-          {/* Mining stats */}
-          <Show when={miningState().mining}>
-            <div class="p-3 bg-bg-primary dark:bg-bg-tertiary border border-border rounded-lg">
-              <div class="text-sm text-text-primary space-y-1">
-                <div>⛏️ Mining reply with POW...</div>
-                <div>Hash rate: {miningState().hashRate.toFixed(2)} H/s</div>
-                <Show when={miningState().overallBestPow !== null}>
-                  <div>Best POW: {miningState().overallBestPow}</div>
-                </Show>
-              </div>
-            </div>
-          </Show>
-
-          {/* Error message */}
-          <Show when={publishError()}>
-            <div class="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-              Error: {publishError()}
-            </div>
-          </Show>
-
           {/* Success message */}
-          <Show when={publishSuccess()}>
+          <Show when={queueSuccess()}>
             <div class="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 text-green-700 dark:text-green-400 rounded-lg text-sm">
-              ✅ Reply published successfully!
+              ✅ Reply added to mining queue!
             </div>
           </Show>
 
@@ -349,20 +291,8 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
               disabled={!canSubmit()}
               class="flex-1 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Show when={!miningState().mining && !publishing()} fallback="Mining...">
-                Reply
-              </Show>
+              Add to Queue
             </button>
-
-            <Show when={miningState().mining}>
-              <button
-                type="button"
-                onClick={stopMining}
-                class="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-              >
-                Cancel
-              </button>
-            </Show>
 
             <button
               type="button"
@@ -372,13 +302,6 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
               Close
             </button>
           </div>
-
-          {/* Mining error */}
-          <Show when={miningState().error}>
-            <div class="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-              Mining error: {miningState().error}
-            </div>
-          </Show>
         </form>
       </div>
     </div>

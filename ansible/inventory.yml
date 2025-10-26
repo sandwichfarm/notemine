@@ -1,0 +1,21 @@
+all:
+  hosts:
+    notemine_vps:
+      ansible_host: "{{ ansible_host }}"
+      ansible_user: "{{ ansible_user }}"
+      ansible_port: "{{ ansible_port | default(22) }}"
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      ansible_python_interpreter: /usr/bin/python3
+  vars:
+    # Deployment paths
+    gui_deploy_path: /var/www/notemine
+    relay_deploy_path: /opt/notemine/relay
+    relay_data_path: /var/lib/notemine/data
+
+    # Service configuration
+    relay_port: 3334
+    relay_user: notemine
+    relay_group: notemine
+
+    # Domain
+    domain: notemine.io

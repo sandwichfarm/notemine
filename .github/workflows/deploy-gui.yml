@@ -1,0 +1,60 @@
+name: Deploy GUI
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'packages/gui/**'
+      - '.github/workflows/deploy-gui.yml'
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build GUI
+        run: pnpm --filter @notemine/gui build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.VPS_SSH_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Run Ansible playbook
+        run: |
+          cd ansible
+          ansible-playbook -i inventory.yml playbook-gui.yml \
+            --extra-vars "gui_dist_path=../packages/gui/dist" \
+            --extra-vars "ansible_user=${{ secrets.VPS_USER }}" \
+            --extra-vars "ansible_host=${{ secrets.VPS_HOST }}" \
+            --extra-vars "ansible_port=${{ secrets.VPS_SSH_PORT || 22 }}"
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: False

@@ -1,6 +1,6 @@
 import { Component } from 'solid-js';
 import { RelayStats } from '../components/RelayStats';
-import { CacheStats } from '../components/CacheStats';
+// import { CacheStats } from '../components/CacheStats';
 
 const Stats: Component = () => {
   return (
@@ -14,7 +14,7 @@ const Stats: Component = () => {
         </p>
       </div>
 
-      <CacheStats />
+      {/* <CacheStats /> */}
 
       <RelayStats />
     </div>

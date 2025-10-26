@@ -7,6 +7,8 @@ import { LoginModal } from './LoginModal';
 import Profile from '../pages/Profile';
 import { MiningStatsButton, MiningPanel } from './MiningStatsButton';
 import { useMining } from '../providers/MiningProvider';
+import { QueueButton } from './QueueButton';
+import { QueuePanel } from './QueuePanel';
 
 const Layout: Component<{ children?: any }> = (props) => {
   const { theme, toggleTheme } = useTheme();
@@ -15,7 +17,7 @@ const Layout: Component<{ children?: any }> = (props) => {
   const { globalMiningState } = useMining();
   const [showLoginModal, setShowLoginModal] = createSignal(false);
   const [showProfileModal, setShowProfileModal] = createSignal(false);
-  const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | null>(null);
+  const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | 'queue' | null>(null);
   const [headerHeight, setHeaderHeight] = createSignal(80); // Default fallback
 
   let headerRef: HTMLDivElement | undefined;
@@ -26,7 +28,7 @@ const Layout: Component<{ children?: any }> = (props) => {
   });
 
   // Close tooltip when opening a panel
-  const openPanel = (panel: 'mining' | 'user') => {
+  const openPanel = (panel: 'mining' | 'user' | 'queue') => {
     setActiveTooltip(null);
     setActivePanel(activePanel() === panel ? null : panel);
   };
@@ -67,6 +69,7 @@ const Layout: Component<{ children?: any }> = (props) => {
       >
         <div class="flex items-center justify-center py-4 bg-black/90">
           <div class="flex items-center gap-2">
+            <QueueButton onToggle={() => openPanel('queue')} isActive={activePanel() === 'queue'} />
             <MiningStatsButton onToggle={() => openPanel('mining')} isActive={activePanel() === 'mining'} />
 
             <Show when={user()}>
@@ -129,6 +132,11 @@ const Layout: Component<{ children?: any }> = (props) => {
         {/* Mining Panel */}
         <Show when={activePanel() === 'mining'}>
           <MiningPanel />
+        </Show>
+
+        {/* Queue Panel */}
+        <Show when={activePanel() === 'queue'}>
+          <QueuePanel />
         </Show>
 
         {/* User Panel */}

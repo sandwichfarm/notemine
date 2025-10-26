@@ -11,18 +11,18 @@ import {
   createTimelineLoader,
   createReactionsLoader,
 } from 'applesauce-loaders/loaders';
+import type { TimelineLoaderOptions } from 'applesauce-loaders/loaders/timeline-loader';
 
 // Create singleton EventStore
-export const eventStore = new EventStore({
-  keepOldVersions: false,
-  keepExpired: false,
-});
+export const eventStore = new EventStore();
 
 // Create singleton RelayPool
 export const relayPool = new RelayPool();
 
-// Default POW relay - will be replaced with actual notemine relay
-export const DEFAULT_POW_RELAY = 'wss://relay.notemine.io';
+// Default POW relay - switches based on environment
+export const DEFAULT_POW_RELAY = import.meta.env.DEV
+  ? 'ws://localhost:3334'
+  : 'wss://notemine.io';
 
 // NIP-66 POW relays (from svelte demo)
 export let powRelays: string[] = [];
@@ -45,11 +45,21 @@ export const eventLoader = createEventLoader(relayPool, {
   bufferSize: 100,
 });
 
-export const timelineLoader = createTimelineLoader(relayPool, {
-  eventStore,
-  bufferTime: 500,
-  bufferSize: 100,
-});
+type TimelineFilters = Parameters<typeof createTimelineLoader>[2];
+
+export function createTimelineStream(
+  relays: string[],
+  filters: TimelineFilters,
+  options: TimelineLoaderOptions & { since?: number } = {},
+) {
+  const { since, ...loaderOptions } = options;
+  const loader = createTimelineLoader(relayPool, relays, filters, {
+    eventStore,
+    ...loaderOptions,
+  });
+
+  return loader(since);
+}
 
 export const reactionsLoader = createReactionsLoader(relayPool, {
   eventStore,
@@ -82,5 +92,57 @@ export function connectToRelays(relays: string[]) {
 
 // Disconnect from relays
 export function disconnectFromRelays() {
-  relayPool.close();
+  for (const relay of relayPool.relays.values()) {
+    relayPool.remove(relay);
+  }
+}
+
+// NIP-65: Get user's outbox relays (where they write)
+export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    const subscription = eventStore.mailboxes(pubkey).subscribe({
+      next: (mailboxes) => {
+        if (mailboxes?.outboxes && mailboxes.outboxes.length > 0) {
+          console.log('[NIP-65] Found outbox relays:', mailboxes.outboxes);
+          resolve(mailboxes.outboxes);
+          subscription.unsubscribe();
+        }
+      },
+      complete: () => {
+        subscription.unsubscribe();
+      },
+    });
+
+    // Timeout after 2 seconds, fallback to default relays
+    setTimeout(() => {
+      subscription.unsubscribe();
+      console.log('[NIP-65] No outbox relays found, using defaults');
+      resolve(getActiveRelays());
+    }, 2000);
+  });
+}
+
+// NIP-65: Get user's inbox relays (where they read)
+export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    const subscription = eventStore.mailboxes(pubkey).subscribe({
+      next: (mailboxes) => {
+        if (mailboxes?.inboxes && mailboxes.inboxes.length > 0) {
+          console.log('[NIP-65] Found inbox relays:', mailboxes.inboxes);
+          resolve(mailboxes.inboxes);
+          subscription.unsubscribe();
+        }
+      },
+      complete: () => {
+        subscription.unsubscribe();
+      },
+    });
+
+    // Timeout after 2 seconds, fallback to default relays
+    setTimeout(() => {
+      subscription.unsubscribe();
+      console.log('[NIP-65] No inbox relays found, using defaults');
+      resolve(getActiveRelays());
+    }, 2000);
+  });
 }

@@ -24,7 +24,7 @@ export const RelayStats: Component = () => {
 
           return {
             url,
-            status: relay.connection ? 'connected' : 'disconnected',
+            status: relay.connected ? 'connected' : 'disconnected',
           } as RelayStatus;
         } catch (error) {
           return {

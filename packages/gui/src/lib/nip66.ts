@@ -15,13 +15,11 @@ export async function fetchNip66PowRelays(): Promise<string[]> {
 
     pool.subscribeMany(
       NIP66_RELAYS,
-      [
-        {
-          since,
-          kinds: [30166],
-          '#R': ['pow'],
-        },
-      ],
+      {
+        since,
+        kinds: [30166],
+        '#R': ['pow'],
+      },
       {
         onevent(event) {
           try {

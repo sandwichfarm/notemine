@@ -7,8 +7,6 @@ import {
 } from 'applesauce-signers/signers';
 import type { ISigner } from 'applesauce-signers';
 import { relayPool } from '../lib/applesauce';
-import type { NostrEvent } from 'nostr-tools/core';
-import type { Filter } from 'nostr-tools/filter';
 import { Observable } from 'rxjs';
 
 export type AuthMethod = 'anon' | 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
@@ -37,25 +35,19 @@ const UserContext = createContext<UserContextType>();
 // Setup NostrConnectSigner with relayPool integration
 const setupNostrConnectMethods = () => {
   // Subscription method using relayPool
-  NostrConnectSigner.subscriptionMethod = (filters: Filter[], relays: string[]) => {
-    return new Observable<NostrEvent>((observer) => {
+  NostrConnectSigner.subscriptionMethod = (relays, filters) =>
+    new Observable((observer) => {
       const subscription = relayPool.req(relays, filters).subscribe({
-        next: (response) => {
-          if (response !== 'EOSE') {
-            observer.next(response);
-          }
-        },
+        next: (value) => observer.next(value),
         error: (err) => observer.error(err),
+        complete: () => observer.complete?.(),
       });
 
       return () => subscription.unsubscribe();
-    });
-  };
+    }) as any;
 
   // Publish method using relayPool
-  NostrConnectSigner.publishMethod = async (event: NostrEvent, relays: string[]) => {
-    await relayPool.publish(relays, event);
-  };
+  NostrConnectSigner.publishMethod = (relays, event) => relayPool.publish(relays, event);
 };
 
 export const UserProvider: ParentComponent = (props): JSX.Element => {

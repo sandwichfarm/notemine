@@ -1,5 +1,4 @@
 import type { NostrEvent } from 'nostr-tools/core';
-import { getEventHash } from 'nostr-tools/pure';
 
 /**
  * Extract POW difficulty from a nostr event (NIP-13)

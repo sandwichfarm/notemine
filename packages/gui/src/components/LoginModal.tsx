@@ -1,8 +1,7 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
-import QRCode from 'solid-qr-code';
-import { NostrConnectSigner, PrivateKeySigner } from 'applesauce-signers/signers';
-import { relayPool } from '../lib/applesauce';
+import { QRCodeSVG } from 'solid-qr-code';
+import { NostrConnectSigner } from 'applesauce-signers/signers';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -12,7 +11,7 @@ interface LoginModalProps {
 type AuthTab = 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
 
 export const LoginModal: Component<LoginModalProps> = (props) => {
-  const { authExtension, authPrivateKey, authBunker, authNostrConnect } = useUser();
+  const { authExtension, authPrivateKey, authBunker } = useUser();
 
   const [activeTab, setActiveTab] = createSignal<AuthTab>('extension');
   const [privateKeyInput, setPrivateKeyInput] = createSignal('');
@@ -306,10 +305,15 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
                   <div class="flex flex-col items-center space-y-4">
                     {/* QR Code */}
                     <div class="p-4 bg-white rounded-lg">
-                      <QRCode
+                      <QRCodeSVG
                         value={nostrConnectUri()}
-                        size={256}
-                        errorCorrection="M"
+                        width={256}
+                        height={256}
+                        backgroundColor="#ffffff"
+                        backgroundAlpha={1}
+                        foregroundColor="#000000"
+                        foregroundAlpha={1}
+                        level="medium"
                       />
                     </div>
 

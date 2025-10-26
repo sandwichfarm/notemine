@@ -1,5 +1,6 @@
 import { Component } from 'solid-js';
 import { RelayStats } from '../components/RelayStats';
+import { CacheStats } from '../components/CacheStats';
 
 const Stats: Component = () => {
   return (
@@ -12,6 +13,8 @@ const Stats: Component = () => {
           POW relay network status and configuration
         </p>
       </div>
+
+      <CacheStats />
 
       <RelayStats />
     </div>

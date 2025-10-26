@@ -1,7 +1,7 @@
 import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { eventStore, timelineLoader, getActiveRelays } from '../lib/applesauce';
-import { calculatePowScore } from '../lib/pow';
+import { createTimelineStream, getActiveRelays, relayPool } from '../lib/applesauce';
+import { calculatePowScore, getPowDifficulty } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
 
@@ -10,14 +10,24 @@ interface TimelineProps {
   showScores?: boolean;
 }
 
+interface ScoredNote {
+  event: NostrEvent;
+  score: number;
+}
+
 export const Timeline: Component<TimelineProps> = (props) => {
-  const [notes, setNotes] = createSignal<NostrEvent[]>([]);
+  const [notes, setNotes] = createSignal<ScoredNote[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
 
   let subscription: Subscription | null = null;
 
   onMount(() => {
+    const eventCache = new Map<string, NostrEvent>();
+    const reactionsCache = new Map<string, NostrEvent[]>();
+    const repliesCache = new Map<string, NostrEvent[]>();
+    const maxEvents = props.limit ?? 50;
+
     try {
       const relays = getActiveRelays();
       console.log('[Timeline] Loading from relays:', relays);
@@ -29,35 +39,99 @@ export const Timeline: Component<TimelineProps> = (props) => {
       }
 
       // Create timeline subscription for kind 1 notes
-      const timeline$ = timelineLoader.loadTimeline(
-        relays,
-        [{ kinds: [1], limit: props.limit || 50 }],
-        { eventStore }
-      );
+      const timeline$ = createTimelineStream(relays, [{ kinds: [1], limit: maxEvents }], {
+        limit: maxEvents,
+      });
 
       // Subscribe to timeline updates
       subscription = timeline$.subscribe({
-        next: (events) => {
-          console.log('[Timeline] Received events:', events.length);
+        next: (event: NostrEvent) => {
+          eventCache.set(event.id, event);
 
-          // Calculate POW scores and sort by score
-          const scoredNotes = events.map((event) => {
-            const score = calculatePowScore(event);
-            return { event, score: score.totalScore };
+          // Initialize reaction and reply arrays for this event
+          if (!reactionsCache.has(event.id)) {
+            reactionsCache.set(event.id, []);
+          }
+          if (!repliesCache.has(event.id)) {
+            repliesCache.set(event.id, []);
+          }
+
+          // Fetch reactions for this event
+          const reactionsObs = relayPool.req(relays, { kinds: [7], '#e': [event.id], limit: 100 });
+          reactionsObs.subscribe({
+            next: (response) => {
+              if (response !== 'EOSE' && response.kind === 7) {
+                const reaction = response as NostrEvent;
+                const existing = reactionsCache.get(event.id) || [];
+                if (!existing.find(r => r.id === reaction.id)) {
+                  existing.push(reaction);
+                  reactionsCache.set(event.id, existing);
+                  recalculateScores();
+                }
+              }
+            },
           });
 
-          // Sort by score (highest first)
-          scoredNotes.sort((a, b) => b.score - a.score);
+          // Fetch replies for this event
+          const repliesObs = relayPool.req(relays, { kinds: [1], '#e': [event.id], limit: 50 });
+          repliesObs.subscribe({
+            next: (response) => {
+              if (response !== 'EOSE' && response.kind === 1) {
+                const reply = response as NostrEvent;
+                const existing = repliesCache.get(event.id) || [];
+                if (!existing.find(r => r.id === reply.id)) {
+                  existing.push(reply);
+                  repliesCache.set(event.id, existing);
+                  recalculateScores();
+                }
+              }
+            },
+          });
 
-          setNotes(scoredNotes.map((n) => n.event));
-          setLoading(false);
+          recalculateScores();
         },
-        error: (err) => {
+        error: (err: unknown) => {
           console.error('[Timeline] Error:', err);
           setError(String(err));
           setLoading(false);
         },
+        complete: () => {
+          setLoading(false);
+        },
       });
+
+      function recalculateScores() {
+        const scoredNotes = Array.from(eventCache.values()).map((evt) => {
+          const reactions = reactionsCache.get(evt.id) || [];
+          const replies = repliesCache.get(evt.id) || [];
+
+          // Calculate score with reactions
+          const score = calculatePowScore(evt, reactions);
+
+          // Add reply POW to total score
+          const repliesPow = replies.reduce((sum, r) => sum + getPowDifficulty(r), 0);
+          const totalScore = score.totalScore + repliesPow;
+
+          return { event: evt, score: totalScore };
+        });
+
+        scoredNotes.sort((a, b) => b.score - a.score);
+
+        const topNotes = scoredNotes.slice(0, maxEvents);
+        const topNoteIds = new Set(topNotes.map(n => n.event.id));
+
+        // Only keep top notes and their cached data
+        for (const [id] of eventCache) {
+          if (!topNoteIds.has(id)) {
+            eventCache.delete(id);
+            reactionsCache.delete(id);
+            repliesCache.delete(id);
+          }
+        }
+
+        setNotes(topNotes);
+        setLoading(false);
+      }
     } catch (err) {
       console.error('[Timeline] Setup error:', err);
       setError(String(err));
@@ -66,9 +140,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
   });
 
   onCleanup(() => {
-    if (subscription) {
-      subscription.unsubscribe();
-    }
+    subscription?.unsubscribe();
   });
 
   return (
@@ -106,16 +178,13 @@ export const Timeline: Component<TimelineProps> = (props) => {
             {notes().length} notes • sorted by POW score
           </div>
           <For each={notes()}>
-            {(note) => {
-              const score = calculatePowScore(note);
-              return (
-                <Note
-                  event={note}
-                  score={score.totalScore}
-                  showScore={props.showScores ?? true}
-                />
-              );
-            }}
+            {(scoredNote) => (
+              <Note
+                event={scoredNote.event}
+                score={scoredNote.score}
+                showScore={props.showScores ?? true}
+              />
+            )}
           </For>
         </div>
       </Show>

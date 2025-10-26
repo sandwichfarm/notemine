@@ -1,7 +1,10 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createSignal } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty, hasValidPow, formatPowDifficulty } from '../lib/pow';
 import { nip19 } from 'nostr-tools';
+import { ReactionPicker } from './ReactionPicker';
+import { ReplyComposer } from './ReplyComposer';
+import { useNoteStats } from '../hooks/useNoteStats';
 
 interface NoteProps {
   event: NostrEvent;
@@ -10,9 +13,13 @@ interface NoteProps {
 }
 
 export const Note: Component<NoteProps> = (props) => {
+  const [showReactionPicker, setShowReactionPicker] = createSignal(false);
+  const [showReplyComposer, setShowReplyComposer] = createSignal(false);
+
   const powDifficulty = () => getPowDifficulty(props.event);
   const hasPow = () => hasValidPow(props.event, 1);
   const formattedPow = () => formatPowDifficulty(powDifficulty());
+  const stats = useNoteStats(props.event);
 
   const shortPubkey = () => {
     try {
@@ -84,18 +91,75 @@ export const Note: Component<NoteProps> = (props) => {
         {props.event.content}
       </div>
 
+      {/* Aggregate Stats */}
+      <Show when={!stats().loading && (stats().reactionCount > 0 || stats().replyCount > 0)}>
+        <div class="mt-3 p-2 bg-bg-primary dark:bg-bg-tertiary rounded border border-border">
+          <div class="flex gap-4 text-xs">
+            <Show when={stats().reactionCount > 0}>
+              <div class="flex items-center gap-1">
+                <span class="text-text-secondary">⚡</span>
+                <span class="text-text-primary font-medium">{stats().reactionCount}</span>
+                <span class="text-text-tertiary">reactions</span>
+                <span class="text-accent font-mono">({stats().reactionsPowTotal} POW)</span>
+              </div>
+            </Show>
+            <Show when={stats().replyCount > 0}>
+              <div class="flex items-center gap-1">
+                <span class="text-text-secondary">💬</span>
+                <span class="text-text-primary font-medium">{stats().replyCount}</span>
+                <span class="text-text-tertiary">replies</span>
+                <span class="text-accent font-mono">({stats().repliesPowTotal} POW)</span>
+              </div>
+            </Show>
+            <div class="flex items-center gap-1 ml-auto">
+              <span class="text-text-tertiary">score:</span>
+              <span class="text-cyber-400 font-mono font-bold">{stats().totalScore.toFixed(1)}</span>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* Footer */}
       <div class="mt-3 pt-3 border-t border-border flex gap-3 text-xs text-text-tertiary">
-        <button class="hover:text-accent transition-colors">
+        <button
+          onClick={() => setShowReplyComposer(true)}
+          class="hover:text-accent transition-colors"
+        >
           💬 reply
         </button>
-        <button class="hover:text-accent transition-colors">
+        <button
+          onClick={() => setShowReactionPicker(true)}
+          class="hover:text-accent transition-colors"
+        >
           ⚡ react
         </button>
-        <button class="hover:text-accent transition-colors">
+        <button
+          onClick={() => {
+            const noteId = nip19.noteEncode(props.event.id);
+            navigator.clipboard.writeText(`https://notemine.io/n/${noteId}`);
+          }}
+          class="hover:text-accent transition-colors"
+        >
           🔗 share
         </button>
       </div>
+
+      {/* Reaction Picker Modal */}
+      <Show when={showReactionPicker()}>
+        <ReactionPicker
+          eventId={props.event.id}
+          eventAuthor={props.event.pubkey}
+          onClose={() => setShowReactionPicker(false)}
+        />
+      </Show>
+
+      {/* Reply Composer Modal */}
+      <Show when={showReplyComposer()}>
+        <ReplyComposer
+          parentEvent={props.event}
+          onClose={() => setShowReplyComposer(false)}
+        />
+      </Show>
     </div>
   );
 };

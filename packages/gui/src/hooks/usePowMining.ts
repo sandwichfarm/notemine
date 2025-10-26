@@ -1,6 +1,12 @@
 import { createSignal, onCleanup } from 'solid-js';
-import { Notemine } from '@notemine/wrapper';
+import {
+  Notemine,
+  type BestPowData,
+  type SuccessEvent,
+  type WorkerPow,
+} from '@notemine/wrapper';
 import type { NostrEvent } from 'nostr-tools/core';
+import type { Subscription } from 'rxjs';
 
 export interface MiningState {
   mining: boolean;
@@ -16,13 +22,12 @@ export interface MiningOptions {
   pubkey: string;
   difficulty: number;
   numberOfWorkers?: number;
-  kind?: number;
   tags?: string[][];
 }
 
 export function usePowMining() {
   let notemine: Notemine | null = null;
-  let subscriptions: any[] = [];
+  let subscriptions: Subscription[] = [];
 
   const [state, setState] = createSignal<MiningState>({
     mining: false,
@@ -50,24 +55,23 @@ export function usePowMining() {
       pubkey: options.pubkey,
       difficulty: options.difficulty,
       numberOfWorkers: options.numberOfWorkers || navigator.hardwareConcurrency || 4,
-      kind: options.kind || 1,
       tags: options.tags || [],
     });
 
     // Subscribe to workers' POW progress
-    const workersPowSub = notemine.workersPow$.subscribe((data: Record<string, number>) => {
+    const workersPowSub = notemine.workersPow$.subscribe((data: Record<number, BestPowData>) => {
       setState((prev) => ({
         ...prev,
-        workersBestPow: Object.values(data),
+        workersBestPow: Object.values(data).map((pow) => pow.bestPow),
       }));
     });
     subscriptions.push(workersPowSub);
 
     // Subscribe to overall best POW
-    const bestPowSub = notemine.highestPow$.subscribe((pow: number) => {
+    const bestPowSub = notemine.highestPow$.subscribe((pow: WorkerPow | null) => {
       setState((prev) => ({
         ...prev,
-        overallBestPow: pow,
+        overallBestPow: pow?.bestPow ?? null,
       }));
     });
     subscriptions.push(bestPowSub);
@@ -86,20 +90,22 @@ export function usePowMining() {
     // Return promise that resolves when mining completes
     return new Promise((resolve, reject) => {
       // Subscribe to success
-      const successSub = notemine!.success$.subscribe(
-        ({ result: minedResult }: { result: any }) => {
-          setState((prev) => ({
-            ...prev,
-            mining: false,
-            result: minedResult.event,
-          }));
-          resolve(minedResult.event);
+      const successSub = notemine!.success$.subscribe(({ result }: SuccessEvent) => {
+        if (!result) {
+          return;
         }
-      );
+
+        setState((prev) => ({
+          ...prev,
+          mining: false,
+          result: result.event,
+        }));
+        resolve(result.event);
+      });
       subscriptions.push(successSub);
 
       // Subscribe to errors
-      const errorSub = notemine!.error$.subscribe(({ error }: { error: any }) => {
+      const errorSub = notemine!.error$.subscribe(({ error }) => {
         console.error('[POW Mining] Error:', error);
         setState((prev) => ({
           ...prev,

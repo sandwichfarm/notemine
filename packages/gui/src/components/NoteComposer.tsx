@@ -1,7 +1,7 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { usePowMining } from '../hooks/usePowMining';
 import { useUser } from '../providers/UserProvider';
-import { relayPool, getActiveRelays } from '../lib/applesauce';
+import { relayPool, getActiveRelays, getUserOutboxRelays } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
 
@@ -50,7 +50,6 @@ export const NoteComposer: Component = () => {
         pubkey: currentUser.pubkey,
         difficulty: difficulty(),
         tags: [['client', CLIENT_TAG]],
-        kind: 1,
       });
 
       if (!minedEvent) {
@@ -70,10 +69,10 @@ export const NoteComposer: Component = () => {
         throw new Error('Cannot sign event: no signing method available');
       }
 
-      // Publish to relays
+      // Publish to relays (using NIP-65 outbox relays)
       setPublishing(true);
-      const activeRelays = getActiveRelays();
-      console.log('[NoteComposer] Publishing to relays:', activeRelays);
+      const activeRelays = await getUserOutboxRelays(currentUser.pubkey);
+      console.log('[NoteComposer] Publishing to user outbox relays:', activeRelays);
 
       const promises = activeRelays.map(async (relayUrl) => {
         const relay = relayPool.relay(relayUrl);

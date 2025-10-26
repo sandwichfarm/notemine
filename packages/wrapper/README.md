@@ -20,6 +20,9 @@ A TypeScript wrapper for [@notemine/core](../core/README.md) that provides a hig
 
 - **Automatic Worker Management**: Spawns and manages multiple Web Workers based on available CPU cores
 - **Real-time Progress Tracking**: RxJS observables for monitoring hash rate, best PoW, and mining progress
+- **Pause & Resume**: Pause mining operations and resume from the exact same state
+- **State Persistence**: Save and restore mining state across page refreshes or sessions
+- **Dynamic Worker Scaling**: Resume mining with a different number of workers
 - **Zero Configuration**: Works out of the box with modern bundlers (Vite, Webpack, Rollup, etc.)
 - **TypeScript Support**: Fully typed API with comprehensive interfaces
 - **Cancellable Operations**: Stop mining at any time with proper cleanup
@@ -84,10 +87,12 @@ successSub.unsubscribe();
 ```typescript
 interface MinerOptions {
   content?: string;          // The content to include in the mined event
-  tags?: string[][];        // Tags for the event (default includes ['miner', 'notemine'])
+  tags?: string[][];        // Tags for the event
   pubkey?: string;          // Public key for the event
   difficulty?: number;      // Target difficulty (default: 20)
   numberOfWorkers?: number; // Number of workers (default: CPU cores)
+  kind?: number;            // Event kind (default: 1)
+  debug?: boolean;          // Enable debug logging (default: false)
 }
 ```
 
@@ -105,8 +110,20 @@ interface MinerOptions {
 #### `mine(): Promise<void>`
 Starts the mining process. Throws if pubkey or content is not set.
 
+#### `pause(): void`
+Pauses the mining process while preserving the current state (nonces, best PoW, etc.). Workers are terminated but state is maintained for resumption.
+
+#### `resume(workerNonces?: string[]): Promise<void>`
+Resumes mining from a paused state. Optionally accepts an array of worker nonces to resume from. If not provided, uses the tracked state from the last pause.
+
+#### `getState(): MiningState`
+Returns the current mining state as a serializable object. This can be saved to localStorage, IndexedDB, or any other storage mechanism for later restoration.
+
+#### `restoreState(state: MiningState): void`
+Restores the miner to a previously saved state. Must be called before `resume()`. Can be used to resume mining after a page refresh or across sessions.
+
 #### `cancel(): void`
-Stops the mining process and terminates all workers.
+Stops the mining process and terminates all workers. State is not preserved.
 
 #### `stop(): void`
 Alias for `cancel()`.
@@ -117,12 +134,13 @@ Alias for `cancel()`.
 // Mining state
 mining$: BehaviorSubject<boolean>
 cancelled$: BehaviorSubject<boolean>
+paused$: BehaviorSubject<boolean>
 
 // Results
 result$: BehaviorSubject<MinedResult | null>
 success$: Observable<SuccessEvent>
 
-// Progress tracking  
+// Progress tracking
 progress$: Observable<ProgressEvent>
 workersPow$: BehaviorSubject<Record<number, BestPowData>>
 highestPow$: BehaviorSubject<WorkerPow | null>
@@ -164,6 +182,167 @@ interface ErrorEvent {
   error: any;
   message?: string;
 }
+
+interface MiningState {
+  event: {
+    pubkey: string;
+    kind: number;
+    tags: string[][];
+    content: string;
+    created_at: number;
+  };
+  workerNonces: string[];      // Array of current nonces for each worker
+  bestPow: BestPowData | null; // Best proof-of-work found so far
+  difficulty: number;          // Target difficulty
+  numberOfWorkers: number;     // Number of workers when state was saved
+}
+```
+
+## Advanced Features
+
+### Debug Mode
+
+Enable detailed console logging for development and troubleshooting:
+
+```typescript
+const notemine = new Notemine({
+  content: 'Hello, Nostr!',
+  pubkey: 'your-public-key-here',
+  difficulty: 21,
+  debug: true  // Enable debug logging
+});
+```
+
+Debug output includes:
+- **Session Management**: RunId generation for each mining session
+- **Worker Progress**: Per-worker nonce updates (rate-limited to every 2s)
+- **Hash Rate**: Total hash rate with delta changes (every 1s)
+- **Ghost Updates**: Detection and blocking of stale worker messages
+- **State Persistence**: Nonce arrays being saved/restored
+
+Example console output:
+```
+[Notemine] Starting new mining session, runId: f3008079-ef2e-44c7-a282-24e851ccfe0c
+[Notemine] Worker 0 currentNonce: 123456
+[Notemine] totalHashRate: 6000.50 KH/s (Δ 150.25)
+[Notemine] 🚫 GHOST UPDATE BLOCKED - Ignoring message from old session
+```
+
+### Protocol v2 - Worker Message Format
+
+The wrapper uses Protocol v2 for communication with workers, which includes:
+
+**Key Features**:
+- **RunId Gating**: Each mining session has a unique UUID to prevent ghost updates
+- **Current Nonce Tracking**: Workers report their current nonce for accurate resume
+- **Backward Compatibility**: Protocol v1 messages (without runId) still work
+
+**Message Structure**:
+```typescript
+{
+  type: 'progress',
+  workerId: 0,
+  runId: 'uuid-v4-string',     // Session identifier
+  currentNonce: '123456',      // Current position for resume
+  bestPowData: {
+    bestPow: 21,
+    nonce: '123456',
+    hash: '000000abc...'
+  },
+  hashRate: 5000
+}
+```
+
+**Custom Worker Implementation**:
+```typescript
+// In your custom mine.worker.ts
+let sessionRunId: string;
+
+self.onmessage = (e) => {
+  const { event, runId, workerId } = e.data;
+  sessionRunId = runId;
+
+  // Your mining loop
+  while (mining) {
+    // ... mining logic ...
+
+    // Send progress with Protocol v2 format
+    self.postMessage({
+      type: 'progress',
+      workerId,
+      runId: sessionRunId,           // Include runId
+      currentNonce: nonce.toString(), // Include current nonce
+      hashRate: calculatedHashRate,
+      bestPowData: bestPow ? { bestPow, nonce, hash } : undefined
+    });
+  }
+};
+```
+
+### Guarded Persistence
+
+The wrapper implements "guarded persistence" to avoid storing useless default state:
+
+```typescript
+// Only real progress is persisted
+const state = notemine.getState();
+
+// If mining just started, workerNonces is empty
+// state.workerNonces = []  (defaults like ["0", "1", "2"] are filtered out)
+
+// After real progress
+// state.workerNonces = ["123456", "789012"]  (actual progress is saved)
+```
+
+This prevents cluttering localStorage with meaningless initial state.
+
+### State Persistence Throttling
+
+State updates are automatically throttled to ~500ms to reduce I/O overhead:
+
+```typescript
+// Updates are batched and throttled
+const notemine = new Notemine({
+  /* ... */
+  onMiningStateUpdate: (state) => {
+    // This callback is called at most every 500ms
+    // Instead of 4-8 times per second
+    localStorage.setItem('mining-state', JSON.stringify(state));
+  }
+});
+```
+
+### Performance Optimizations
+
+The wrapper includes several performance improvements:
+
+**WASM SIMD**: 15-35% hash rate improvement
+```
+Baseline: 5.2-5.5 MH/s
+With SIMD: 6.0 MH/s sustained, 7.0 MH/s burst
+```
+
+**Adaptive Progress Reporting**: Automatically adjusts reporting frequency to maintain ~250ms cadence
+
+**Efficient Cancel**: Workers respond to cancel requests within 100ms typical
+
+### Lifecycle Semantics
+
+Enhanced pause/resume/cancel behavior:
+
+**Grace Period**: Workers get 200ms to respond to cancel before termination
+
+**Idempotent Operations**: Safe to call pause/resume/cancel multiple times
+
+**Progress Gating**: Progress messages are ignored after mining stops (prevents race conditions)
+
+```typescript
+// All of these are safe
+notemine.pause();
+notemine.pause();  // No-op, already paused
+
+notemine.resume();
+notemine.resume(); // No-op, already mining
 ```
 
 ## Framework Examples
@@ -337,6 +516,124 @@ export class MinerComponent implements OnInit, OnDestroy {
 </details>
 
 ## Advanced Usage
+
+### Pause and Resume Mining
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+const miner = new Notemine({
+  content: 'Mining with pause/resume',
+  pubkey: 'your-pubkey-here',
+  difficulty: 21,
+  numberOfWorkers: 4
+});
+
+// Start mining
+await miner.mine();
+
+// Pause after some time
+setTimeout(() => {
+  miner.pause();
+  console.log('Mining paused');
+}, 10000);
+
+// Resume later
+setTimeout(async () => {
+  await miner.resume();
+  console.log('Mining resumed');
+}, 20000);
+```
+
+### Persist State Across Page Refreshes
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+// Before page refresh - save state
+const miner = new Notemine({
+  content: 'Persistent mining',
+  pubkey: 'your-pubkey-here',
+  difficulty: 21
+});
+
+await miner.mine();
+
+// User navigates away or refreshes
+window.addEventListener('beforeunload', () => {
+  miner.pause();
+  const state = miner.getState();
+  localStorage.setItem('mining_state', JSON.stringify(state));
+});
+
+// After page reload - restore state
+const savedState = localStorage.getItem('mining_state');
+if (savedState) {
+  const state = JSON.parse(savedState);
+
+  const miner = new Notemine({
+    numberOfWorkers: state.numberOfWorkers
+  });
+
+  miner.restoreState(state);
+  await miner.resume();
+
+  console.log('Mining resumed from saved state!');
+}
+```
+
+### Resume with Different Worker Count
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+// Start mining with 4 workers
+const miner = new Notemine({
+  content: 'Scalable mining',
+  pubkey: 'your-pubkey-here',
+  difficulty: 21,
+  numberOfWorkers: 4
+});
+
+await miner.mine();
+
+// Pause and get state
+miner.pause();
+const state = miner.getState();
+
+// Resume with 8 workers - nonces are automatically redistributed
+const miner2 = new Notemine({
+  numberOfWorkers: 8  // Different worker count!
+});
+
+miner2.restoreState(state);
+await miner2.resume();
+
+console.log('Mining resumed with 8 workers instead of 4!');
+```
+
+### Track Pause/Resume State
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+const miner = new Notemine({ content: 'State tracking' });
+
+// Subscribe to pause state
+miner.paused$.subscribe(isPaused => {
+  console.log(`Mining is ${isPaused ? 'paused' : 'active'}`);
+
+  if (isPaused) {
+    // Show resume button in UI
+    // Display saved state info
+  }
+});
+
+// Subscribe to mining state
+miner.mining$.subscribe(isMining => {
+  console.log(`Mining is ${isMining ? 'running' : 'stopped'}`);
+});
+```
 
 ### Monitoring Mining Progress
 

@@ -1,0 +1,36 @@
+{
+  "name": "@notemine/estimator",
+  "version": "0.1.0",
+  "description": "Payload- and thread-aware PoW time estimator for the web",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "sideEffects": false,
+  "dependencies": {
+    "@notemine/core": "workspace:*",
+    "@notemine/wrapper": "workspace:*"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.6.3",
+    "vite-plugin-wasm": "^3.5.0",
+    "vitest": "^2.1.3"
+  }
+}

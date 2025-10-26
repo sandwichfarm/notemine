@@ -4,3 +4,5 @@ dist
 **/*/dist
 target
 docs
+
+relay/data

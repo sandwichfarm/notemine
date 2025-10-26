@@ -23,7 +23,6 @@ let usub = null;
 
 let totalWorkers = navigator.hardwareConcurrency-1 || 2;
 let workers = [];
-let isWorkerReady = 0;
 let isMining = false;
 
 const mineButton = document.getElementById('mineButton');
@@ -216,12 +215,16 @@ function spawnWorkers(amt=null){
     for (let i = 0; i < amt; i++) {
         const worker = new Worker('./worker.js', { type: 'module' });
         worker.onmessage = handleWorkerMessage;
-        worker.postMessage({ type: 'init', id: i });
+        worker.postMessage({ type: 'init', workerId: i });
         workers.push(worker);
     }
 }
 
 spawnWorkers()
+
+// Enable mining immediately - WASM will initialize on first mine call
+mineButton.disabled = false;
+resultOutput.textContent = 'Ready to mine. Click "Mine & Publish" to start.';
 
 function disableInputs(){
     mineButton.disabled = true;
@@ -316,13 +319,6 @@ async function handleWorkerMessage(e) {
             updateBestPowDisplay();
         }
 
-    } else if (type === 'ready') {
-        isWorkerReady++;
-        if (isWorkerReady === totalWorkers) {
-            console.log('All workers are ready.');
-            mineButton.disabled = false;
-            resultOutput.textContent = 'Workers are ready. You can start mining.';
-        }
     } else if (type === 'result') {
         if (data.error) {
             resultOutput.textContent = `Error: ${data.error}\n${JSON.stringify(data, null, 2)}`;
@@ -348,9 +344,11 @@ async function handleWorkerMessage(e) {
         mineButton.disabled = false;
         cancelButton.disabled = true;
         eventInput.value = '';
-        workers[workerId]?.terminate();
-        workers = []
-        spawnWorkers()
+
+        // Terminate all old workers before spawning new ones
+        terminateAllWorkers();
+        workers = [];
+        spawnWorkers();
         
     } else if (type === 'stopped') {
         
@@ -368,7 +366,16 @@ function cancelOtherWorkers(excludeWorkerId) {
     workers.forEach((worker, index) => {
         if (index !== excludeWorkerId) {
             worker.postMessage({ type: 'cancel' });
-            setTimeout( () => worker.terminate(), 1);
+        }
+    });
+}
+
+function terminateAllWorkers() {
+    workers.forEach(worker => {
+        try {
+            worker.terminate();
+        } catch (e) {
+            console.warn('Error terminating worker:', e);
         }
     });
 }
@@ -396,6 +403,7 @@ numberOfWorkers.addEventListener('change', () => {
         const workersToTerminate = workers.splice(n, Math.abs(delta))
         workersToTerminate.forEach(worker => worker.terminate())
     }
+    totalWorkers = n;
     enableInputs()
 })
 
@@ -512,8 +520,8 @@ mineButton.addEventListener('click', async () => {
         return;
     }
 
-    if (isWorkerReady < totalWorkers) {
-        alert('Workers are not ready yet. Please wait.');
+    if (workers.length === 0) {
+        alert('No workers available. Please refresh the page.');
         return;
     }
 
@@ -543,17 +551,20 @@ cancelButton.addEventListener('click', () => {
     if (isMining) {
         workers.forEach(worker => {
             worker.postMessage({ type: 'cancel' });
-            worker.terminate();
         });
-        workers = []
+
         resultOutput.textContent = 'Mining cancellation requested.';
         hashrateOutput.textContent = '0 H/s';
         mineButton.disabled = false;
         cancelButton.disabled = true;
         isMining = false;
-        workerHashRates = {}; 
+        workerHashRates = {};
         workerMaxHashRates = {};
-        spawnWorkers()
+
+        // Terminate all workers and spawn fresh ones
+        terminateAllWorkers();
+        workers = [];
+        spawnWorkers();
     }
 });
 

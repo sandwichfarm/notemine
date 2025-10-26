@@ -1,0 +1,8 @@
+[build]
+rustflags = ["--cfg", "sha2_backend=\"wasm32-simd\""]
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "--cfg", "sha2_backend=\"wasm32-simd\"",
+  "-C", "target-feature=+simd128"
+]

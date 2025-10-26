@@ -5,7 +5,7 @@
   "main": "src/index.html",
   "license": "MIT",
   "scripts": {
-    "dev": "sirv public --port 1372",
+    "dev": "sirv src --port 1372",
     "build": "./scripts/copy-notemine.sh"
   },
   "dependencies": {

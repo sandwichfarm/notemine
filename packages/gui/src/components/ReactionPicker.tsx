@@ -1,7 +1,8 @@
 import { Component, createSignal, Show, For } from 'solid-js';
 import { usePowMining } from '../hooks/usePowMining';
 import { useUser } from '../providers/UserProvider';
-import { relayPool, getActiveRelays, getUserOutboxRelays } from '../lib/applesauce';
+import { usePreferences } from '../providers/PreferencesProvider';
+import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
 
@@ -22,17 +23,23 @@ const COMMON_REACTIONS = [
   { emoji: '⚡', label: 'Zap', type: 'neutral' },
 ];
 
-const DEFAULT_DIFFICULTY = 18;
-
 export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
+  const { preferences, updatePreference } = usePreferences();
+
   const [selectedReaction, setSelectedReaction] = createSignal<string>('');
   const [customEmoji, setCustomEmoji] = createSignal('');
-  const [difficulty, setDifficulty] = createSignal(DEFAULT_DIFFICULTY);
+  const [difficulty, setDifficulty] = createSignal(preferences().powDifficultyReaction);
   const [publishing, setPublishing] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
   const { user } = useUser();
   const { state: miningState, startMining } = usePowMining();
+
+  // Save difficulty preference when changed
+  const handleDifficultyChange = (newDifficulty: number) => {
+    setDifficulty(newDifficulty);
+    updatePreference('powDifficultyReaction', newDifficulty);
+  };
 
   const handleReact = async (emoji: string) => {
     setError(null);
@@ -65,6 +72,8 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
       }
 
       console.log('[ReactionPicker] POW mining complete, publishing...');
+      console.log('[ReactionPicker] Mined event kind:', minedEvent.kind);
+      console.log('[ReactionPicker] Mined event:', minedEvent);
 
       // Sign the event
       let signedEvent: NostrEvent;
@@ -78,12 +87,16 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
         throw new Error('Cannot sign event: no signing method available');
       }
 
-      // Publish to relays (using NIP-65 outbox relays)
-      setPublishing(true);
-      const activeRelays = await getUserOutboxRelays(currentUser.pubkey);
-      console.log('[ReactionPicker] Publishing to user outbox relays:', activeRelays);
+      console.log('[ReactionPicker] Signed event kind:', signedEvent.kind);
+      console.log('[ReactionPicker] Signed event:', signedEvent);
 
-      const promises = activeRelays.map(async (relayUrl) => {
+      // Publish to relays (using NIP-65 outbox relays or localhost in dev)
+      setPublishing(true);
+      const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
+      const publishRelays = getPublishRelays(outboxRelays);
+      console.log('[ReactionPicker] Publishing to relays:', publishRelays);
+
+      const promises = publishRelays.map(async (relayUrl) => {
         const relay = relayPool.relay(relayUrl);
         return relay.publish(signedEvent);
       });
@@ -177,7 +190,7 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
               max="24"
               step="1"
               value={difficulty()}
-              onInput={(e) => setDifficulty(Number(e.currentTarget.value))}
+              onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
               class="w-full"
               disabled={miningState().mining || publishing()}
             />

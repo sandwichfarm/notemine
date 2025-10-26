@@ -4,6 +4,7 @@ import { useTheme } from '../providers/ThemeProvider';
 import { useUser } from '../providers/UserProvider';
 import { LoginModal } from './LoginModal';
 import Profile from '../pages/Profile';
+import { MiningStatsButton } from './MiningStatsButton';
 
 const Layout: Component<{ children?: any }> = (props) => {
   const { theme, toggleTheme } = useTheme();
@@ -14,22 +15,16 @@ const Layout: Component<{ children?: any }> = (props) => {
 
   return (
     <div class="min-h-screen flex flex-col pb-16">
-      {/* Floating User Widget (top right) */}
-      <div class="fixed top-4 right-4 z-40 flex items-center gap-2">
-        <button
-          onClick={toggleTheme}
-          class="btn text-xs px-3 py-2"
-          title={`Switch to ${theme() === 'dark' ? 'light' : 'dark'} mode`}
-        >
-          {theme() === 'dark' ? '☀️' : '🌙'}
-        </button>
+      {/* Header with Mining, User, Login, Theme */}
+      <div class="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
+        <MiningStatsButton />
 
         <Show when={user()}>
           <div class="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu())}
               class="btn text-sm font-mono flex items-center gap-2"
-              title="Click to view profile or sign in"
+              title="Click to view profile"
             >
               <Show when={user()?.isAnon}>
                 <span class="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-500 rounded">anon</span>
@@ -65,34 +60,40 @@ const Layout: Component<{ children?: any }> = (props) => {
                   </button>
                 </Show>
 
-                <Show
-                  when={user()?.isAnon}
-                  fallback={
-                    <button
-                      onClick={() => {
-                        logout();
-                        setShowUserMenu(false);
-                      }}
-                      class="w-full px-3 py-2 text-left text-sm hover:bg-bg-secondary dark:hover:bg-bg-tertiary rounded transition-colors text-red-500"
-                    >
-                      Sign Out
-                    </button>
-                  }
-                >
+                <Show when={!user()?.isAnon}>
                   <button
                     onClick={() => {
+                      logout();
                       setShowUserMenu(false);
-                      setShowLoginModal(true);
                     }}
-                    class="w-full px-3 py-2 text-left text-sm hover:bg-bg-secondary dark:hover:bg-bg-tertiary rounded transition-colors text-accent"
+                    class="w-full px-3 py-2 text-left text-sm hover:bg-bg-secondary dark:hover:bg-bg-tertiary rounded transition-colors text-red-500"
                   >
-                    Sign In
+                    Sign Out
                   </button>
                 </Show>
               </div>
             </Show>
           </div>
         </Show>
+
+        {/* Login Button (visible for anon users) */}
+        <Show when={user()?.isAnon}>
+          <button
+            onClick={() => setShowLoginModal(true)}
+            class="btn text-xs px-3 py-2"
+          >
+            Sign In
+          </button>
+        </Show>
+
+        {/* Theme Toggle (far right) */}
+        <button
+          onClick={toggleTheme}
+          class="btn text-xs px-3 py-2"
+          title={`Switch to ${theme() === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme() === 'dark' ? '☀️' : '🌙'}
+        </button>
       </div>
 
       {/* Login Modal */}
@@ -127,7 +128,7 @@ const Layout: Component<{ children?: any }> = (props) => {
       </Show>
 
       {/* Main Content */}
-      <main class="flex-1 px-6 py-8">
+      <main class="flex-1 px-6 py-8 pt-20">
         <div class="max-w-6xl mx-auto">
           {props.children}
         </div>

@@ -23,7 +23,12 @@ export async function initializeCache(): Promise<AsyncEventStore> {
     // Create database instance with IndexedDB backend
     const db = new Database(':notemine-cache:');
 
+    // Connect to the database
+    console.log('[Cache] Connecting to database...');
+    await db.connect();
+
     // Initialize the event database
+    console.log('[Cache] Creating TursoWasmEventDatabase...');
     cacheDatabase = await TursoWasmEventDatabase.fromDatabase(db);
 
     // Create AsyncEventStore with the database
@@ -95,6 +100,11 @@ export async function loadCachedEvents(mainEventStore: any, limit: number = 1000
       { kinds: [1], limit },
     ]);
 
+    // Load kind 30023 long-form content
+    const cachedLongForm = await cacheDatabase.getByFilters([
+      { kinds: [30023], limit: 100 },
+    ]);
+
     // Load kind 0 metadata
     const cachedMetadata = await cacheDatabase.getByFilters([
       { kinds: [0], limit: 500 },
@@ -105,7 +115,7 @@ export async function loadCachedEvents(mainEventStore: any, limit: number = 1000
       { kinds: [7], limit: 1000 },
     ]);
 
-    const allEvents = [...cachedNotes, ...cachedMetadata, ...cachedReactions];
+    const allEvents = [...cachedNotes, ...cachedLongForm, ...cachedMetadata, ...cachedReactions];
 
     // Add each event to the main event store with cache marker
     let loadedCount = 0;

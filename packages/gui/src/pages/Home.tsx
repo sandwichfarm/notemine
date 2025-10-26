@@ -1,6 +1,6 @@
 import { Component } from 'solid-js';
 import { NoteComposer } from '../components/NoteComposer';
-import { Timeline } from '../components/Timeline';
+import { InfiniteTimeline } from '../components/InfiniteTimeline';
 
 const Home: Component = () => {
   return (
@@ -10,9 +10,9 @@ const Home: Component = () => {
         <NoteComposer />
       </section>
 
-      {/* Timeline */}
+      {/* Timeline with Infinite Scroll */}
       <section>
-        <Timeline limit={50} showScores={true} />
+        <InfiniteTimeline limit={20} showScores={true} />
       </section>
     </div>
   );

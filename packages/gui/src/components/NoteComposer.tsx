@@ -1,33 +1,47 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createSignal, Show, createEffect } from 'solid-js';
 import { usePowMining } from '../hooks/usePowMining';
 import { useUser } from '../providers/UserProvider';
-import { relayPool, getActiveRelays, getUserOutboxRelays } from '../lib/applesauce';
+import { usePreferences } from '../providers/PreferencesProvider';
+import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
+import { MentionAutocomplete } from './MentionAutocomplete';
 
-const MAX_CONTENT_LENGTH = 140;
-const DEFAULT_DIFFICULTY = 20;
 const CLIENT_TAG = 'notemine.io';
 
 export const NoteComposer: Component = () => {
+  const { preferences, updatePreference } = usePreferences();
+  const maxContentLength = () => preferences().maxContentLengthRootNote;
+
   const [content, setContent] = createSignal('');
-  const [difficulty, setDifficulty] = createSignal(DEFAULT_DIFFICULTY);
+  const [difficulty, setDifficulty] = createSignal(preferences().powDifficultyRootNote);
   const [publishing, setPublishing] = createSignal(false);
   const [publishError, setPublishError] = createSignal<string | null>(null);
   const [publishSuccess, setPublishSuccess] = createSignal(false);
+  const [showMentionAutocomplete, setShowMentionAutocomplete] = createSignal(false);
+  const [mentionQuery, setMentionQuery] = createSignal('');
+  const [mentionPosition, setMentionPosition] = createSignal({ top: 0, left: 0 });
+  const [mentionStartIndex, setMentionStartIndex] = createSignal(-1);
+  let textareaRef: HTMLTextAreaElement | undefined;
 
   const { user } = useUser();
   const { state: miningState, startMining, stopMining } = usePowMining();
 
-  const remainingChars = () => MAX_CONTENT_LENGTH - content().length;
+  const remainingChars = () => maxContentLength() - content().length;
   const canSubmit = () => {
     return (
       content().trim().length > 0 &&
-      content().length <= MAX_CONTENT_LENGTH &&
+      content().length <= maxContentLength() &&
       user() &&
       !miningState().mining &&
       !publishing()
     );
+  };
+
+  // Save difficulty preference when changed
+  const handleDifficultyChange = (newDifficulty: number) => {
+    setDifficulty(newDifficulty);
+    updatePreference('powDifficultyRootNote', newDifficulty);
   };
 
   const handleSubmit = async (e: Event) => {
@@ -69,12 +83,13 @@ export const NoteComposer: Component = () => {
         throw new Error('Cannot sign event: no signing method available');
       }
 
-      // Publish to relays (using NIP-65 outbox relays)
+      // Publish to relays (using NIP-65 outbox relays or localhost in dev)
       setPublishing(true);
-      const activeRelays = await getUserOutboxRelays(currentUser.pubkey);
-      console.log('[NoteComposer] Publishing to user outbox relays:', activeRelays);
+      const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
+      const publishRelays = getPublishRelays(outboxRelays);
+      console.log('[NoteComposer] Publishing to relays:', publishRelays);
 
-      const promises = activeRelays.map(async (relayUrl) => {
+      const promises = publishRelays.map(async (relayUrl) => {
         const relay = relayPool.relay(relayUrl);
         return relay.publish(signedEvent);
       });
@@ -96,20 +111,130 @@ export const NoteComposer: Component = () => {
     }
   };
 
+  // Helper to get cursor coordinates in textarea
+  const getCursorCoordinates = (textarea: HTMLTextAreaElement, position: number) => {
+    const div = document.createElement('div');
+    const style = window.getComputedStyle(textarea);
+
+    // Copy relevant styles
+    ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight',
+     'padding', 'border', 'width'].forEach(prop => {
+      div.style[prop as any] = style[prop as any];
+    });
+
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.wordWrap = 'break-word';
+
+    const textBeforeCursor = textarea.value.substring(0, position);
+    div.textContent = textBeforeCursor;
+
+    const span = document.createElement('span');
+    span.textContent = textarea.value.substring(position) || '.';
+    div.appendChild(span);
+
+    document.body.appendChild(div);
+    const coordinates = {
+      top: span.offsetTop,
+      left: span.offsetLeft,
+    };
+    document.body.removeChild(div);
+
+    return coordinates;
+  };
+
+  // Detect @ mentions and show autocomplete
+  const handleContentChange = (e: InputEvent) => {
+    const textarea = e.currentTarget as HTMLTextAreaElement;
+    const newContent = textarea.value;
+    setContent(newContent);
+
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = newContent.slice(0, cursorPos);
+
+    // Find the last @ symbol before cursor
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      // Check if @ is at start or preceded by whitespace
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+      const isValidMention = charBeforeAt === ' ' || charBeforeAt === '\n' || lastAtIndex === 0;
+
+      if (isValidMention) {
+        const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+        // Check if there's no whitespace after @
+        if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+          setMentionQuery(textAfterAt);
+          setMentionStartIndex(lastAtIndex);
+          setShowMentionAutocomplete(true);
+
+          // Calculate position near cursor
+          const rect = textarea.getBoundingClientRect();
+          const cursorCoords = getCursorCoordinates(textarea, cursorPos);
+
+          setMentionPosition({
+            top: rect.top + cursorCoords.top + 20,
+            left: rect.left + cursorCoords.left,
+          });
+          return;
+        }
+      }
+    }
+
+    // Hide autocomplete if no valid @ mention
+    setShowMentionAutocomplete(false);
+  };
+
+  // Handle mention selection
+  const handleMentionSelect = (npub: string, displayName: string) => {
+    const currentContent = content();
+    const startIdx = mentionStartIndex();
+
+    if (startIdx === -1) return;
+
+    // Replace @query with @npub
+    const before = currentContent.slice(0, startIdx);
+    const after = currentContent.slice(startIdx + 1 + mentionQuery().length);
+    const newContent = `${before}@${npub}${after}`;
+
+    setContent(newContent);
+    setShowMentionAutocomplete(false);
+
+    // Focus back on textarea
+    if (textareaRef) {
+      textareaRef.focus();
+      const newCursorPos = startIdx + npub.length + 1;
+      textareaRef.setSelectionRange(newCursorPos, newCursorPos);
+    }
+  };
+
   return (
-    <div class="w-full max-w-2xl mx-auto p-4 bg-bg-secondary dark:bg-bg-primary border border-border rounded-lg">
+    <div class="w-full max-w-2xl mx-auto p-4 bg-transparent border-0 rounded-lg relative">
       <form onSubmit={handleSubmit}>
         {/* Textarea */}
-        <div class="mb-4">
+        <div class="mb-4 relative">
           <textarea
-            class="w-full p-3 bg-bg-primary dark:bg-bg-secondary text-text-primary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent resize-none font-mono"
-            placeholder={`What's on your mind? (${MAX_CONTENT_LENGTH} chars max, POW required)`}
+            ref={textareaRef}
+            class="w-full p-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] border-0 rounded-lg focus:outline-none focus:ring-0 resize-none font-sans placeholder:opacity-40"
+            placeholder={`What's on your mind? (${maxContentLength()} chars max, POW required, use @ to mention users)`}
             rows={4}
             value={content()}
-            onInput={(e) => setContent(e.currentTarget.value)}
-            maxLength={MAX_CONTENT_LENGTH}
+            onInput={handleContentChange}
+            maxLength={maxContentLength()}
             disabled={miningState().mining || publishing()}
           />
+
+          {/* Mention Autocomplete */}
+          <Show when={showMentionAutocomplete()}>
+            <MentionAutocomplete
+              top={mentionPosition().top}
+              left={mentionPosition().left}
+              query={mentionQuery()}
+              onSelect={handleMentionSelect}
+              onClose={() => setShowMentionAutocomplete(false)}
+            />
+          </Show>
           <div
             class="text-sm mt-1"
             classList={{
@@ -124,22 +249,19 @@ export const NoteComposer: Component = () => {
 
         {/* Difficulty slider */}
         <div class="mb-4">
-          <label class="block text-sm font-medium text-text-primary mb-2">
+          <label class="block text-sm font-medium text-text-secondary opacity-60 mb-2">
             POW Difficulty: {difficulty()}
           </label>
           <input
             type="range"
             min="16"
-            max="28"
+            max="42"
             step="1"
             value={difficulty()}
-            onInput={(e) => setDifficulty(Number(e.currentTarget.value))}
+            onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
             class="w-full"
             disabled={miningState().mining || publishing()}
           />
-          <div class="text-xs text-text-secondary mt-1">
-            Higher difficulty = longer mining time but better anti-spam protection
-          </div>
         </div>
 
         {/* Mining stats */}
@@ -147,7 +269,7 @@ export const NoteComposer: Component = () => {
           <div class="mb-4 p-3 bg-bg-primary dark:bg-bg-tertiary border border-border rounded-lg">
             <div class="text-sm text-text-primary space-y-1">
               <div>⛏️ Mining in progress...</div>
-              <div>Hash rate: {miningState().hashRate.toFixed(2)} H/s</div>
+              <div>Hash rate: {miningState().hashRate.toFixed(2)} KH/s ({(miningState().hashRate / 1000).toFixed(2)} MH/s)</div>
               <Show when={miningState().overallBestPow !== null}>
                 <div>Best POW: {miningState().overallBestPow}</div>
               </Show>

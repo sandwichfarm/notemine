@@ -11,6 +11,7 @@ import (
 	"github.com/fiatjaf/eventstore/lmdb"
 	"github.com/fiatjaf/khatru"
 	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip11"
 	"github.com/sandwichfarm/notemine/relay/internal/pow"
 	"github.com/sandwichfarm/notemine/relay/internal/retention"
 )
@@ -23,8 +24,8 @@ const (
 	PruneInterval = 1 * time.Hour
 
 	// RelayName for NIP-11
-	RelayName = "notemine relay"
-	RelayDescription = "A proof-of-work first nostr relay with POW-based retention"
+	RelayName = "notemine.io"
+	RelayDescription = "novel pow relay"
 	RelayPubkey = "" // Set your relay operator pubkey here
 )
 
@@ -61,6 +62,11 @@ func main() {
 	relay.Info.Software = "https://github.com/sandwichfarm/notemine"
 	relay.Info.Version = "0.1.0"
 	relay.Info.SupportedNIPs = []int{1, 9, 11, 13, 16, 20, 33}
+
+	// Set limitations for NIP-11
+	relay.Info.Limitation = &nip11.RelayLimitationDocument{
+		MinPowDifficulty: MinPOWDifficulty,
+	}
 
 	// Set up POW validation hook
 	relay.RejectEvent = append(relay.RejectEvent, func(ctx context.Context, event *nostr.Event) (bool, string) {

@@ -14,6 +14,8 @@ export interface MinerOptions {
   difficulty?: number;
   /** Number of workers to use for mining */
   numberOfWorkers?: number;
+  /** Event kind (default: 1) */
+  kind?: number;
 }
 
 /** Data structure representing a progress event during mining */
@@ -81,6 +83,7 @@ export class Notemine {
   private _pubkey: string;
   private _difficulty: number;
   private _numberOfWorkers: number;
+  private _kind: number;
   private _workerMaxHashRates = new Map<number, number>();
   private _workerHashRates = new Map<number, number[]>();
   private _lastRefresh = 0;
@@ -124,6 +127,7 @@ export class Notemine {
     this._pubkey = options?.pubkey || '';
     this._difficulty = options?.difficulty || 20;
     this._numberOfWorkers = options?.numberOfWorkers || navigator.hardwareConcurrency || 4;
+    this._kind = options?.kind || 1;
   }
 
   /** Sets the content to be used in the mining event */
@@ -174,6 +178,16 @@ export class Notemine {
   /** Gets the number of workers currently being used */
   get numberOfWorkers(): number {
     return this._numberOfWorkers;
+  }
+
+  /** Sets the event kind */
+  set kind(kind: number) {
+    this._kind = kind;
+  }
+
+  /** Gets the event kind */
+  get kind(): number {
+    return this._kind;
   }
 
   /** Sets the last refresh interval */
@@ -339,7 +353,7 @@ export class Notemine {
   private prepareEvent(): string {
     const event = {
       pubkey: this.pubkey,
-      kind: 1,
+      kind: this._kind,
       tags: this.tags,
       content: this.content,
       created_at: Math.floor(Date.now() / 1000),

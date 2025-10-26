@@ -1,4 +1,4 @@
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, createEffect } from 'solid-js';
 import {
   Notemine,
   type BestPowData,
@@ -7,6 +7,7 @@ import {
 } from '@notemine/wrapper';
 import type { NostrEvent } from 'nostr-tools/core';
 import type { Subscription } from 'rxjs';
+import { useMining } from '../providers/MiningProvider';
 
 export interface MiningState {
   mining: boolean;
@@ -23,11 +24,13 @@ export interface MiningOptions {
   difficulty: number;
   numberOfWorkers?: number;
   tags?: string[][];
+  kind?: number; // Event kind (default: 1)
 }
 
 export function usePowMining() {
   let notemine: Notemine | null = null;
   let subscriptions: Subscription[] = [];
+  const { setGlobalMiningState } = useMining();
 
   const [state, setState] = createSignal<MiningState>({
     mining: false,
@@ -36,6 +39,11 @@ export function usePowMining() {
     workersBestPow: [],
     result: null,
     error: null,
+  });
+
+  // Sync local state to global state
+  createEffect(() => {
+    setGlobalMiningState(state());
   });
 
   const startMining = async (options: MiningOptions): Promise<NostrEvent | null> => {
@@ -50,12 +58,15 @@ export function usePowMining() {
     });
 
     // Initialize notemine
+    // Use cores-1 to leave one core free for the system
+    const defaultWorkers = Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
     notemine = new Notemine({
       content: options.content,
       pubkey: options.pubkey,
       difficulty: options.difficulty,
-      numberOfWorkers: options.numberOfWorkers || navigator.hardwareConcurrency || 4,
+      numberOfWorkers: options.numberOfWorkers || defaultWorkers,
       tags: options.tags || [],
+      kind: options.kind, // Pass the kind parameter
     });
 
     // Subscribe to workers' POW progress
@@ -79,9 +90,13 @@ export function usePowMining() {
     // Subscribe to progress (for hash rate)
     const progressSub = notemine.progress$.subscribe(() => {
       if (notemine) {
+        const hashRate = notemine!.totalHashRate;
+        // Note: totalHashRate is actually in KH/s (divided by 1000 in wrapper)
+        const actualHashRate = hashRate * 1000; // Convert back to H/s
+        console.log(`[POW Mining] Total hash rate: ${(actualHashRate / 1000000).toFixed(2)} MH/s (${hashRate} KH/s) across ${notemine!.numberOfWorkers} workers`);
         setState((prev) => ({
           ...prev,
-          hashRate: notemine!.totalHashRate,
+          hashRate,
         }));
       }
     });

@@ -43,8 +43,13 @@ export function useNoteStats(event: NostrEvent) {
     reactionsSubscription = reactionsObs.subscribe({
       next: (response) => {
         if (response !== 'EOSE' && response.kind === 7) {
-          reactions.push(response as NostrEvent);
-          updateStats();
+          const reaction = response as NostrEvent;
+          // Ensure this is a kind 7 reaction event
+          if (reaction.kind === 7 && !reactions.find(r => r.id === reaction.id)) {
+            reactions.push(reaction);
+            console.log(`[useNoteStats] Reaction added for ${event.id.slice(0, 8)}: ${reaction.content}`);
+            updateStats();
+          }
         }
       },
       error: (err) => {
@@ -58,8 +63,13 @@ export function useNoteStats(event: NostrEvent) {
     repliesSubscription = repliesObs.subscribe({
       next: (response) => {
         if (response !== 'EOSE' && response.kind === 1) {
-          replies.push(response as NostrEvent);
-          updateStats();
+          const reply = response as NostrEvent;
+          // Ensure this is a kind 1 reply event (not a kind 7 reaction)
+          if (reply.kind === 1 && !replies.find(r => r.id === reply.id)) {
+            replies.push(reply);
+            console.log(`[useNoteStats] Reply added for ${event.id.slice(0, 8)}`);
+            updateStats();
+          }
         }
       },
       error: (err) => {
@@ -80,6 +90,8 @@ export function useNoteStats(event: NostrEvent) {
 
       // Calculate total score using the scoring formula
       const score = calculatePowScore(event, reactions);
+
+      console.log(`[useNoteStats] Stats for ${event.id.slice(0, 8)}: reactions=${reactions.length}, replies=${replies.length}`);
 
       setStats({
         reactionCount: reactions.length,

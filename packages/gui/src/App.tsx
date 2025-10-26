@@ -1,23 +1,32 @@
-import { Component, ParentComponent, onMount } from 'solid-js';
+import { Component, ParentComponent, onMount, createSignal, Show } from 'solid-js';
 import { Router, Route } from '@solidjs/router';
 import { EventStoreProvider } from './providers/EventStoreProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { UserProvider } from './providers/UserProvider';
+import { MiningProvider } from './providers/MiningProvider';
+import { PreferencesProvider } from './providers/PreferencesProvider';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import About from './pages/About';
 import Stats from './pages/Stats';
+import NoteDetail from './pages/NoteDetail';
+import ProfileDetail from './pages/ProfileDetail';
 import { fetchNip66PowRelays } from './lib/nip66';
-import { setPowRelays, connectToRelays, getActiveRelays } from './lib/applesauce';
-// import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
+import { setPowRelays, connectToRelays, getActiveRelays, eventStore } from './lib/applesauce';
+import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
 
 // App initialization component
 const AppInit: ParentComponent = (props) => {
   const { authAnon } = useUser();
+  const [relaysReady, setRelaysReady] = createSignal(false);
 
   onMount(async () => {
-    // Initialize local cache (temporarily disabled for debugging)
+    // FIXME: Cache disabled due to WASM threading conflict with COOP/COEP headers
+    // Turso WASM with threading requires COOP/COEP headers, but those break WebSocket relay connections
+    // Need to either: use non-threaded Turso, use different cache, or solve COOP/COEP + WebSocket issue
+
+    // Initialize local cache
     // try {
     //   await initializeCache();
     //   console.log('[App] Cache initialized');
@@ -32,8 +41,9 @@ const AppInit: ParentComponent = (props) => {
     //   console.error('[App] Cache initialization failed:', error);
     //   // Continue without cache
     // }
+    console.log('[App] Cache disabled - WASM threading conflict with relay WebSockets');
 
-    // Fetch NIP-66 POW relays
+    // Fetch NIP-66 POW relays BEFORE mounting children
     try {
       const relays = await fetchNip66PowRelays();
       setPowRelays(relays);
@@ -48,25 +58,35 @@ const AppInit: ParentComponent = (props) => {
 
     // Initialize with anonymous user
     authAnon();
+
+    // Signal that relays are ready and children can mount
+    setRelaysReady(true);
   });
 
-  return props.children;
+  return <Show when={relaysReady()}>{props.children}</Show>;
 };
 
 const App: Component = () => {
   return (
     <ThemeProvider>
-      <EventStoreProvider>
-        <UserProvider>
-          <AppInit>
-            <Router root={Layout}>
-              <Route path="/" component={Home} />
-              <Route path="/about" component={About} />
-              <Route path="/stats" component={Stats} />
-            </Router>
-          </AppInit>
-        </UserProvider>
-      </EventStoreProvider>
+      <PreferencesProvider>
+        <EventStoreProvider>
+          <UserProvider>
+            <MiningProvider>
+              <AppInit>
+                <Router root={Layout}>
+                  <Route path="/" component={Home} />
+                  <Route path="/about" component={About} />
+                  <Route path="/stats" component={Stats} />
+                  <Route path="/n/:id" component={NoteDetail} />
+                  <Route path="/e/:id" component={NoteDetail} />
+                  <Route path="/p/:identifier" component={ProfileDetail} />
+                </Router>
+              </AppInit>
+            </MiningProvider>
+          </UserProvider>
+        </EventStoreProvider>
+      </PreferencesProvider>
     </ThemeProvider>
   );
 };

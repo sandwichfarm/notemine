@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { createTimelineStream, getActiveRelays, relayPool } from '../lib/applesauce';
 import { calculatePowScore, getPowDifficulty } from '../lib/pow';
@@ -18,9 +18,13 @@ interface ScoredNote {
 export const Timeline: Component<TimelineProps> = (props) => {
   const [notes, setNotes] = createSignal<ScoredNote[]>([]);
   const [loading, setLoading] = createSignal(true);
+  const [loadingMore, setLoadingMore] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [hasMore, setHasMore] = createSignal(true);
+  const [oldestTimestamp, setOldestTimestamp] = createSignal<number | undefined>(undefined);
 
   let subscription: Subscription | null = null;
+  let scrollElement: HTMLDivElement | undefined;
 
   onMount(() => {
     const eventCache = new Map<string, NostrEvent>();

@@ -24,6 +24,17 @@ export const DEFAULT_POW_RELAY = import.meta.env.DEV
   ? 'ws://localhost:3334'
   : 'wss://notemine.io';
 
+// Well-known profile relays for kind 0 (profiles) and kind 10002 (relay lists)
+// These are always used for fetching profile metadata
+export const PROFILE_RELAYS = [
+  'wss://purplepag.es',
+  'wss://user.kindpag.es',
+  'wss://profiles.nostr1.com',
+  'wss://relay.damus.io',
+  'wss://relay.primal.net',
+  'wss://relay.nostr.band',
+];
+
 // NIP-66 POW relays (from svelte demo)
 export let powRelays: string[] = [];
 
@@ -113,12 +124,30 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
       },
     });
 
-    // Timeout after 2 seconds, fallback to default relays
+    // If not found in store, fetch kind 10002 from profile relays
+    const fetchTimeout = setTimeout(() => {
+      const filter = { kinds: [10002], authors: [pubkey], limit: 1 };
+      const relay$ = relayPool.req(PROFILE_RELAYS, filter);
+
+      let found = false;
+      relay$.subscribe({
+        next: (response) => {
+          if (response !== 'EOSE' && response.kind === 10002 && !found) {
+            found = true;
+            eventStore.add(response);
+            console.log('[NIP-65] Fetched kind 10002 from profile relays');
+          }
+        },
+      });
+    }, 500);
+
+    // Timeout after 3 seconds total, fallback to default relays
     setTimeout(() => {
+      clearTimeout(fetchTimeout);
       subscription.unsubscribe();
       console.log('[NIP-65] No outbox relays found, using defaults');
       resolve(getActiveRelays());
-    }, 2000);
+    }, 3000);
   });
 }
 
@@ -138,11 +167,77 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
       },
     });
 
-    // Timeout after 2 seconds, fallback to default relays
+    // If not found in store, fetch kind 10002 from profile relays
+    const fetchTimeout = setTimeout(() => {
+      const filter = { kinds: [10002], authors: [pubkey], limit: 1 };
+      const relay$ = relayPool.req(PROFILE_RELAYS, filter);
+
+      let found = false;
+      relay$.subscribe({
+        next: (response) => {
+          if (response !== 'EOSE' && response.kind === 10002 && !found) {
+            found = true;
+            eventStore.add(response);
+            console.log('[NIP-65] Fetched kind 10002 from profile relays');
+          }
+        },
+      });
+    }, 500);
+
+    // Timeout after 3 seconds total, fallback to default relays
     setTimeout(() => {
+      clearTimeout(fetchTimeout);
       subscription.unsubscribe();
       console.log('[NIP-65] No inbox relays found, using defaults');
       resolve(getActiveRelays());
-    }, 2000);
+    }, 3000);
+  });
+}
+
+// Check if localhost relay is available
+export function isLocalhostRelayAvailable(): boolean {
+  const localhostRelay = relayPool.relays.get('ws://localhost:3334');
+  if (!localhostRelay) return false;
+
+  // Check if the relay is actually connected
+  return localhostRelay.status === 1; // 1 = OPEN in WebSocket
+}
+
+// Get relays for publishing - prefers localhost in dev mode if available
+export function getPublishRelays(userRelays: string[] = []): string[] {
+  // In dev mode, if localhost relay is available, only publish there
+  if (import.meta.env.DEV && isLocalhostRelayAvailable()) {
+    console.log('[Publish] Using localhost relay only (dev mode)');
+    return ['ws://localhost:3334'];
+  }
+
+  // Otherwise, use all active relays
+  return getActiveRelays(userRelays);
+}
+
+// Batch fetch metadata (kind 0) for multiple pubkeys
+export function batchFetchMetadata(pubkeys: string[], relays?: string[]): void {
+  if (pubkeys.length === 0) return;
+
+  // Always use profile relays for kind 0, ignoring the relays parameter
+  const targetRelays = PROFILE_RELAYS;
+  console.log(`[Metadata] Batch fetching kind 0 for ${pubkeys.length} pubkeys from profile relays`);
+
+  const filter = {
+    kinds: [0],
+    authors: pubkeys,
+  };
+
+  const relay$ = relayPool.req(targetRelays, filter);
+  relay$.subscribe({
+    next: (response) => {
+      if (response !== 'EOSE' && response.kind === 0) {
+        // Add to event store for caching
+        eventStore.add(response);
+      }
+    },
+    complete: () => {
+      console.log('[Metadata] Batch fetch complete');
+    },
   });
 }

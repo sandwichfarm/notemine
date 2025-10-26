@@ -1,10 +1,11 @@
-import { Component, createSignal, onMount, For, Show } from 'solid-js';
+import { Component, createSignal, onMount, For, Show, createEffect } from 'solid-js';
 import { relayPool, powRelays, DEFAULT_POW_RELAY } from '../lib/applesauce';
+import { relayStatsTracker } from '../lib/relay-stats';
 
 interface RelayStatus {
   url: string;
   status: 'connecting' | 'connected' | 'disconnected' | 'error';
-  eventCount?: number;
+  eventCount: number;
   error?: string;
 }
 
@@ -12,7 +13,7 @@ export const RelayStats: Component = () => {
   const [relayStatuses, setRelayStatuses] = createSignal<RelayStatus[]>([]);
   const [loading, setLoading] = createSignal(true);
 
-  onMount(async () => {
+  const updateRelayStats = async () => {
     // Get all relay URLs
     const allRelays = [DEFAULT_POW_RELAY, ...powRelays];
 
@@ -21,23 +22,37 @@ export const RelayStats: Component = () => {
       allRelays.map(async (url) => {
         try {
           const relay = relayPool.relay(url);
+          const stats = relayStatsTracker.getRelayStats(url);
 
           return {
             url,
             status: relay.connected ? 'connected' : 'disconnected',
+            eventCount: stats?.eventCount || 0,
           } as RelayStatus;
         } catch (error) {
           return {
             url,
             status: 'error',
             error: String(error),
+            eventCount: 0,
           } as RelayStatus;
         }
       })
     );
 
     setRelayStatuses(statuses);
+  };
+
+  onMount(async () => {
+    await updateRelayStats();
     setLoading(false);
+
+    // Update stats every 2 seconds
+    const interval = setInterval(() => {
+      updateRelayStats();
+    }, 2000);
+
+    return () => clearInterval(interval);
   });
 
   const connectedCount = () =>
@@ -97,26 +112,42 @@ export const RelayStats: Component = () => {
                       <div class="font-mono text-sm truncate">
                         {relay.url}
                       </div>
-                      <Show when={relay.url === DEFAULT_POW_RELAY}>
-                        <div class="text-xs text-accent">Default Relay</div>
-                      </Show>
+                      <div class="flex items-center gap-2 mt-1">
+                        <Show when={relay.url === DEFAULT_POW_RELAY}>
+                          <span class="text-xs text-accent">Default Relay</span>
+                        </Show>
+                        <Show when={relay.eventCount > 0}>
+                          <span class="text-xs text-text-secondary">
+                            📊 {relay.eventCount} events
+                          </span>
+                        </Show>
+                      </div>
                       <Show when={relay.error}>
                         <div class="text-xs text-red-500">{relay.error}</div>
                       </Show>
                     </div>
                   </div>
 
-                  {/* Status badge */}
-                  <div
-                    class="text-xs px-2 py-1 rounded font-medium"
-                    classList={{
-                      'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400': relay.status === 'connected',
-                      'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400': relay.status === 'connecting',
-                      'bg-gray-100 dark:bg-gray-900/20 text-gray-700 dark:text-gray-400': relay.status === 'disconnected',
-                      'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400': relay.status === 'error',
-                    }}
-                  >
-                    {relay.status}
+                  <div class="flex items-center gap-3">
+                    {/* Event count badge */}
+                    <Show when={relay.eventCount > 0}>
+                      <div class="text-xs px-2 py-1 rounded bg-accent/20 text-accent font-mono font-bold">
+                        {relay.eventCount}
+                      </div>
+                    </Show>
+
+                    {/* Status badge */}
+                    <div
+                      class="text-xs px-2 py-1 rounded font-medium"
+                      classList={{
+                        'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400': relay.status === 'connected',
+                        'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400': relay.status === 'connecting',
+                        'bg-gray-100 dark:bg-gray-900/20 text-gray-700 dark:text-gray-400': relay.status === 'disconnected',
+                        'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400': relay.status === 'error',
+                      }}
+                    >
+                      {relay.status}
+                    </div>
                   </div>
                 </div>
               )}

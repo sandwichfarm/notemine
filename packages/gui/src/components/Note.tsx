@@ -1,10 +1,13 @@
 import { Component, Show, createSignal } from 'solid-js';
+import { A } from '@solidjs/router';
 import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty, hasValidPow, formatPowDifficulty } from '../lib/pow';
 import { nip19 } from 'nostr-tools';
 import { ReactionPicker } from './ReactionPicker';
 import { ReplyComposer } from './ReplyComposer';
 import { useNoteStats } from '../hooks/useNoteStats';
+import { ProfileName } from './ProfileName';
+import { ParsedContent } from './ParsedContent';
 
 interface NoteProps {
   event: NostrEvent;
@@ -21,14 +24,7 @@ export const Note: Component<NoteProps> = (props) => {
   const formattedPow = () => formatPowDifficulty(powDifficulty());
   const stats = useNoteStats(props.event);
 
-  const shortPubkey = () => {
-    try {
-      const npub = nip19.npubEncode(props.event.pubkey);
-      return npub.slice(0, 12) + '...' + npub.slice(-4);
-    } catch {
-      return props.event.pubkey.slice(0, 8) + '...' + props.event.pubkey.slice(-4);
-    }
-  };
+  // Removed shortPubkey - now using ProfileName component
 
   const timestamp = () => {
     const date = new Date(props.event.created_at * 1000);
@@ -46,101 +42,96 @@ export const Note: Component<NoteProps> = (props) => {
     return `${seconds}s ago`;
   };
 
+  const noteLink = () => {
+    const nevent = nip19.neventEncode({
+      id: props.event.id,
+      author: props.event.pubkey,
+    });
+    return `/e/${nevent}`;
+  };
+
   return (
     <div
-      class="card p-4 border-l-4 transition-all hover:shadow-md"
+      class="p-5 mb-4 rounded-lg border-l-2 transition-all"
       classList={{
-        'border-l-accent': hasPow(),
-        'border-l-gray-400 dark:border-l-gray-600 opacity-70': !hasPow(),
-        'bg-bg-secondary dark:bg-bg-tertiary': !hasPow(),
+        'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
+        'border-l-gray-500/30 bg-bg-secondary/50 dark:bg-bg-tertiary/50 opacity-60': !hasPow(),
       }}
     >
-      {/* Header */}
-      <div class="flex items-start justify-between mb-3">
+      {/* Header - Low contrast metadata */}
+      <div class="flex items-start justify-between mb-2 opacity-60">
         <div class="flex items-center gap-2 min-w-0 flex-1">
-          <div class="font-mono text-sm text-text-secondary truncate">
-            {shortPubkey()}
-          </div>
+          <ProfileName pubkey={props.event.pubkey} asLink={true} />
           <div class="text-xs text-text-tertiary">{timestamp()}</div>
         </div>
 
         <div class="flex items-center gap-2">
           {/* POW Badge */}
-          <Show when={hasPow()} fallback={<span class="text-xs text-gray-400">no pow</span>}>
-            <span class="text-xs font-medium px-2 py-1 rounded bg-accent/10 text-accent">
+          <Show when={hasPow()} fallback={<span class="text-xs text-text-tertiary">no pow</span>}>
+            <span class="text-xs font-mono text-accent/70">
               {formattedPow()}
             </span>
           </Show>
 
           {/* Score (if provided) */}
           <Show when={props.showScore && props.score !== undefined}>
-            <span class="text-xs font-mono px-2 py-1 rounded bg-cyber-700/20 text-cyber-400">
-              score: {props.score?.toFixed(1)}
+            <span class="text-xs font-mono text-text-tertiary">
+              {props.score?.toFixed(1)}
             </span>
           </Show>
         </div>
       </div>
 
-      {/* Content */}
-      <div
-        class="text-text-primary whitespace-pre-wrap break-words font-sans"
+      {/* Content - HIGH CONTRAST, the focus */}
+      <ParsedContent
+        content={props.event.content}
+        class="text-text-primary break-words font-sans text-base leading-relaxed mb-4"
         classList={{
-          'text-text-secondary': !hasPow(),
+          'opacity-70': !hasPow(),
         }}
-      >
-        {props.event.content}
-      </div>
+      />
 
-      {/* Aggregate Stats */}
+      {/* Interaction Stats - Subtle, low contrast */}
       <Show when={!stats().loading && (stats().reactionCount > 0 || stats().replyCount > 0)}>
-        <div class="mt-3 p-2 bg-bg-primary dark:bg-bg-tertiary rounded border border-border">
-          <div class="flex gap-4 text-xs">
-            <Show when={stats().reactionCount > 0}>
-              <div class="flex items-center gap-1">
-                <span class="text-text-secondary">⚡</span>
-                <span class="text-text-primary font-medium">{stats().reactionCount}</span>
-                <span class="text-text-tertiary">reactions</span>
-                <span class="text-accent font-mono">({stats().reactionsPowTotal} POW)</span>
-              </div>
-            </Show>
-            <Show when={stats().replyCount > 0}>
-              <div class="flex items-center gap-1">
-                <span class="text-text-secondary">💬</span>
-                <span class="text-text-primary font-medium">{stats().replyCount}</span>
-                <span class="text-text-tertiary">replies</span>
-                <span class="text-accent font-mono">({stats().repliesPowTotal} POW)</span>
-              </div>
-            </Show>
-            <div class="flex items-center gap-1 ml-auto">
-              <span class="text-text-tertiary">score:</span>
-              <span class="text-cyber-400 font-mono font-bold">{stats().totalScore.toFixed(1)}</span>
-            </div>
-          </div>
+        <div class="mb-3 text-xs opacity-50 font-mono">
+          <span class="text-text-tertiary">
+            ❤️{stats().reactionCount} <span class="text-text-tertiary/60">[P:{stats().reactionsPowTotal}]</span>
+            {' '}
+            💬{stats().replyCount} <span class="text-text-tertiary/60">[W:{stats().repliesPowTotal}]</span>
+            {' | '}
+            <span class="text-text-secondary">Contributed Work: {stats().reactionsPowTotal + stats().repliesPowTotal}</span>
+          </span>
         </div>
       </Show>
 
-      {/* Footer */}
-      <div class="mt-3 pt-3 border-t border-border flex gap-3 text-xs text-text-tertiary">
+      {/* Footer - Low contrast actions */}
+      <div class="flex gap-4 text-xs opacity-50 hover:opacity-70 transition-opacity">
+        <A
+          href={noteLink()}
+          class="text-text-tertiary hover:text-accent transition-colors"
+        >
+          view
+        </A>
         <button
           onClick={() => setShowReplyComposer(true)}
-          class="hover:text-accent transition-colors"
+          class="text-text-tertiary hover:text-accent transition-colors"
         >
-          💬 reply
+          reply
         </button>
         <button
           onClick={() => setShowReactionPicker(true)}
-          class="hover:text-accent transition-colors"
+          class="text-text-tertiary hover:text-accent transition-colors"
         >
-          ⚡ react
+          react
         </button>
         <button
           onClick={() => {
             const noteId = nip19.noteEncode(props.event.id);
             navigator.clipboard.writeText(`https://notemine.io/n/${noteId}`);
           }}
-          class="hover:text-accent transition-colors"
+          class="text-text-tertiary hover:text-accent transition-colors"
         >
-          🔗 share
+          share
         </button>
       </div>
 

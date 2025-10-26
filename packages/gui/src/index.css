@@ -49,3 +49,10 @@
     @apply bg-[var(--bg-primary)] border border-[var(--border-color)] rounded px-3 py-2 focus:outline-none focus:border-[var(--accent)];
   }
 }
+
+@layer utilities {
+  @keyframes swing {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-45deg); }
+  }
+}

@@ -50,7 +50,7 @@ self.onmessage = async function (e: MessageEvent) {
   }
   ////console.log('Worker received message:', e.data);
   try {
-    const { type, event, difficulty, id, totalWorkers } = e.data;
+    const { type, event, difficulty, id, totalWorkers, workerNonces } = e.data;
     ////console.log(e.data)
 
     // return 
@@ -70,16 +70,48 @@ self.onmessage = async function (e: MessageEvent) {
         await initWasm(wasm);
         ////console.log('WASM Initialized successfully.');
 
-        const startNonce = BigInt(workerId);
+        let startNonce = BigInt(workerId);
         const nonceStep = BigInt(totalWorkers);
+
+        // Handle resume with worker nonces
+        if (workerNonces && Array.isArray(workerNonces) && workerNonces.length > 0) {
+          if (workerNonces.length === totalWorkers) {
+            // Same worker count - use the saved nonce for this worker
+            startNonce = BigInt(workerNonces[workerId] || workerId);
+          } else {
+            // Different worker count - find minimum and redistribute
+            const minNonce = workerNonces.reduce((min, nonce) => {
+              const n = BigInt(nonce);
+              return n < min ? n : min;
+            }, BigInt(workerNonces[0]));
+            startNonce = minNonce + BigInt(workerId);
+          }
+          ////console.log(`Worker ${workerId} resuming from nonce: ${startNonce}`);
+        }
 
         const reportProgress = (hashRate: number, bestPowData: any) => {
           ////console.log('Progress:', hashRate, bestPowData);
+
+          let currentNonce: string | undefined;
+          let parsedBestPowData: BestPowData | undefined;
+
+          if (bestPowData) {
+            const destructured = destructureBestPowData(bestPowData);
+            parsedBestPowData = destructured;
+            // Extract currentNonce if it's in the data
+            if (typeof bestPowData.get === 'function') {
+              currentNonce = bestPowData.get('currentNonce') as string;
+            } else if (typeof bestPowData === 'object' && bestPowData !== null) {
+              currentNonce = bestPowData.currentNonce;
+            }
+          }
+
           const message: any = {
             type: 'progress',
             workerId,
             hashRate,
-            bestPowData: bestPowData ? destructureBestPowData(bestPowData) : undefined,
+            bestPowData: parsedBestPowData,
+            currentNonce,
           };
           self.postMessage(message);
         };

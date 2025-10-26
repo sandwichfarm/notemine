@@ -104,7 +104,8 @@ Mines a Nostr event to meet the specified proof-of-work difficulty.
 - `nonce_step_str` (string): Nonce increment step as a string
 - `report_progress` (function): Callback function for progress updates
   - Called with `(hashRate?: number, bestPowData?: object)`
-  - `bestPowData` contains: `{ best_pow: number, nonce: string, hash: string }`
+  - `bestPowData` contains: `{ best_pow: number, nonce: string, hash: string, currentNonce: string }`
+  - `currentNonce` is the current nonce being tested (useful for pause/resume)
 - `should_cancel` (function): Callback that returns `boolean` to cancel mining
 
 **Returns:** `MinedResult | { error: string }`
@@ -128,9 +129,10 @@ interface MinedResult {
 }
 
 interface BestPowData {
-  best_pow: number;    // Best proof-of-work found so far
-  nonce: string;       // Nonce that achieved this PoW
-  hash: string;        // Hash that achieved this PoW
+  best_pow: number;     // Best proof-of-work found so far
+  nonce: string;        // Nonce that achieved this PoW
+  hash: string;         // Hash that achieved this PoW
+  currentNonce: string; // Current nonce being tested (for state tracking)
 }
 ```
 

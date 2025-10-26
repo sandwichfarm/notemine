@@ -20,6 +20,9 @@ A TypeScript wrapper for [@notemine/core](../core/README.md) that provides a hig
 
 - **Automatic Worker Management**: Spawns and manages multiple Web Workers based on available CPU cores
 - **Real-time Progress Tracking**: RxJS observables for monitoring hash rate, best PoW, and mining progress
+- **Pause & Resume**: Pause mining operations and resume from the exact same state
+- **State Persistence**: Save and restore mining state across page refreshes or sessions
+- **Dynamic Worker Scaling**: Resume mining with a different number of workers
 - **Zero Configuration**: Works out of the box with modern bundlers (Vite, Webpack, Rollup, etc.)
 - **TypeScript Support**: Fully typed API with comprehensive interfaces
 - **Cancellable Operations**: Stop mining at any time with proper cleanup
@@ -105,8 +108,20 @@ interface MinerOptions {
 #### `mine(): Promise<void>`
 Starts the mining process. Throws if pubkey or content is not set.
 
+#### `pause(): void`
+Pauses the mining process while preserving the current state (nonces, best PoW, etc.). Workers are terminated but state is maintained for resumption.
+
+#### `resume(workerNonces?: string[]): Promise<void>`
+Resumes mining from a paused state. Optionally accepts an array of worker nonces to resume from. If not provided, uses the tracked state from the last pause.
+
+#### `getState(): MiningState`
+Returns the current mining state as a serializable object. This can be saved to localStorage, IndexedDB, or any other storage mechanism for later restoration.
+
+#### `restoreState(state: MiningState): void`
+Restores the miner to a previously saved state. Must be called before `resume()`. Can be used to resume mining after a page refresh or across sessions.
+
 #### `cancel(): void`
-Stops the mining process and terminates all workers.
+Stops the mining process and terminates all workers. State is not preserved.
 
 #### `stop(): void`
 Alias for `cancel()`.
@@ -117,12 +132,13 @@ Alias for `cancel()`.
 // Mining state
 mining$: BehaviorSubject<boolean>
 cancelled$: BehaviorSubject<boolean>
+paused$: BehaviorSubject<boolean>
 
 // Results
 result$: BehaviorSubject<MinedResult | null>
 success$: Observable<SuccessEvent>
 
-// Progress tracking  
+// Progress tracking
 progress$: Observable<ProgressEvent>
 workersPow$: BehaviorSubject<Record<number, BestPowData>>
 highestPow$: BehaviorSubject<WorkerPow | null>
@@ -163,6 +179,20 @@ interface SuccessEvent {
 interface ErrorEvent {
   error: any;
   message?: string;
+}
+
+interface MiningState {
+  event: {
+    pubkey: string;
+    kind: number;
+    tags: string[][];
+    content: string;
+    created_at: number;
+  };
+  workerNonces: string[];      // Array of current nonces for each worker
+  bestPow: BestPowData | null; // Best proof-of-work found so far
+  difficulty: number;          // Target difficulty
+  numberOfWorkers: number;     // Number of workers when state was saved
 }
 ```
 
@@ -337,6 +367,124 @@ export class MinerComponent implements OnInit, OnDestroy {
 </details>
 
 ## Advanced Usage
+
+### Pause and Resume Mining
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+const miner = new Notemine({
+  content: 'Mining with pause/resume',
+  pubkey: 'your-pubkey-here',
+  difficulty: 21,
+  numberOfWorkers: 4
+});
+
+// Start mining
+await miner.mine();
+
+// Pause after some time
+setTimeout(() => {
+  miner.pause();
+  console.log('Mining paused');
+}, 10000);
+
+// Resume later
+setTimeout(async () => {
+  await miner.resume();
+  console.log('Mining resumed');
+}, 20000);
+```
+
+### Persist State Across Page Refreshes
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+// Before page refresh - save state
+const miner = new Notemine({
+  content: 'Persistent mining',
+  pubkey: 'your-pubkey-here',
+  difficulty: 21
+});
+
+await miner.mine();
+
+// User navigates away or refreshes
+window.addEventListener('beforeunload', () => {
+  miner.pause();
+  const state = miner.getState();
+  localStorage.setItem('mining_state', JSON.stringify(state));
+});
+
+// After page reload - restore state
+const savedState = localStorage.getItem('mining_state');
+if (savedState) {
+  const state = JSON.parse(savedState);
+
+  const miner = new Notemine({
+    numberOfWorkers: state.numberOfWorkers
+  });
+
+  miner.restoreState(state);
+  await miner.resume();
+
+  console.log('Mining resumed from saved state!');
+}
+```
+
+### Resume with Different Worker Count
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+// Start mining with 4 workers
+const miner = new Notemine({
+  content: 'Scalable mining',
+  pubkey: 'your-pubkey-here',
+  difficulty: 21,
+  numberOfWorkers: 4
+});
+
+await miner.mine();
+
+// Pause and get state
+miner.pause();
+const state = miner.getState();
+
+// Resume with 8 workers - nonces are automatically redistributed
+const miner2 = new Notemine({
+  numberOfWorkers: 8  // Different worker count!
+});
+
+miner2.restoreState(state);
+await miner2.resume();
+
+console.log('Mining resumed with 8 workers instead of 4!');
+```
+
+### Track Pause/Resume State
+
+```typescript
+import { Notemine } from '@notemine/wrapper';
+
+const miner = new Notemine({ content: 'State tracking' });
+
+// Subscribe to pause state
+miner.paused$.subscribe(isPaused => {
+  console.log(`Mining is ${isPaused ? 'paused' : 'active'}`);
+
+  if (isPaused) {
+    // Show resume button in UI
+    // Display saved state info
+  }
+});
+
+// Subscribe to mining state
+miner.mining$.subscribe(isMining => {
+  console.log(`Mining is ${isMining ? 'running' : 'stopped'}`);
+});
+```
 
 ### Monitoring Mining Progress
 

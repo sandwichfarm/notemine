@@ -74,6 +74,26 @@ export interface MinedResult {
   hashRate: number;
 }
 
+/** Serializable mining state for pause/resume functionality */
+export interface MiningState {
+  /** The event being mined */
+  event: {
+    pubkey: string;
+    kind: number;
+    tags: string[][];
+    content: string;
+    created_at: number;
+  };
+  /** Array of current nonces for each worker */
+  workerNonces: string[];
+  /** Best proof-of-work found so far */
+  bestPow: BestPowData | null;
+  /** Target difficulty */
+  difficulty: number;
+  /** Number of workers when state was saved */
+  numberOfWorkers: number;
+}
+
 /** Class representing a miner for Notemine events */
 export class Notemine {
   private readonly REFRESH_EVERY_MS = 250;
@@ -88,12 +108,16 @@ export class Notemine {
   private _workerHashRates = new Map<number, number[]>();
   private _lastRefresh = 0;
   private _totalHashRate = 0;
+  private _workerNonces = new Map<number, string>();
+  private _resumeNonces: string[] | undefined;
   static _defaultTags: string[][] = [['miner', 'notemine']];
 
   /** Observable indicating whether mining is currently active */
   public mining$ = new BehaviorSubject<boolean>(false);
   /** Observable indicating if mining was cancelled */
   public cancelled$ = new BehaviorSubject<boolean>(false);
+  /** Observable indicating if mining is paused */
+  public paused$ = new BehaviorSubject<boolean>(false);
   /** Observable for the result of the mining operation */
   public result$ = new BehaviorSubject<MinedResult | null>(null);
   /** Observable for the list of active workers */
@@ -223,12 +247,26 @@ export class Notemine {
     this.cancelled$.next(false);
     this.result$.next(null);
     this.workers$.next([]);
-    //@ts-ignore: pedantic
-    this.workersPow$.next({});
-    //@ts-ignore: pedantic
-    this.highestPow$.next({});
+
+    // Reset hash rate tracking when starting/resuming
+    this._workerHashRates.clear();
+    this._workerMaxHashRates.clear();
+    this._totalHashRate = 0;
+    this._lastRefresh = 0;
+
+    // Only clear these if not resuming
+    if (!this._resumeNonces) {
+      //@ts-ignore: pedantic
+      this.workersPow$.next({});
+      //@ts-ignore: pedantic
+      this.highestPow$.next({});
+      this._workerNonces.clear();
+    }
 
     await this.initializeWorkers();
+
+    // Clear resume nonces after they're used
+    this._resumeNonces = undefined;
   }
 
   /** Stops the mining process */
@@ -245,6 +283,98 @@ export class Notemine {
     this.mining$.next(false);
 
     this.cancelledEventSubject.next({ reason: 'Mining cancelled by user.' });
+  }
+
+  /**
+   * Pauses the mining process while preserving state
+   */
+  pause(): void {
+    if (!this.mining$.getValue()) return;
+
+    // Terminate workers but keep state
+    this.workers$.getValue().forEach(worker => worker.terminate());
+    this.mining$.next(false);
+    this.paused$.next(true);
+  }
+
+  /**
+   * Resumes the mining process from a paused or saved state
+   * @param workerNonces - Optional array of worker nonces to resume from
+   */
+  async resume(workerNonces?: string[]): Promise<void> {
+    if (this.mining$.getValue()) return;
+
+    // If workerNonces provided, use them; otherwise use tracked nonces
+    if (workerNonces && workerNonces.length > 0) {
+      this._resumeNonces = workerNonces;
+    } else if (this._workerNonces.size > 0) {
+      // Convert Map to array
+      this._resumeNonces = Array.from(this._workerNonces.values());
+    }
+
+    this.paused$.next(false);
+    await this.mine();
+  }
+
+  /**
+   * Gets the current mining state for serialization/persistence
+   * @returns MiningState object containing all resumable state
+   */
+  getState(): MiningState {
+    const workerNonces: string[] = [];
+
+    // Build array from current worker nonces
+    for (let i = 0; i < this.numberOfWorkers; i++) {
+      const nonce = this._workerNonces.get(i);
+      if (nonce) {
+        workerNonces.push(nonce);
+      } else {
+        // If worker hasn't reported yet, use default starting nonce
+        workerNonces.push(i.toString());
+      }
+    }
+
+    return {
+      event: {
+        pubkey: this.pubkey,
+        kind: this.kind,
+        tags: this.tags,
+        content: this.content,
+        created_at: Math.floor(Date.now() / 1000),
+      },
+      workerNonces,
+      bestPow: this.highestPow$.getValue(),
+      difficulty: this.difficulty,
+      numberOfWorkers: this.numberOfWorkers,
+    };
+  }
+
+  /**
+   * Restores mining state from a previously saved state
+   * @param state - MiningState object to restore
+   */
+  restoreState(state: MiningState): void {
+    if (this.mining$.getValue()) {
+      throw new Error('Cannot restore state while mining is active');
+    }
+
+    // Restore event data
+    this.pubkey = state.event.pubkey;
+    this.kind = state.event.kind;
+    this.tags = state.event.tags;
+    this.content = state.event.content;
+    this.difficulty = state.difficulty;
+
+    // Restore nonces
+    this._resumeNonces = state.workerNonces;
+
+    // Restore best POW if available
+    if (state.bestPow) {
+      this.highestPow$.next(state.bestPow);
+    }
+
+    // Note: numberOfWorkers can be different from state.numberOfWorkers
+    // The worker will handle redistribution automatically
   }
 
   /**
@@ -267,6 +397,7 @@ export class Notemine {
           difficulty: this.difficulty,
           id: i,
           totalWorkers: this.numberOfWorkers,
+          workerNonces: this._resumeNonces,
         });
 
         workers.push(worker);
@@ -295,6 +426,11 @@ export class Notemine {
       ////console.log(`Worker ${workerId} initialized:`, data.message);
     } else if (type === 'progress') {
       let bestPowData: BestPowData | undefined;
+
+      // Track current nonce for this worker
+      if (data?.currentNonce) {
+        this._workerNonces.set(workerId, data.currentNonce);
+      }
 
       if (data?.bestPowData) {
         bestPowData = data.bestPowData as BestPowData;

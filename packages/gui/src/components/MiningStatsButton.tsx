@@ -42,7 +42,7 @@ export const MiningPanel: Component = () => {
   const state = globalMiningState;
 
   return (
-    <div class="px-6 py-4">
+    <div class="px-6 py-4  bg-black/90">
       <div class="max-w-6xl mx-auto">
         <Show
           when={state().mining}

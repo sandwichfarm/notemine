@@ -72,7 +72,7 @@ pub fn main_js() {
 }
 
 #[wasm_bindgen]
-pub fn mine_event(
+pub fn mine_event_with_nonce(
     event_json: &str,
     difficulty: u32,
     start_nonce_str: &str,
@@ -171,6 +171,7 @@ pub fn mine_event(
                 "best_pow": best_pow,
                 "nonce": best_nonce.to_string(),
                 "hash": hex::encode(&best_hash_bytes),
+                "currentNonce": nonce.to_string(),
             });
 
             report_progress
@@ -225,8 +226,11 @@ pub fn mine_event(
             let elapsed_time = (current_time - last_report_time) / 1000.0;
             if elapsed_time > 0.0 {
                 let hash_rate = (report_interval as f64) / elapsed_time;
+                let nonce_data = serde_json::json!({
+                    "currentNonce": nonce.to_string(),
+                });
                 report_progress
-                    .call2(&JsValue::NULL, &hash_rate.into(), &JsValue::NULL)
+                    .call2(&JsValue::NULL, &hash_rate.into(), &serde_wasm_bindgen::to_value(&nonce_data).unwrap())
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),
@@ -237,6 +241,25 @@ pub fn mine_event(
             }
         }
     }
+}
+
+#[wasm_bindgen]
+pub fn mine_event(
+    event_json: &str,
+    difficulty: u32,
+    start_nonce_str: &str,
+    nonce_step_str: &str,
+    report_progress: JsValue,
+    should_cancel: JsValue,
+) -> JsValue {
+    mine_event_with_nonce(
+        event_json,
+        difficulty,
+        start_nonce_str,
+        nonce_step_str,
+        report_progress,
+        should_cancel,
+    )
 }
 
 

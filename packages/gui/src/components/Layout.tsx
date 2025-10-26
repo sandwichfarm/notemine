@@ -65,7 +65,7 @@ const Layout: Component<{ children?: any }> = (props) => {
         ref={headerRef}
         class="fixed top-0 left-0 right-0 z-40 transition-all bg-bg-primary dark:bg-bg-secondary"
       >
-        <div class="flex items-center justify-center gap-2 py-4">
+        <div class="flex items-center justify-center py-4 bg-black/90">
           <div class="flex items-center gap-2">
             <MiningStatsButton onToggle={() => openPanel('mining')} isActive={activePanel() === 'mining'} />
 
@@ -133,7 +133,7 @@ const Layout: Component<{ children?: any }> = (props) => {
 
         {/* User Panel */}
         <Show when={activePanel() === 'user'}>
-          <div class="px-6 py-4">
+          <div class="px-6 py-4 bg-black/90">
             <div class="max-w-6xl mx-auto">
               <div class="px-3 py-2 mb-2">
                 <div class="text-xs text-text-secondary mb-1">

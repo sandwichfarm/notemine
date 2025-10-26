@@ -8,6 +8,8 @@ import { ReplyComposer } from './ReplyComposer';
 import { useNoteStats } from '../hooks/useNoteStats';
 import { ProfileName } from './ProfileName';
 import { ParsedContent } from './ParsedContent';
+import { usePreferences } from '../providers/PreferencesProvider';
+import { useTooltip } from '../providers/TooltipProvider';
 
 interface NoteProps {
   event: NostrEvent;
@@ -18,13 +20,50 @@ interface NoteProps {
 export const Note: Component<NoteProps> = (props) => {
   const [showReactionPicker, setShowReactionPicker] = createSignal(false);
   const [showReplyComposer, setShowReplyComposer] = createSignal(false);
+  const { preferences } = usePreferences();
+  const { activeTooltip, setActiveTooltip, setTooltipContent, closeAllPanels } = useTooltip();
 
   const powDifficulty = () => getPowDifficulty(props.event);
   const hasPow = () => hasValidPow(props.event, 1);
   const formattedPow = () => formatPowDifficulty(powDifficulty());
   const stats = useNoteStats(props.event);
 
+  // Unique ID for this note's tooltip
+  const tooltipId = `note-${props.event.id}`;
+
   // Removed shortPubkey - now using ProfileName component
+
+  const scoreBreakdown = () => {
+    const s = stats();
+    const prefs = preferences();
+
+    // Build the calculation breakdown
+    const lines = [
+      'Score Breakdown:',
+      '',
+      `Root POW: ${s.rootPow}`,
+      '',
+      `Reactions POW: ${s.reactionsPowTotal} × ${(prefs.reactionPowWeight * 100).toFixed(0)}% = ${s.weightedReactionsPow.toFixed(1)}`,
+      `Replies POW: ${s.repliesPowTotal} × ${(prefs.replyPowWeight * 100).toFixed(0)}% = ${s.weightedRepliesPow.toFixed(1)}`,
+      `Profile POW: ${s.profilePow} × ${(prefs.profilePowWeight * 100).toFixed(0)}% = ${s.weightedProfilePow.toFixed(1)}`,
+      '',
+      `Total = ${s.rootPow} + ${s.weightedReactionsPow.toFixed(1)} + ${s.weightedRepliesPow.toFixed(1)} + ${s.weightedProfilePow.toFixed(1)}`,
+      `Total = ${s.totalScore.toFixed(1)}`
+    ];
+
+    return lines.join('\n');
+  };
+
+  const toggleTooltip = () => {
+    if (activeTooltip() === tooltipId) {
+      setActiveTooltip(null);
+    } else {
+      // Close any open panels first
+      closeAllPanels?.();
+      setTooltipContent(scoreBreakdown());
+      setActiveTooltip(tooltipId);
+    }
+  };
 
   const timestamp = () => {
     const date = new Date(props.event.created_at * 1000);
@@ -68,14 +107,20 @@ export const Note: Component<NoteProps> = (props) => {
         <div class="flex items-center gap-2">
           {/* POW Badge */}
           <Show when={hasPow()} fallback={<span class="text-xs text-text-tertiary">no pow</span>}>
-            <span class="text-xs font-mono text-accent/70">
+            <span
+              class="text-xs font-mono text-accent/70 cursor-pointer hover:text-accent transition-colors"
+              onClick={toggleTooltip}
+            >
               {formattedPow()}
             </span>
           </Show>
 
           {/* Score (if provided) */}
           <Show when={props.showScore && props.score !== undefined}>
-            <span class="text-xs font-mono text-text-tertiary">
+            <span
+              class="text-xs font-mono text-text-tertiary"
+              title={`Total Score: ${props.score?.toFixed(1)}`}
+            >
               {props.score?.toFixed(1)}
             </span>
           </Show>
@@ -95,11 +140,35 @@ export const Note: Component<NoteProps> = (props) => {
       <Show when={!stats().loading && (stats().reactionCount > 0 || stats().replyCount > 0)}>
         <div class="mb-3 text-xs opacity-50 font-mono">
           <span class="text-text-tertiary">
-            ❤️{stats().reactionCount} <span class="text-text-tertiary/60">[P:{stats().reactionsPowTotal}]</span>
-            {' '}
-            💬{stats().replyCount} <span class="text-text-tertiary/60">[W:{stats().repliesPowTotal}]</span>
+            <Show when={stats().positiveReactionsPow > 0}>
+              ↑{stats().positiveReactionsPow}
+              {' '}
+            </Show>
+            <Show when={stats().negativeReactionsPow > 0}>
+              ↓{stats().negativeReactionsPow}
+              {' '}
+            </Show>
+            💬{stats().replyCount}{' '}
+            <span
+              class="text-text-tertiary/60 cursor-help"
+              title="Work: Total raw POW from replies before weighting is applied"
+            >
+              [W:{stats().repliesPowTotal}]
+            </span>
             {' | '}
-            <span class="text-text-secondary">Contributed Work: {stats().reactionsPowTotal + stats().repliesPowTotal}</span>
+            <span
+              class="text-text-secondary cursor-help"
+              title="Contributed Work: Total raw POW from reactions and replies combined"
+            >
+              CW: {stats().contributedWork}
+            </span>
+            {' '}
+            <span
+              class="text-text-secondary cursor-help"
+              title="Weighted Work: POW after applying reaction and reply weight multipliers from preferences"
+            >
+              WW: {stats().weightedContributedWork.toFixed(0)}
+            </span>
           </span>
         </div>
       </Show>

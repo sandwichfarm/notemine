@@ -13,7 +13,7 @@ export interface MiningState {
   mining: boolean;
   hashRate: number;
   overallBestPow: number | null;
-  workersBestPow: number[];
+  workersBestPow: BestPowData[];
   result: NostrEvent | null;
   error: string | null;
 }
@@ -73,7 +73,7 @@ export function usePowMining() {
     const workersPowSub = notemine.workersPow$.subscribe((data: Record<number, BestPowData>) => {
       setState((prev) => ({
         ...prev,
-        workersBestPow: Object.values(data).map((pow) => pow.bestPow),
+        workersBestPow: Object.values(data),
       }));
     });
     subscriptions.push(workersPowSub);

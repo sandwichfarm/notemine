@@ -264,19 +264,6 @@ export const NoteComposer: Component = () => {
           />
         </div>
 
-        {/* Mining stats */}
-        <Show when={miningState().mining}>
-          <div class="mb-4 p-3 bg-bg-primary dark:bg-bg-tertiary border border-border rounded-lg">
-            <div class="text-sm text-text-primary space-y-1">
-              <div>⛏️ Mining in progress...</div>
-              <div>Hash rate: {miningState().hashRate.toFixed(2)} KH/s ({(miningState().hashRate / 1000).toFixed(2)} MH/s)</div>
-              <Show when={miningState().overallBestPow !== null}>
-                <div>Best POW: {miningState().overallBestPow}</div>
-              </Show>
-            </div>
-          </div>
-        </Show>
-
         {/* Error message */}
         <Show when={publishError()}>
           <div class="mb-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">

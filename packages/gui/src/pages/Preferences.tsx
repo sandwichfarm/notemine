@@ -1,0 +1,408 @@
+import { Component, createSignal, Show, For } from 'solid-js';
+import { usePreferences } from '../providers/PreferencesProvider';
+import { getActiveRelays } from '../lib/applesauce';
+
+export const Preferences: Component = () => {
+  const { preferences, updatePreference, resetPreferences } = usePreferences();
+  const [showResetConfirm, setShowResetConfirm] = createSignal(false);
+
+  const handleReset = () => {
+    resetPreferences();
+    setShowResetConfirm(false);
+  };
+
+  // Get all known relays
+  const allRelays = () => getActiveRelays();
+
+  return (
+    <div class="max-w-4xl mx-auto p-6">
+      <h1 class="text-2xl font-bold mb-6">Preferences</h1>
+
+      {/* POW Difficulty Settings */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">POW Difficulty (Default)</h2>
+
+        <div class="space-y-4">
+          {/* Root Note POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Root Note POW Difficulty: {preferences().powDifficultyRootNote}
+            </label>
+            <input
+              type="range"
+              min="16"
+              max="42"
+              step="1"
+              value={preferences().powDifficultyRootNote}
+              onInput={(e) => updatePreference('powDifficultyRootNote', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Difficulty for new posts (default: 21)
+            </p>
+          </div>
+
+          {/* Reply POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Reply POW Difficulty: {preferences().powDifficultyReply}
+            </label>
+            <input
+              type="range"
+              min="16"
+              max="42"
+              step="1"
+              value={preferences().powDifficultyReply}
+              onInput={(e) => updatePreference('powDifficultyReply', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Difficulty for replies (default: 23)
+            </p>
+          </div>
+
+          {/* Reaction POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Reaction POW Difficulty: {preferences().powDifficultyReaction}
+            </label>
+            <input
+              type="range"
+              min="16"
+              max="42"
+              step="1"
+              value={preferences().powDifficultyReaction}
+              onInput={(e) => updatePreference('powDifficultyReaction', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Difficulty for reactions (default: 28)
+            </p>
+          </div>
+
+          {/* Profile Update POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Profile Update POW Difficulty: {preferences().powDifficultyProfile}
+            </label>
+            <input
+              type="range"
+              min="16"
+              max="42"
+              step="1"
+              value={preferences().powDifficultyProfile}
+              onInput={(e) => updatePreference('powDifficultyProfile', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Difficulty for profile updates (default: 21)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Minimum POW Requirements */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Minimum POW Requirements</h2>
+
+        <div class="space-y-4">
+          {/* Min Root Note POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Minimum Root Note POW: {preferences().minPowRootNote}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="32"
+              step="1"
+              value={preferences().minPowRootNote}
+              onInput={(e) => updatePreference('minPowRootNote', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Required minimum POW for root notes (default: 16)
+            </p>
+          </div>
+
+          {/* Min Reply POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Minimum Reply POW: {preferences().minPowReply}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="32"
+              step="1"
+              value={preferences().minPowReply}
+              onInput={(e) => updatePreference('minPowReply', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Required minimum POW for replies (default: 18)
+            </p>
+          </div>
+
+          {/* Min Reaction POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Minimum Reaction POW: {preferences().minPowReaction}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="32"
+              step="1"
+              value={preferences().minPowReaction}
+              onInput={(e) => updatePreference('minPowReaction', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Required minimum POW for reactions (default: 21)
+            </p>
+          </div>
+
+          {/* Min Profile POW */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Minimum Profile POW: {preferences().minPowProfile}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="32"
+              step="1"
+              value={preferences().minPowProfile}
+              onInput={(e) => updatePreference('minPowProfile', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Required minimum POW for profile updates (default: 18)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* POW Weighting Factors */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">POW Score Weighting</h2>
+
+        <div class="space-y-4">
+          {/* Reaction Weight */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Reaction POW Weight: {(preferences().reactionPowWeight * 100).toFixed(0)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={preferences().reactionPowWeight}
+              onInput={(e) => updatePreference('reactionPowWeight', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              How much reactions influence note score (default: 50%)
+            </p>
+          </div>
+
+          {/* Reply Weight */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Reply POW Weight: {(preferences().replyPowWeight * 100).toFixed(0)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={preferences().replyPowWeight}
+              onInput={(e) => updatePreference('replyPowWeight', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              How much replies influence note score (default: 70%)
+            </p>
+          </div>
+
+          {/* Profile Weight */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Profile POW Weight: {(preferences().profilePowWeight * 100).toFixed(0)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={preferences().profilePowWeight}
+              onInput={(e) => updatePreference('profilePowWeight', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              How much author's mined pubkey influences note score (default: 30%)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Content Length Settings */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Content Length Limits</h2>
+
+        <div class="space-y-4">
+          {/* Root Note Length */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Root Note Max Length: {preferences().maxContentLengthRootNote} characters
+            </label>
+            <input
+              type="range"
+              min="140"
+              max="2000"
+              step="10"
+              value={preferences().maxContentLengthRootNote}
+              onInput={(e) => updatePreference('maxContentLengthRootNote', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Maximum characters for new posts (default: 140)
+            </p>
+          </div>
+
+          {/* Reply Length */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Reply Max Length: {preferences().maxContentLengthReply} characters
+            </label>
+            <input
+              type="range"
+              min="140"
+              max="2000"
+              step="10"
+              value={preferences().maxContentLengthReply}
+              onInput={(e) => updatePreference('maxContentLengthReply', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Maximum characters for replies (default: 280)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Timeline Settings */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Timeline Filters</h2>
+
+        <div class="space-y-4">
+          {/* Min POW Difficulty */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Minimum POW Difficulty: {preferences().minPowDifficulty}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="32"
+              step="1"
+              value={preferences().minPowDifficulty}
+              onInput={(e) => updatePreference('minPowDifficulty', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Filter out notes below this POW difficulty (default: 8)
+            </p>
+          </div>
+
+          {/* Min POW Threshold */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              POW Display Threshold: {preferences().minPowThreshold}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="32"
+              step="1"
+              value={preferences().minPowThreshold}
+              onInput={(e) => updatePreference('minPowThreshold', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Notes below this threshold appear dimmed (default: 16)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* UI Settings */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">UI Settings</h2>
+
+        <div class="space-y-4">
+          {/* Thread Collapse Depth */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Thread Collapse Depth: {preferences().threadedRepliesCollapseDepth}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              step="1"
+              value={preferences().threadedRepliesCollapseDepth}
+              onInput={(e) => updatePreference('threadedRepliesCollapseDepth', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Collapse reply threads after this depth (default: 2)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Reset Button */}
+      <section class="mb-8">
+        <div class="card">
+          <h3 class="text-lg font-semibold mb-2 text-text-secondary">Reset Preferences</h3>
+          <p class="text-sm text-text-tertiary mb-4 opacity-70">
+            Reset all preferences to their default values
+          </p>
+
+          <Show
+            when={showResetConfirm()}
+            fallback={
+              <button
+                onClick={() => setShowResetConfirm(true)}
+                class="btn text-red-500 hover:text-red-600 border-red-500 hover:border-red-600"
+              >
+                Reset to Defaults
+              </button>
+            }
+          >
+            <div class="space-y-2">
+              <p class="text-sm text-red-500">Are you sure? This cannot be undone.</p>
+              <div class="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  class="btn bg-red-500 text-white border-red-500 hover:bg-red-600"
+                >
+                  Yes, Reset
+                </button>
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  class="btn"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </Show>
+        </div>
+      </section>
+    </div>
+  );
+};

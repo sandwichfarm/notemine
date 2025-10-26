@@ -9,17 +9,19 @@ export const ImageEmbed: Component<ImageEmbedProps> = (props) => {
 
   return (
     <div class="my-3">
-      <img
-        src={props.url}
-        alt="Embedded image"
-        class="max-w-full h-auto rounded-lg cursor-pointer transition-all"
-        classList={{
-          'blur-xl': blurred(),
-          'blur-none': !blurred(),
-        }}
-        onClick={() => setBlurred(!blurred())}
-        loading="lazy"
-      />
+      <div class="overflow-hidden rounded-lg">
+        <img
+          src={props.url}
+          alt="Embedded image"
+          class="max-w-full h-auto cursor-pointer transition-all"
+          classList={{
+            'blur-xl': blurred(),
+            'blur-none': !blurred(),
+          }}
+          onClick={() => setBlurred(!blurred())}
+          loading="lazy"
+        />
+      </div>
       <div class="text-xs text-text-tertiary mt-1 opacity-50">
         Click to {blurred() ? 'reveal' : 'blur'} image
       </div>

@@ -5,11 +5,22 @@ import { createLocalStore } from '../lib/localStorage';
  * User preferences with all configurable magic numbers
  */
 export interface UserPreferences {
-  // POW Difficulty settings
+  // POW Difficulty settings (defaults for composing)
   powDifficultyRootNote: number;
   powDifficultyReply: number;
   powDifficultyReaction: number;
   powDifficultyProfile: number;
+
+  // Minimum POW requirements
+  minPowRootNote: number;
+  minPowReply: number;
+  minPowReaction: number;
+  minPowProfile: number;
+
+  // POW weighting factors
+  reactionPowWeight: number; // How much reactions influence score (0.0 - 1.0)
+  replyPowWeight: number; // How much replies influence score (0.0 - 1.0)
+  profilePowWeight: number; // How much profile POW influences score (0.0 - 1.0)
 
   // Content length limits
   maxContentLengthRootNote: number;
@@ -29,11 +40,22 @@ export interface UserPreferences {
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
-  // POW Difficulty defaults
-  powDifficultyRootNote: 20,
-  powDifficultyReply: 18,
-  powDifficultyReaction: 18,
-  powDifficultyProfile: 20,
+  // POW Difficulty defaults (for composing)
+  powDifficultyRootNote: 21,
+  powDifficultyReply: 23,
+  powDifficultyReaction: 28,
+  powDifficultyProfile: 21,
+
+  // Minimum POW requirements
+  minPowRootNote: 16,
+  minPowReply: 18,
+  minPowReaction: 21,
+  minPowProfile: 18,
+
+  // POW weighting factors (non-linear influence)
+  reactionPowWeight: 0.5, // Reactions have 50% influence
+  replyPowWeight: 0.7, // Replies have 70% influence
+  profilePowWeight: 0.3, // Profile POW has 30% influence
 
   // Content length defaults
   maxContentLengthRootNote: 140,
@@ -67,9 +89,14 @@ interface PreferencesContextType {
 const PreferencesContext = createContext<PreferencesContextType>();
 
 export const PreferencesProvider: Component<{ children: JSX.Element }> = (props) => {
+  // Load preferences and merge with defaults to handle new fields
+  const stored = localStorage.getItem('notemine:preferences');
+  const storedPreferences = stored ? JSON.parse(stored) : {};
+  const mergedPreferences = { ...DEFAULT_PREFERENCES, ...storedPreferences };
+
   const [preferences, setPreferences] = createLocalStore<UserPreferences>(
     'notemine:preferences',
-    DEFAULT_PREFERENCES
+    mergedPreferences
   );
 
   const updatePreference = <K extends keyof UserPreferences>(

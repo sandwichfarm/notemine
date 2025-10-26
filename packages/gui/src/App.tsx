@@ -5,6 +5,7 @@ import { ThemeProvider } from './providers/ThemeProvider';
 import { UserProvider } from './providers/UserProvider';
 import { MiningProvider } from './providers/MiningProvider';
 import { PreferencesProvider } from './providers/PreferencesProvider';
+import { TooltipProvider } from './providers/TooltipProvider';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -12,6 +13,7 @@ import About from './pages/About';
 import Stats from './pages/Stats';
 import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
+import { Preferences } from './pages/Preferences';
 import { fetchNip66PowRelays } from './lib/nip66';
 import { setPowRelays, connectToRelays, getActiveRelays, eventStore } from './lib/applesauce';
 import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
@@ -70,22 +72,25 @@ const App: Component = () => {
   return (
     <ThemeProvider>
       <PreferencesProvider>
-        <EventStoreProvider>
-          <UserProvider>
-            <MiningProvider>
-              <AppInit>
-                <Router root={Layout}>
-                  <Route path="/" component={Home} />
-                  <Route path="/about" component={About} />
-                  <Route path="/stats" component={Stats} />
-                  <Route path="/n/:id" component={NoteDetail} />
-                  <Route path="/e/:id" component={NoteDetail} />
-                  <Route path="/p/:identifier" component={ProfileDetail} />
-                </Router>
-              </AppInit>
-            </MiningProvider>
-          </UserProvider>
-        </EventStoreProvider>
+        <TooltipProvider>
+          <EventStoreProvider>
+            <UserProvider>
+              <MiningProvider>
+                <AppInit>
+                  <Router root={Layout}>
+                    <Route path="/" component={Home} />
+                    <Route path="/about" component={About} />
+                    <Route path="/stats" component={Stats} />
+                    <Route path="/preferences" component={Preferences} />
+                    <Route path="/n/:id" component={NoteDetail} />
+                    <Route path="/e/:id" component={NoteDetail} />
+                    <Route path="/p/:identifier" component={ProfileDetail} />
+                  </Router>
+                </AppInit>
+              </MiningProvider>
+            </UserProvider>
+          </EventStoreProvider>
+        </TooltipProvider>
       </PreferencesProvider>
     </ThemeProvider>
   );

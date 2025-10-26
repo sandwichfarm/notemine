@@ -1,15 +1,28 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { relayPool, getActiveRelays } from '../lib/applesauce';
-import { getPowDifficulty, calculatePowScore } from '../lib/pow';
+import { getPowDifficulty, calculatePowScore, getPubkeyPowDifficulty } from '../lib/pow';
 import { Subscription } from 'rxjs';
+import { usePreferences } from '../providers/PreferencesProvider';
 
 export interface NoteStats {
   reactionCount: number;
   replyCount: number;
   reactionsPowTotal: number;
+  positiveReactionsPow: number;
+  negativeReactionsPow: number;
   repliesPowTotal: number;
   totalScore: number;
+  contributedWork: number; // Raw total POW
+  weightedContributedWork: number; // After applying weights
+
+  // Breakdown for tooltip
+  rootPow: number;
+  weightedReactionsPow: number;
+  weightedRepliesPow: number;
+  profilePow: number;
+  weightedProfilePow: number;
+
   loading: boolean;
 }
 
@@ -20,12 +33,23 @@ export interface NoteStats {
  * - Overall score
  */
 export function useNoteStats(event: NostrEvent) {
+  const { preferences } = usePreferences();
+
   const [stats, setStats] = createSignal<NoteStats>({
     reactionCount: 0,
     replyCount: 0,
     reactionsPowTotal: 0,
+    positiveReactionsPow: 0,
+    negativeReactionsPow: 0,
     repliesPowTotal: 0,
     totalScore: getPowDifficulty(event),
+    contributedWork: 0,
+    weightedContributedWork: 0,
+    rootPow: getPowDifficulty(event),
+    weightedReactionsPow: 0,
+    weightedRepliesPow: 0,
+    profilePow: getPubkeyPowDifficulty(event.pubkey),
+    weightedProfilePow: 0,
     loading: true,
   });
 
@@ -78,18 +102,42 @@ export function useNoteStats(event: NostrEvent) {
     });
 
     function updateStats() {
-      // Calculate reaction POW
-      const reactionsPowTotal = reactions.reduce((sum, r) => {
-        return sum + getPowDifficulty(r);
-      }, 0);
+      // Calculate reaction POW - separate positive and negative
+      let positiveReactionsPow = 0;
+      let negativeReactionsPow = 0;
+
+      for (const reaction of reactions) {
+        const reactionPowValue = getPowDifficulty(reaction);
+        const content = reaction.content.trim();
+
+        if (content === '-' || content === '👎') {
+          negativeReactionsPow += reactionPowValue;
+        } else {
+          // All other reactions are positive (including +, ❤️, 👍, and custom)
+          positiveReactionsPow += reactionPowValue;
+        }
+      }
+
+      const reactionsPowTotal = positiveReactionsPow + negativeReactionsPow;
 
       // Calculate reply POW
       const repliesPowTotal = replies.reduce((sum, r) => {
         return sum + getPowDifficulty(r);
       }, 0);
 
-      // Calculate total score using the scoring formula
-      const score = calculatePowScore(event, reactions);
+      // Calculate total score using the scoring formula with current preferences
+      const prefs = preferences();
+      const score = calculatePowScore(event, reactions, replies, {
+        reactionPowWeight: prefs.reactionPowWeight,
+        replyPowWeight: prefs.replyPowWeight,
+        profilePowWeight: prefs.profilePowWeight,
+      });
+
+      // Contributed work is raw sum of reactions + replies
+      const contributedWork = reactionsPowTotal + repliesPowTotal;
+
+      // Weighted contributed work is what actually affects the score
+      const weightedContributedWork = score.reactionsPow + score.repliesPow;
 
       console.log(`[useNoteStats] Stats for ${event.id.slice(0, 8)}: reactions=${reactions.length}, replies=${replies.length}`);
 
@@ -97,8 +145,17 @@ export function useNoteStats(event: NostrEvent) {
         reactionCount: reactions.length,
         replyCount: replies.length,
         reactionsPowTotal,
+        positiveReactionsPow,
+        negativeReactionsPow,
         repliesPowTotal,
-        totalScore: score.totalScore + repliesPowTotal,
+        totalScore: score.totalScore,
+        contributedWork,
+        weightedContributedWork,
+        rootPow: score.rootPow,
+        weightedReactionsPow: score.reactionsPow,
+        weightedRepliesPow: score.repliesPow,
+        profilePow: getPubkeyPowDifficulty(event.pubkey),
+        weightedProfilePow: score.profilePow,
         loading: false,
       });
     }
@@ -106,12 +163,25 @@ export function useNoteStats(event: NostrEvent) {
     // Initial stats after a short delay to allow data to load
     setTimeout(() => {
       if (reactions.length === 0 && replies.length === 0) {
+        const rootPow = getPowDifficulty(event);
+        const profilePow = getPubkeyPowDifficulty(event.pubkey);
+        const prefs = preferences();
+
         setStats({
           reactionCount: 0,
           replyCount: 0,
           reactionsPowTotal: 0,
+          positiveReactionsPow: 0,
+          negativeReactionsPow: 0,
           repliesPowTotal: 0,
-          totalScore: getPowDifficulty(event),
+          totalScore: rootPow + (profilePow * prefs.profilePowWeight),
+          contributedWork: 0,
+          weightedContributedWork: 0,
+          rootPow,
+          weightedReactionsPow: 0,
+          weightedRepliesPow: 0,
+          profilePow,
+          weightedProfilePow: profilePow * prefs.profilePowWeight,
           loading: false,
         });
       }

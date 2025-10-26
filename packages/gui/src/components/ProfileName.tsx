@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import { nip19 } from 'nostr-tools';
 import { useProfile } from '../hooks/useProfile';
+import { getPubkeyPowDifficulty } from '../lib/pow';
 
 interface ProfileNameProps {
   pubkey: string;
@@ -43,6 +44,9 @@ export const ProfileName: Component<ProfileNameProps> = (props) => {
     }
   };
 
+  const pubkeyPow = () => getPubkeyPowDifficulty(props.pubkey);
+  const hasMindedPubkey = () => pubkeyPow() >= 3; // Show diamond for 3+ leading zeros
+
   const content = () => (
     <span
       class={props.class || 'font-mono text-sm text-text-secondary'}
@@ -58,6 +62,11 @@ export const ProfileName: Component<ProfileNameProps> = (props) => {
         />
       </Show>
       {displayName()}
+      <Show when={hasMindedPubkey()}>
+        <span class="ml-1 text-accent" title={`Mined pubkey: ${pubkeyPow()} leading zeros`}>
+          ◆
+        </span>
+      </Show>
     </span>
   );
 

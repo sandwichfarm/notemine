@@ -46,24 +46,42 @@ export function getTargetDifficulty(event: NostrEvent): number | null {
 }
 
 /**
- * Calculate POW score for a note including reactions
- * Score = root_pow + Σ(reaction_pow × reaction_type)
- * where + = +1, - = -1, others = +0.5
+ * Calculate POW score for a note including reactions, replies, and author profile POW
+ * Applies non-linear weighting based on user preferences
  */
 export interface PowScore {
   rootPow: number;
   reactionsPow: number;
+  repliesPow: number;
+  profilePow: number;
   totalScore: number;
   hasPow: boolean;
 }
 
+export interface PowScoreWeights {
+  reactionPowWeight?: number;
+  replyPowWeight?: number;
+  profilePowWeight?: number;
+}
+
 export function calculatePowScore(
   event: NostrEvent,
-  reactions: NostrEvent[] = []
+  reactions: NostrEvent[] = [],
+  replies: NostrEvent[] = [],
+  weights: PowScoreWeights = {}
 ): PowScore {
   const rootPow = getPowDifficulty(event);
   const hasPow = hasValidPow(event, 1);
 
+  // Get weights with defaults
+  const reactionWeight = weights.reactionPowWeight ?? 0.5;
+  const replyWeight = weights.replyPowWeight ?? 0.7;
+  const profileWeight = weights.profilePowWeight ?? 0.3;
+
+  // Calculate profile POW (leading zeros in pubkey)
+  const profilePow = getPubkeyPowDifficulty(event.pubkey);
+
+  // Calculate reactions POW with non-linear weighting
   let reactionsPow = 0;
   for (const reaction of reactions) {
     const reactionPowValue = getPowDifficulty(reaction);
@@ -78,14 +96,39 @@ export function calculatePowScore(
     }
   }
 
-  const totalScore = rootPow + reactionsPow;
+  // Calculate replies POW
+  let repliesPow = 0;
+  for (const reply of replies) {
+    repliesPow += getPowDifficulty(reply);
+  }
+
+  // Apply non-linear weights
+  const weightedReactionsPow = reactionsPow * reactionWeight;
+  const weightedRepliesPow = repliesPow * replyWeight;
+  const weightedProfilePow = profilePow * profileWeight;
+
+  const totalScore = rootPow + weightedReactionsPow + weightedRepliesPow + weightedProfilePow;
 
   return {
     rootPow,
-    reactionsPow,
+    reactionsPow: weightedReactionsPow,
+    repliesPow: weightedRepliesPow,
+    profilePow: weightedProfilePow,
     totalScore,
     hasPow,
   };
+}
+
+/**
+ * Calculate POW difficulty of a pubkey (count leading zeros)
+ */
+export function getPubkeyPowDifficulty(pubkey: string): number {
+  let count = 0;
+  for (const char of pubkey) {
+    if (char === '0') count++;
+    else break;
+  }
+  return count;
 }
 
 /**

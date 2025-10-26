@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f5;
+    --text-primary: #0a0a0a;
+    --text-secondary: #666666;
+    --border-color: #e0e0e0;
+    --accent: #0ea5e9;
+  }
+
+  .dark {
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #1a1a1a;
+    --text-primary: #f5f5f5;
+    --text-secondary: #999999;
+    --border-color: #333333;
+    --accent: #22c55e;
+  }
+
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded border border-[var(--border-color)] hover:border-[var(--accent)] cursor-pointer;
+  }
+
+  .btn-primary {
+    @apply btn bg-[var(--accent)] text-white border-[var(--accent)];
+  }
+
+  .card {
+    @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded p-4;
+  }
+
+  .input {
+    @apply bg-[var(--bg-primary)] border border-[var(--border-color)] rounded px-3 py-2 focus:outline-none focus:border-[var(--accent)];
+  }
+}

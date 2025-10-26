@@ -1,0 +1,235 @@
+import { createContext, useContext, Component, JSX } from 'solid-js';
+import type { QueueItem, QueueState } from '../types/queue';
+import { createLocalStore } from '../lib/localStorage';
+import { debug } from '../lib/debug';
+
+interface QueueContextType {
+  queueState: () => QueueState;
+  addToQueue: (item: Omit<QueueItem, 'id' | 'status' | 'createdAt'>) => string;
+  removeFromQueue: (itemId: string) => void;
+  moveToTop: (itemId: string) => void;
+  clearCompleted: () => void;
+  clearQueue: () => void;
+  updateItemStatus: (itemId: string, status: QueueItem['status'], error?: string) => void;
+  updateItemMiningState: (itemId: string, miningState: any) => void;
+  setActiveItem: (itemId: string | null) => void;
+  startQueue: () => void;
+  pauseQueue: () => void;
+  skipCurrent: () => void;
+  toggleAutoProcess: () => void;
+  getNextQueuedItem: () => QueueItem | null;
+}
+
+const QueueContext = createContext<QueueContextType>();
+
+const DEFAULT_QUEUE_STATE: QueueState = {
+  items: [],
+  activeItemId: null,
+  isProcessing: false,
+  autoProcess: true,
+};
+
+export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
+  const [queueState, setQueueState] = createLocalStore<QueueState>(
+    'notemine:miningQueue',
+    DEFAULT_QUEUE_STATE
+  );
+
+  // On mount, if there are items with mining or queued status, ensure isProcessing is true
+  // This handles page reload scenarios
+  const state = queueState();
+  if (!state.isProcessing && state.items.some((item) => ['queued', 'mining'].includes(item.status))) {
+    debug('[QueueProvider] Detected pending items on mount, auto-starting queue');
+    setQueueState((prev) => ({
+      ...prev,
+      isProcessing: true,
+    }));
+  }
+
+  // Add item to queue
+  const addToQueue = (item: Omit<QueueItem, 'id' | 'status' | 'createdAt'>): string => {
+    const id = `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newItem: QueueItem = {
+      ...item,
+      id,
+      status: 'queued',
+      createdAt: Date.now(),
+    };
+
+    setQueueState((prev) => ({
+      ...prev,
+      items: [...prev.items, newItem],
+    }));
+
+    debug('[Queue] Added item:', newItem);
+    return id;
+  };
+
+  // Remove item from queue
+  const removeFromQueue = (itemId: string) => {
+    const state = queueState();
+    const isActiveItem = state.activeItemId === itemId;
+
+    setQueueState((prev) => ({
+      ...prev,
+      items: prev.items.filter((item) => item.id !== itemId),
+      activeItemId: prev.activeItemId === itemId ? null : prev.activeItemId,
+    }));
+
+    debug('[Queue] Removed item:', itemId, 'wasActive:', isActiveItem);
+
+    // If we removed the active item, we need to signal that mining should stop
+    // The QueueProcessor will handle starting the next item
+    if (isActiveItem) {
+      debug('[Queue] Removed active item, mining should stop');
+    }
+  };
+
+  // Move item to top of queue
+  const moveToTop = (itemId: string) => {
+    setQueueState((prev) => {
+      const item = prev.items.find((i) => i.id === itemId);
+      if (!item || item.status !== 'queued') return prev;
+
+      const otherItems = prev.items.filter((i) => i.id !== itemId);
+      return {
+        ...prev,
+        items: [item, ...otherItems],
+      };
+    });
+    debug('[Queue] Moved to top:', itemId);
+  };
+
+  // Clear completed/failed/skipped items
+  const clearCompleted = () => {
+    setQueueState((prev) => ({
+      ...prev,
+      items: prev.items.filter(
+        (item) => !['completed', 'failed', 'skipped'].includes(item.status)
+      ),
+    }));
+    debug('[Queue] Cleared completed items');
+  };
+
+  // Clear entire queue
+  const clearQueue = () => {
+    setQueueState(DEFAULT_QUEUE_STATE);
+    debug('[Queue] Cleared all items');
+  };
+
+  // Update item status
+  const updateItemStatus = (itemId: string, status: QueueItem['status'], error?: string) => {
+    setQueueState((prev) => ({
+      ...prev,
+      items: prev.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              status,
+              error,
+              completedAt: ['completed', 'failed', 'skipped'].includes(status)
+                ? Date.now()
+                : item.completedAt,
+            }
+          : item
+      ),
+    }));
+    debug(`[Queue] Updated item ${itemId} status:`, status);
+  };
+
+  // Update item mining state
+  const updateItemMiningState = (itemId: string, miningState: any) => {
+    debug(`[Queue] Updating mining state for ${itemId}:`, {
+      workerNonces: miningState?.workerNonces,
+      numberOfWorkers: miningState?.numberOfWorkers
+    });
+    setQueueState((prev) => ({
+      ...prev,
+      items: prev.items.map((item) =>
+        item.id === itemId
+          ? { ...item, miningState }
+          : item
+      ),
+    }));
+  };
+
+  // Set active item
+  const setActiveItem = (itemId: string | null) => {
+    setQueueState((prev) => ({
+      ...prev,
+      activeItemId: itemId,
+    }));
+  };
+
+  // Start queue processing
+  const startQueue = () => {
+    setQueueState((prev) => ({
+      ...prev,
+      isProcessing: true,
+    }));
+    debug('[Queue] Started processing');
+  };
+
+  // Pause queue processing
+  const pauseQueue = () => {
+    setQueueState((prev) => ({
+      ...prev,
+      isProcessing: false,
+    }));
+    debug('[Queue] Paused processing');
+  };
+
+  // Skip current item
+  const skipCurrent = () => {
+    const state = queueState();
+    if (state.activeItemId) {
+      updateItemStatus(state.activeItemId, 'skipped', 'Manually skipped by user');
+      setActiveItem(null);
+    }
+  };
+
+  // Toggle auto-process
+  const toggleAutoProcess = () => {
+    setQueueState((prev) => ({
+      ...prev,
+      autoProcess: !prev.autoProcess,
+    }));
+  };
+
+  // Get next queued item
+  const getNextQueuedItem = (): QueueItem | null => {
+    const state = queueState();
+    return state.items.find((item) => item.status === 'queued') || null;
+  };
+
+  const value: QueueContextType = {
+    queueState,
+    addToQueue,
+    removeFromQueue,
+    moveToTop,
+    clearCompleted,
+    clearQueue,
+    updateItemStatus,
+    updateItemMiningState,
+    setActiveItem,
+    startQueue,
+    pauseQueue,
+    skipCurrent,
+    toggleAutoProcess,
+    getNextQueuedItem,
+  };
+
+  return (
+    <QueueContext.Provider value={value}>
+      {props.children}
+    </QueueContext.Provider>
+  );
+};
+
+export function useQueue(): QueueContextType {
+  const context = useContext(QueueContext);
+  if (!context) {
+    throw new Error('useQueue must be used within QueueProvider');
+  }
+  return context;
+}

@@ -9,6 +9,7 @@ type BestPowDataMap = Map<'best_pow' | 'nonce' | 'hash', number | string>;
 let mining = false;
 let workerId: number;
 let miningCancelled = false;
+let currentRunId: string | null = null;
 
 const destructureBestPowData = (data: BestPowDataMap | any): BestPowData => {
   ////console.log('Destructuring bestPowData:', data, typeof data, data.get ? 'has get' : 'no get');
@@ -17,7 +18,12 @@ const destructureBestPowData = (data: BestPowDataMap | any): BestPowData => {
   let nonce: string;
   let hash: string;
 
-  if (typeof data.get === 'function') {
+  // Check if it's a primitive array [pow, nonce] from optimized Rust
+  if (Array.isArray(data) && data.length >= 2) {
+    bestPow = data[0];
+    nonce = data[1];
+    hash = ''; // Not needed for progress updates
+  } else if (typeof data.get === 'function') {
     bestPow = data.get('best_pow') as number;
     nonce = data.get('nonce') as string;
     hash = data.get('hash') as string;
@@ -29,14 +35,14 @@ const destructureBestPowData = (data: BestPowDataMap | any): BestPowData => {
     throw new Error('Invalid bestPowData received from mine_event');
   }
 
-  if (bestPow === undefined || nonce === undefined || hash === undefined) {
+  if (bestPow === undefined || nonce === undefined) {
     throw new Error('Incomplete bestPowData received from mine_event');
   }
 
   return {
     bestPow,
     nonce,
-    hash,
+    hash: hash || '',
   };
 };
 
@@ -50,16 +56,17 @@ self.onmessage = async function (e: MessageEvent) {
   }
   ////console.log('Worker received message:', e.data);
   try {
-    const { type, event, difficulty, id, totalWorkers } = e.data;
+    const { type, event, difficulty, id, totalWorkers, workerNonces, runId } = e.data;
     ////console.log(e.data)
 
-    // return 
+    // return
 
     // if (!event || !difficulty || id === undefined || !totalWorkers || type === 'error') {
     //   throw new Error('Missing required mining parameters');
     // }
 
     workerId = id;
+    currentRunId = runId || null; // Store runId for this mining session
 
     if (type === 'mine' && !mining) {
       miningCancelled = false;
@@ -70,16 +77,79 @@ self.onmessage = async function (e: MessageEvent) {
         await initWasm(wasm);
         ////console.log('WASM Initialized successfully.');
 
-        const startNonce = BigInt(workerId);
+        let startNonce = BigInt(workerId);
         const nonceStep = BigInt(totalWorkers);
+
+        // Handle resume with worker nonces
+        if (workerNonces && Array.isArray(workerNonces) && workerNonces.length > 0) {
+          if (workerNonces.length === totalWorkers) {
+            // Same worker count - use the saved nonce for this worker
+            startNonce = BigInt(workerNonces[workerId] || workerId);
+          } else {
+            // Different worker count - find minimum and redistribute
+            const minNonce = workerNonces.reduce((min, nonce) => {
+              const n = BigInt(nonce);
+              return n < min ? n : min;
+            }, BigInt(workerNonces[0]));
+            startNonce = minNonce + BigInt(workerId);
+          }
+          ////console.log(`Worker ${workerId} resuming from nonce: ${startNonce}`);
+        }
+
+        // Announce starting nonce immediately so the wrapper can persist resume positions
+        try {
+          self.postMessage({
+            type: 'progress',
+            workerId,
+            currentNonce: startNonce.toString(),
+            runId: currentRunId,
+          });
+        } catch {}
 
         const reportProgress = (hashRate: number, bestPowData: any) => {
           ////console.log('Progress:', hashRate, bestPowData);
+
+          let currentNonce: string | undefined;
+          let parsedBestPowData: BestPowData | undefined;
+
+          const extractCurrentNonce = (data: any) => {
+            if (typeof data?.get === 'function') {
+              const nonce = data.get('currentNonce');
+              return typeof nonce === 'string' ? nonce : undefined;
+            }
+            if (typeof data === 'object' && data !== null) {
+              const nonce = (data as any).currentNonce;
+              return typeof nonce === 'string' ? nonce : undefined;
+            }
+            return undefined;
+          };
+
+          const hasBestPowFields = (data: any) => {
+            if (!data) return false;
+            if (typeof data?.get === 'function') {
+              return data.get('best_pow') !== undefined || data.get('bestPow') !== undefined;
+            }
+            if (typeof data === 'object' && data !== null) {
+              return 'best_pow' in data || 'bestPow' in data;
+            }
+            return false;
+          };
+
+          if (bestPowData && hasBestPowFields(bestPowData)) {
+            const destructured = destructureBestPowData(bestPowData);
+            parsedBestPowData = destructured;
+            currentNonce = extractCurrentNonce(bestPowData);
+          } else if (bestPowData) {
+            currentNonce = extractCurrentNonce(bestPowData);
+          }
+
           const message: any = {
             type: 'progress',
             workerId,
             hashRate,
-            bestPowData: bestPowData ? destructureBestPowData(bestPowData) : undefined,
+            bestPowData: parsedBestPowData,
+            currentNonce,
+            runId: currentRunId,
           };
           self.postMessage(message);
         };
@@ -97,22 +167,22 @@ self.onmessage = async function (e: MessageEvent) {
         );
 
         ////console.log('Mining completed successfully:', minedResult);
-        self.postMessage({ type: 'result', data: minedResult, workerId });
+        self.postMessage({ type: 'result', data: minedResult, workerId, runId: currentRunId });
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
         console.error('Error during mining:', errorMessage);
-        self.postMessage({ type: 'error', error: errorMessage, workerId });
+        self.postMessage({ type: 'error', error: errorMessage, workerId, runId: currentRunId });
       } finally {
         mining = false;
       }
     } else if (type === 'cancel') {
       miningCancelled = true;
-      ////console.log('Mining cancelled by user.');
+      console.log(`[Worker ${workerId}] Received cancel, setting miningCancelled=true`);
     }
   } catch (err: any) {
     const errorMessage = err.message || 'Unknown error occurred in worker';
     console.error('Critical Worker error:', errorMessage);
-    self.postMessage({ type: 'error', error: errorMessage, workerId });
+    self.postMessage({ type: 'error', error: errorMessage, workerId, runId: currentRunId });
     self.close();
   }
 };

@@ -1,0 +1,31 @@
+# Ansible runtime files
+*.retry
+.vault_pass
+vault_pass.txt
+
+# Ansible facts cache
+/tmp/ansible_facts/
+
+# Local testing
+/test/
+/local/
+
+# Sensitive files
+secrets.yml
+vault.yml
+host_vars/*/vault.yml
+group_vars/*/vault.yml
+
+# SSH keys (should never be committed)
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Logs
+*.log
+
+# Backups
+*.backup
+*.bak
+*.old

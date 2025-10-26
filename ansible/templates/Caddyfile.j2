@@ -1,0 +1,57 @@
+{{ domain }} {
+	# NIP-11: Accept: application/nostr+json header returns relay information
+	@nip11 {
+		header Accept application/nostr+json
+	}
+	handle @nip11 {
+		reverse_proxy localhost:{{ relay_port }}
+	}
+
+	# WebSocket upgrade requests go to the relay
+	@websocket {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	handle @websocket {
+		reverse_proxy localhost:{{ relay_port }}
+	}
+
+	# .well-known static files
+	handle /.well-known/* {
+		root * {{ gui_deploy_path }}
+		file_server
+	}
+
+	# Everything else goes to the SPA
+	handle {
+		root * {{ gui_deploy_path }}
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Security headers
+	header {
+		# Enable HSTS
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Prevent MIME sniffing
+		X-Content-Type-Options "nosniff"
+		# Enable XSS protection
+		X-Frame-Options "DENY"
+		# CSP
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: ws:; worker-src 'self' blob:;"
+	}
+
+	# Logging
+	log {
+		output file /var/log/caddy/notemine.log
+		format json
+	}
+
+	# Enable compression
+	encode gzip zstd
+
+	# TLS - Let's Encrypt automatic HTTPS
+	tls {
+		protocols tls1.2 tls1.3
+	}
+}

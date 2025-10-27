@@ -26,7 +26,11 @@ export function utf8ByteLength(s: string): number {
 
 export function formatTime(sec: number): string {
   if (sec < 1) return `${Math.round(sec * 1000)}ms`;
-  if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)}s`;
+  if (sec < 60) {
+    // Only use decimal for non-whole numbers
+    if (sec % 1 === 0) return `${sec}s`;
+    return `${sec.toFixed(sec < 10 ? 1 : 0)}s`;
+  }
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
   return `${m}m${s.toString().padStart(2, '0')}s`;

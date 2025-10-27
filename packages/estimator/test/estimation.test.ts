@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { estimate, severity } from '../src/estimation.js';
 import type { Calibration } from '../src/types.js';
 
+// Sample calibration data for NIP-13 mining
+// These values are representative - actual values will vary by device
+// Obtain real calibration data using calibrateNip13()
 const cal: Calibration = {
-  a: 1e-7, // 0.1us base
-  b: 5e-10, // 0.5ns per byte
-  c: 1e-7, // 0.1us per tag
-  eff: { 1: 1, 2: 0.9, 4: 0.8 },
+  a: 1e-7, // 0.1us base overhead per attempt
+  b: 5e-10, // 0.5ns cost per byte of content
+  c: 1e-7, // 0.1us cost per tag
+  eff: { 1: 1, 2: 0.9, 4: 0.8 }, // Thread efficiency factors
   algo: 'sha256',
   cpu: 'test',
   at: Date.now(),

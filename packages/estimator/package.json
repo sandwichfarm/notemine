@@ -8,8 +8,7 @@
   "exports": {
     ".": {
       "import": "./dist/index.js"
-    },
-    "./worker/attemptWorker.js": "./dist/worker/attemptWorker.js"
+    }
   },
   "types": "dist/index.d.ts",
   "scripts": {
@@ -24,9 +23,14 @@
   ],
   "license": "MIT",
   "sideEffects": false,
+  "dependencies": {
+    "@notemine/core": "workspace:*",
+    "@notemine/wrapper": "workspace:*"
+  },
   "devDependencies": {
-    "typescript": "^5.6.3",
     "rimraf": "^6.0.1",
+    "typescript": "^5.6.3",
+    "vite-plugin-wasm": "^3.5.0",
     "vitest": "^2.1.3"
   }
 }

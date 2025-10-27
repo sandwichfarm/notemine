@@ -101,8 +101,12 @@ export const QueueProcessor: Component = () => {
         );
       }
 
+      // If minedEvent is null, it means mining was paused or cancelled
+      // Keep the item in 'mining' state so it can be resumed later
       if (!minedEvent) {
-        throw new Error('Mining failed: no event returned');
+        debug('[QueueProcessor] Mining was paused/cancelled, keeping item in mining state');
+        processingLock = false;
+        return;
       }
 
       debug('[QueueProcessor] Mining complete, signing and publishing...');

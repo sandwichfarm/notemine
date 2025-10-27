@@ -13,6 +13,7 @@ import Layout from './components/Layout';
 import Home from './pages/Home';
 import About from './pages/About';
 import Stats from './pages/Stats';
+import Relays from './pages/Relays';
 import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
 import { Preferences } from './pages/Preferences';
@@ -101,6 +102,7 @@ const App: Component = () => {
                     <Router root={Layout}>
                       <Route path="/" component={Home} />
                       <Route path="/about" component={About} />
+                      <Route path="/relays" component={Relays} />
                       <Route path="/stats" component={Stats} />
                       <Route path="/preferences" component={Preferences} />
                       <Route path="/n/:id" component={NoteDetail} />

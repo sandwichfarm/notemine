@@ -242,6 +242,32 @@ export const MiningProvider: ParentComponent = (props) => {
       });
       subscriptions.push(errorSub);
 
+      // Subscribe to cancelled events
+      const cancelledSub = notemine!.cancelled$.subscribe((cancelled) => {
+        if (cancelled) {
+          debug('[MiningProvider] Mining was cancelled, resolving promise with null');
+          setMiningState((prev) => ({
+            ...prev,
+            mining: false,
+          }));
+          resolve(null);
+        }
+      });
+      subscriptions.push(cancelledSub);
+
+      // Subscribe to paused events
+      const pausedSub = notemine!.paused$.subscribe((paused) => {
+        if (paused) {
+          debug('[MiningProvider] Mining was paused, resolving promise with null');
+          setMiningState((prev) => ({
+            ...prev,
+            mining: false,
+          }));
+          resolve(null);
+        }
+      });
+      subscriptions.push(pausedSub);
+
       // Start mining
       notemine!.mine().catch(reject);
     });
@@ -456,6 +482,32 @@ export const MiningProvider: ParentComponent = (props) => {
           reject(error);
         });
         subscriptions.push(errorSub);
+
+        // Subscribe to cancelled events
+        const cancelledSub = notemine!.cancelled$.subscribe((cancelled) => {
+          if (cancelled) {
+            debug('[MiningProvider] Mining was cancelled during resume, resolving promise with null');
+            setMiningState((prev) => ({
+              ...prev,
+              mining: false,
+            }));
+            resolve(null);
+          }
+        });
+        subscriptions.push(cancelledSub);
+
+        // Subscribe to paused events
+        const pausedSub = notemine!.paused$.subscribe((paused) => {
+          if (paused) {
+            debug('[MiningProvider] Mining was paused during resume, resolving promise with null');
+            setMiningState((prev) => ({
+              ...prev,
+              mining: false,
+            }));
+            resolve(null);
+          }
+        });
+        subscriptions.push(pausedSub);
 
         // Resume mining
         debug('[MiningProvider] resume() with nonces count:', Array.isArray(queueItem.miningState.workerNonces) ? queueItem.miningState.workerNonces.length : 0);

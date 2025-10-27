@@ -234,6 +234,9 @@ const Layout: Component<{ children?: any }> = (props) => {
             <A href="/about" class="hover:text-accent transition-colors">
               about
             </A>
+            <A href="/relays" class="hover:text-accent transition-colors">
+              relays
+            </A>
             <A href="/stats" class="hover:text-accent transition-colors">
               stats
             </A>

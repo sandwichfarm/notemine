@@ -1,5 +1,4 @@
 import { Component } from 'solid-js';
-import { RelayStats } from '../components/RelayStats';
 // import { CacheStats } from '../components/CacheStats';
 
 const Stats: Component = () => {
@@ -10,13 +9,11 @@ const Stats: Component = () => {
           Network Stats <span class="text-[var(--accent)]">📊</span>
         </h1>
         <p class="text-text-secondary">
-          POW relay network status and configuration
+          Mining statistics and performance metrics
         </p>
       </div>
 
       {/* <CacheStats /> */}
-
-      <RelayStats />
     </div>
   );
 };

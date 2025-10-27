@@ -59,6 +59,8 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     setQueueState((prev) => ({
       ...prev,
       items: [...prev.items, newItem],
+      // Auto-start queue if autoProcess is enabled and not already processing
+      isProcessing: prev.autoProcess ? true : prev.isProcessing,
     }));
 
     debug('[Queue] Added item:', newItem);

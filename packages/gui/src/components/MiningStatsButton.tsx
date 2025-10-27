@@ -68,7 +68,7 @@ export const MiningPanel: Component = () => {
               {/* Overall Best POW */}
               <Show when={state().overallBestPow !== null}>
                 <div class="text-right">
-                  <div class="text-xs text-text-secondary mb-1 opacity-60">Best POW Found</div>
+                  <div class="text-xs text-text-secondary mb-1 opacity-60">Highest Diff</div>
                   <div class="text-lg font-mono text-accent">
                     {state().overallBestPow}
                   </div>

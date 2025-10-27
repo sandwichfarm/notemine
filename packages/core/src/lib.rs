@@ -167,10 +167,12 @@ pub fn mine_event(
             best_nonce = nonce;
             best_hash_bytes = hash_bytes.clone();
 
+            // Include currentNonce so the JS wrapper can persist accurate resume state
             let best_pow_data = serde_json::json!({
                 "best_pow": best_pow,
                 "nonce": best_nonce.to_string(),
                 "hash": hex::encode(&best_hash_bytes),
+                "currentNonce": nonce.to_string(),
             });
 
             report_progress
@@ -225,8 +227,16 @@ pub fn mine_event(
             let elapsed_time = (current_time - last_report_time) / 1000.0;
             if elapsed_time > 0.0 {
                 let hash_rate = (report_interval as f64) / elapsed_time;
+                // Send currentNonce on periodic progress so resume has up-to-date nonces
+                let prog = serde_json::json!({
+                    "currentNonce": nonce.to_string(),
+                });
                 report_progress
-                    .call2(&JsValue::NULL, &hash_rate.into(), &JsValue::NULL)
+                    .call2(
+                        &JsValue::NULL,
+                        &hash_rate.into(),
+                        &serde_wasm_bindgen::to_value(&prog).unwrap(),
+                    )
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),

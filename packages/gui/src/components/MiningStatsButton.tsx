@@ -8,8 +8,8 @@ interface MiningStatsButtonProps {
 
 export const MiningStatsButton: Component<MiningStatsButtonProps> = (props) => {
   // Access global mining state
-  const { globalMiningState } = useMining();
-  const state = globalMiningState;
+  const { miningState } = useMining();
+  const state = miningState;
 
   return (
     <button
@@ -38,8 +38,8 @@ export const MiningStatsButton: Component<MiningStatsButtonProps> = (props) => {
 };
 
 export const MiningPanel: Component = () => {
-  const { globalMiningState } = useMining();
-  const state = globalMiningState;
+  const { miningState } = useMining();
+  const state = miningState;
 
   return (
     <div class="px-6 py-4  bg-black/90">

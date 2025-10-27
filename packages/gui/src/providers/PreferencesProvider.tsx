@@ -41,6 +41,15 @@ export interface UserPreferences {
   enabledRelays: {
     [relayUrl: string]: boolean;
   };
+
+  // Mining settings
+  // Preferred number of workers to use for mining. Clamped to device capabilities.
+  // Default leaves one core free.
+  minerNumberOfWorkers: number;
+  // When true, use all available cores and hide the slider
+  minerUseAllCores: boolean;
+  // When true, always start fresh and ignore saved mining state on resume
+  disableResume: boolean;
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -77,6 +86,11 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
   // Relay defaults (empty initially, will be populated when relays are discovered)
   enabledRelays: {},
+
+  // Mining defaults
+  minerNumberOfWorkers: Math.max(1, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4) - 1),
+  minerUseAllCores: false,
+  disableResume: false,
 };
 
 interface PreferencesContextType {
@@ -101,10 +115,12 @@ export const PreferencesProvider: Component<{ children: JSX.Element }> = (props)
   const storedPreferences = stored ? JSON.parse(stored) : {};
   const mergedPreferences = { ...DEFAULT_PREFERENCES, ...storedPreferences };
 
-  const [preferences, setPreferences] = createLocalStore<UserPreferences>(
-    'notemine:preferences',
-    mergedPreferences
-  );
+  // Ensure localStorage contains merged defaults so new fields get initialized
+  try {
+    localStorage.setItem('notemine:preferences', JSON.stringify(mergedPreferences));
+  } catch {}
+
+  const [preferences, setPreferences] = createLocalStore<UserPreferences>('notemine:preferences', mergedPreferences);
 
   const updatePreference = <K extends keyof UserPreferences>(
     key: K,

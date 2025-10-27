@@ -1,7 +1,7 @@
 import { Component, createEffect } from 'solid-js';
 import { useQueue } from '../providers/QueueProvider';
 import { useUser } from '../providers/UserProvider';
-import { usePowMining } from '../hooks/usePowMining';
+import { useMining } from '../providers/MiningProvider';
 import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
@@ -14,8 +14,7 @@ import { debug } from '../lib/debug';
 export const QueueProcessor: Component = () => {
   const { queueState, updateItemStatus, updateItemMiningState, setActiveItem, getNextQueuedItem } = useQueue();
   const { user } = useUser();
-  const powMining = usePowMining();
-  const { startMining, resumeMining, stopMining, state: miningState } = powMining;
+  const { startMining, resumeMining, stopMining, miningState, currentQueueItemId } = useMining();
 
   let processingLock = false;
 
@@ -169,15 +168,15 @@ export const QueueProcessor: Component = () => {
       isProcessing: state.isProcessing,
       autoProcess: state.autoProcess,
       mining: miningState().mining,
-      currentQueueItemId: powMining.currentQueueItemId,
+      currentQueueItemId: currentQueueItemId,
       activeItemId: state.activeItemId,
       queuedItems: state.items.filter(item => item.status === 'queued').length,
       miningItems: state.items.filter(item => item.status === 'mining').length,
     });
 
     // Check if currently mining item was removed from queue or stopped
-    if (miningState().mining && powMining.currentQueueItemId) {
-      const currentItem = state.items.find(item => item.id === powMining.currentQueueItemId);
+    if (miningState().mining && currentQueueItemId) {
+      const currentItem = state.items.find(item => item.id === currentQueueItemId);
       // Stop mining if item was removed OR if its status is no longer 'mining'
       if (!currentItem || currentItem.status !== 'mining') {
         debug('[QueueProcessor] Currently mining item was removed or stopped, stopping mining');

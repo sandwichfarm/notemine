@@ -14,7 +14,7 @@ const Layout: Component<{ children?: any }> = (props) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useUser();
   const { activeTooltip, tooltipContent, setActiveTooltip, setCloseAllPanels } = useTooltip();
-  const { globalMiningState } = useMining();
+  const { miningState } = useMining();
   const [showLoginModal, setShowLoginModal] = createSignal(false);
   const [showProfileModal, setShowProfileModal] = createSignal(false);
   const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | 'queue' | null>(null);
@@ -38,7 +38,7 @@ const Layout: Component<{ children?: any }> = (props) => {
     // Trigger on these dependencies
     activeTooltip();
     activePanel();
-    globalMiningState().mining;
+    miningState().mining;
 
     // Measure header height after render
     setTimeout(() => {

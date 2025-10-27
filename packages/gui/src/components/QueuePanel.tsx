@@ -5,7 +5,7 @@ import { useMining } from '../providers/MiningProvider';
 
 export const QueuePanel: Component = () => {
   const { queueState, moveToTop, removeFromQueue, clearCompleted, toggleAutoProcess, pauseQueue, startQueue, skipCurrent } = useQueue();
-  const { globalMiningState } = useMining();
+  const { miningState } = useMining();
 
   const getQueuedItems = () => queueState().items.filter((item) => item.status === 'queued');
   const getCompletedItems = () => queueState().items.filter((item) => ['completed', 'failed', 'skipped'].includes(item.status));
@@ -138,16 +138,16 @@ export const QueuePanel: Component = () => {
               </div>
 
               {/* Mining stats */}
-              <Show when={globalMiningState().mining}>
+              <Show when={miningState().mining}>
                 <div class="flex items-center gap-4 text-xs">
                   <div>
                     <span class="text-text-secondary">Hash Rate: </span>
-                    <span class="font-mono text-accent">{globalMiningState().hashRate.toFixed(2)} KH/s</span>
+                    <span class="font-mono text-accent">{miningState().hashRate.toFixed(2)} KH/s</span>
                   </div>
-                  <Show when={globalMiningState().overallBestPow !== null}>
+                  <Show when={miningState().overallBestPow !== null}>
                     <div>
                       <span class="text-text-secondary">Best POW: </span>
-                      <span class="font-mono text-accent">{globalMiningState().overallBestPow}</span>
+                      <span class="font-mono text-accent">{miningState().overallBestPow}</span>
                     </div>
                   </Show>
                 </div>

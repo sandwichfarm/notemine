@@ -5,6 +5,13 @@ export default defineConfig({
   plugins: [solid()],
   server: {
     port: 3000,
+    // In dev, aggressively disable HTTP caching to avoid stale modules/workers
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'Surrogate-Control': 'no-store',
+    },
   },
   build: {
     target: 'es2022',

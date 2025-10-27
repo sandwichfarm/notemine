@@ -4,6 +4,7 @@ import { usePreferences } from '../providers/PreferencesProvider';
 export const Preferences: Component = () => {
   const { preferences, updatePreference, resetPreferences } = usePreferences();
   const [showResetConfirm, setShowResetConfirm] = createSignal(false);
+  const maxWorkers = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
 
   const handleReset = () => {
     resetPreferences();
@@ -194,7 +195,7 @@ export const Preferences: Component = () => {
               type="range"
               min="0"
               max="1"
-              step="0.1"
+              step="0.01"
               value={preferences().reactionPowWeight}
               onInput={(e) => updatePreference('reactionPowWeight', Number(e.currentTarget.value))}
               class="w-full"
@@ -213,7 +214,7 @@ export const Preferences: Component = () => {
               type="range"
               min="0"
               max="1"
-              step="0.1"
+              step="0.01"
               value={preferences().replyPowWeight}
               onInput={(e) => updatePreference('replyPowWeight', Number(e.currentTarget.value))}
               class="w-full"
@@ -232,7 +233,7 @@ export const Preferences: Component = () => {
               type="range"
               min="0"
               max="1"
-              step="0.1"
+              step="0.01"
               value={preferences().profilePowWeight}
               onInput={(e) => updatePreference('profilePowWeight', Number(e.currentTarget.value))}
               class="w-full"
@@ -355,6 +356,75 @@ export const Preferences: Component = () => {
             />
             <p class="text-xs text-text-tertiary mt-1 opacity-50">
               Collapse reply threads after this depth (default: 2)
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Mining Settings */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Mining</h2>
+
+        <div class="space-y-4">
+          {/* Disable Resume Toggle */}
+          <div class="card">
+            <label class="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preferences().disableResume}
+                onChange={(e) => updatePreference('disableResume', e.currentTarget.checked)}
+                class="w-5 h-5"
+              />
+              <div>
+                <span class="block text-sm font-medium text-text-secondary">
+                  Disable Resume
+                </span>
+                <p class="text-xs text-text-tertiary opacity-50">
+                  Always start fresh when processing queued items or after refresh. Useful for debugging slowdowns.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Use All Cores Toggle */}
+          <div class="card">
+            <label class="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preferences().minerUseAllCores}
+                onChange={(e) => updatePreference('minerUseAllCores', e.currentTarget.checked)}
+                class="w-5 h-5"
+              />
+              <div>
+                <span class="block text-sm font-medium text-text-secondary">
+                  Use All Cores
+                </span>
+                <p class="text-xs text-text-tertiary opacity-50">
+                  When enabled, uses all available hardware threads and hides the slider.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Number of Workers */}
+          <div class="card" classList={{ hidden: preferences().minerUseAllCores }}>
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Number of Workers: {preferences().minerNumberOfWorkers} <span class="text-text-tertiary">(max {maxWorkers})</span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max={maxWorkers}
+              step="1"
+              value={preferences().minerNumberOfWorkers}
+              onInput={(e) => {
+                const val = Math.max(1, Math.min(Number(e.currentTarget.value), maxWorkers));
+                updatePreference('minerNumberOfWorkers', val);
+              }}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Adjust mining threads. Default leaves one core free.
             </p>
           </div>
         </div>

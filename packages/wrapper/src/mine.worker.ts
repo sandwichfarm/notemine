@@ -94,6 +94,15 @@ self.onmessage = async function (e: MessageEvent) {
           ////console.log(`Worker ${workerId} resuming from nonce: ${startNonce}`);
         }
 
+        // Announce starting nonce immediately so the wrapper can persist resume positions
+        try {
+          self.postMessage({
+            type: 'progress',
+            workerId,
+            currentNonce: startNonce.toString(),
+          });
+        } catch {}
+
         const reportProgress = (hashRate: number, bestPowData: any) => {
           ////console.log('Progress:', hashRate, bestPowData);
 

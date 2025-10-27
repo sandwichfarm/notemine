@@ -1,6 +1,6 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
-import { usePowMining } from '../hooks/usePowMining';
+import { useMining } from '../providers/MiningProvider';
 import { relayPool, getActiveRelays, getUserOutboxRelays } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
@@ -18,7 +18,7 @@ const DEFAULT_DIFFICULTY = 20;
 
 const Profile: Component = () => {
   const { user } = useUser();
-  const { state: miningState, startMining } = usePowMining();
+  const { miningState, startMining } = useMining();
 
   const [isEditing, setIsEditing] = createSignal(false);
   const [profileData, setProfileData] = createSignal<ProfileMetadata>({});

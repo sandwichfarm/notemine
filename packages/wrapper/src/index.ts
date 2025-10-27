@@ -107,6 +107,7 @@ export class Notemine {
   private _numberOfWorkers: number;
   private _kind: number;
   private _debug: boolean;
+  private _createdAt?: number;
   private _workerMaxHashRates = new Map<number, number>();
   private _workerHashRates = new Map<number, number[]>();
   private _lastRefresh = 0;
@@ -153,7 +154,7 @@ export class Notemine {
    */
   constructor(options?: MinerOptions) {
     this._content = options?.content || '';
-    this._tags = [...Notemine._defaultTags, ...(options?.tags || [])];
+    this._tags = Notemine.normalizeTags([...Notemine._defaultTags, ...(options?.tags || [])]);
     this._pubkey = options?.pubkey || '';
     this._difficulty = options?.difficulty || 20;
     this._numberOfWorkers = options?.numberOfWorkers || navigator.hardwareConcurrency || 4;
@@ -173,7 +174,7 @@ export class Notemine {
 
   /** Sets the tags to be used in the mining event */
   set tags(tags: string[][]) {
-    this._tags = Array.from(new Set([...this._tags, ...tags]));
+    this._tags = Notemine.normalizeTags([...this._tags, ...tags]);
   }
 
   /** Gets the current tags */
@@ -278,6 +279,7 @@ export class Notemine {
       //@ts-ignore: pedantic
       this.highestPow$.next({});
       this._workerNonces.clear();
+      this._createdAt = undefined;
     }
 
     await this.initializeWorkers();
@@ -356,19 +358,27 @@ export class Notemine {
       }
     }
 
-    return {
+    const state = {
       event: {
         pubkey: this.pubkey,
         kind: this.kind,
         tags: this.tags,
         content: this.content,
-        created_at: Math.floor(Date.now() / 1000),
+        created_at: this._createdAt ?? Math.floor(Date.now() / 1000),
       },
       workerNonces,
       bestPow: this.highestPow$.getValue(),
       difficulty: this.difficulty,
       numberOfWorkers: this.numberOfWorkers,
     };
+    if (this._debug) {
+      try {
+        console.log('[Notemine] getState workerNonces', JSON.stringify(workerNonces));
+      } catch {
+        console.log('[Notemine] getState workerNonces', workerNonces);
+      }
+    }
+    return state;
   }
 
   /**
@@ -383,9 +393,10 @@ export class Notemine {
     // Restore event data
     this.pubkey = state.event.pubkey;
     this.kind = state.event.kind;
-    this.tags = state.event.tags;
+    this._tags = Notemine.normalizeTags(state.event.tags);
     this.content = state.event.content;
     this.difficulty = state.difficulty;
+    this._createdAt = state.event.created_at;
 
     // Restore nonces
     this._resumeNonces = state.workerNonces;
@@ -447,10 +458,20 @@ export class Notemine {
     if (type === 'initialized') {
       ////console.log(`Worker ${workerId} initialized:`, data.message);
     } else if (type === 'progress') {
+      if (this._debug) {
+        try {
+          console.log('[Notemine] progress from worker', workerId, JSON.stringify(data));
+        } catch {
+          console.log('[Notemine] progress from worker', workerId, data);
+        }
+      }
       let bestPowData: BestPowData | undefined;
 
       // Track current nonce for this worker
       if (data?.currentNonce) {
+        if (this._debug) {
+          console.log('[Notemine] set currentNonce', workerId, data.currentNonce);
+        }
         this._workerNonces.set(workerId, data.currentNonce);
       }
 
@@ -509,12 +530,15 @@ export class Notemine {
    * @returns A JSON string representing the event
    */
   private prepareEvent(): string {
+    const createdAt = this._createdAt ?? Math.floor(Date.now() / 1000);
+    // Ensure created_at stays stable for the lifetime of this mining session
+    this._createdAt = createdAt;
     const event = {
       pubkey: this.pubkey,
       kind: this._kind,
       tags: this.tags,
       content: this.content,
-      created_at: Math.floor(Date.now() / 1000),
+      created_at: createdAt,
     };
 
     return JSON.stringify(event);
@@ -587,5 +611,28 @@ export class Notemine {
 
     this._totalHashRate = totalRate / 1000;
     this._lastRefresh = Date.now();
+  }
+
+  /** Normalize tags by content (dedupe arrays by their values, not references) */
+  private static normalizeTags(tags: string[][]): string[][] {
+    const seen = new Set<string>();
+    const out: string[][] = [];
+    for (const t of tags) {
+      if (!Array.isArray(t) || t.length === 0) continue;
+      const key = t.join('\u001F');
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(t);
+      }
+    }
+    // Ensure default tags exist exactly once
+    for (const dt of Notemine._defaultTags) {
+      const key = dt.join('\u001F');
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(dt);
+      }
+    }
+    return out;
   }
 }

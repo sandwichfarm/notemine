@@ -59,20 +59,23 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
     try {
       debug('[ReplyComposer] Adding reply to mining queue...');
 
-      // Build reply tags
+      // Build reply tags with relay hints
+      const parentRelayHint = getEventRelayHint(props.parentEvent.id);
+
       const replyTags: string[][] = [
-        ['e', props.parentEvent.id, '', 'reply'],
-        ['p', props.parentEvent.pubkey],
+        addRelayHintToETag(props.parentEvent.id, parentRelayHint, 'reply'),
+        addRelayHintToPTag(props.parentEvent.pubkey, parentRelayHint),
         ['client', CLIENT_TAG],
       ];
 
-      // If parent has 'e' tags, preserve the root
+      // If parent has 'e' tags, preserve the root with its relay hint
       const parentETags = props.parentEvent.tags.filter((t) => t[0] === 'e');
       if (parentETags.length > 0) {
         // First e tag is root
         const rootTag = parentETags[0];
         if (rootTag[1] !== props.parentEvent.id) {
-          replyTags.unshift(['e', rootTag[1], '', 'root']);
+          const rootRelayHint = rootTag[2] || undefined;
+          replyTags.unshift(addRelayHintToETag(rootTag[1], rootRelayHint, 'root'));
         }
       }
 

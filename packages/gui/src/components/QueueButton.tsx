@@ -13,7 +13,7 @@ export const QueueButton: Component<QueueButtonProps> = (props) => {
   const getActiveCount = () => {
     const state = queueState();
     // Only count the item that's actually set as active
-    const activeItem = state.items.find((item) => item.id === state.activeItemId && item.status === 'mining');
+    const activeItem = state.activeItemId ? state.items.find((item) => item.id === state.activeItemId) : null;
     debug('[QueueButton] Active item:', activeItem ? { id: activeItem.id, status: activeItem.status, content: activeItem.content } : 'none');
     return activeItem ? 1 : 0;
   };

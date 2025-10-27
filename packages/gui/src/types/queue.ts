@@ -14,7 +14,7 @@ export interface QueueItem {
   difficulty: number;
   tags?: string[][];
   kind: number;
-  status: 'queued' | 'mining' | 'paused' | 'completed' | 'failed' | 'skipped';
+  status: 'queued' | 'completed' | 'failed' | 'skipped';
   createdAt: number;
   completedAt?: number;
   miningState?: MiningState; // Saved state from wrapper

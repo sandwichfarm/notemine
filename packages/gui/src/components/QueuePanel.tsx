@@ -1,11 +1,15 @@
-import { Component, Show, For } from 'solid-js';
+import { Component, Show, For, createSignal } from 'solid-js';
 import { useQueue } from '../providers/QueueProvider';
 import type { QueueItem } from '../types/queue';
 import { useMining } from '../providers/MiningProvider';
+import { ConfirmDialog } from './ConfirmDialog';
 
 export const QueuePanel: Component = () => {
-  const { queueState, moveToTop, removeFromQueue, clearCompleted, toggleAutoProcess, pauseQueue, startQueue, skipCurrent } = useQueue();
-  const { miningState, pauseMining } = useMining();
+  const { queueState, reorderItem, removeFromQueue, clearCompleted, toggleAutoProcess, pauseQueue, startQueue, skipCurrent } = useQueue();
+  const { miningState, pauseMining, stopMining } = useMining();
+
+  // Confirmation dialog state
+  const [itemToDelete, setItemToDelete] = createSignal<QueueItem | null>(null);
 
   const handlePause = () => {
     pauseQueue(); // Pause queue processing
@@ -21,12 +25,97 @@ export const QueuePanel: Component = () => {
     pauseMining(); // Stop actual mining immediately
   };
 
-  const getQueuedItems = () => queueState().items.filter((item) => item.status === 'queued');
+  const handleDelete = (item: QueueItem) => {
+    // Check if item has mining state (saved progress)
+    if (item.miningState) {
+      // Show confirmation dialog
+      setItemToDelete(item);
+    } else {
+      // Delete immediately if no mining state
+      confirmDelete(item);
+    }
+  };
+
+  const confirmDelete = (item: QueueItem) => {
+    const isActive = queueState().activeItemId === item.id;
+
+    // If deleting active item, stop mining first
+    if (isActive) {
+      stopMining();
+    }
+
+    // Remove from queue
+    removeFromQueue(item.id);
+
+    // Close confirmation dialog
+    setItemToDelete(null);
+
+    // If deleted active item and queue is still processing, trigger next item after delay
+    if (isActive && queueState().isProcessing) {
+      // QueueProcessor will detect the change and start next item automatically
+    }
+  };
+
+  const cancelDelete = () => {
+    setItemToDelete(null);
+  };
+
+  const handleMoveUp = (item: QueueItem, currentIndex: number) => {
+    if (currentIndex === 0) return; // Already at top
+
+    const targetIndex = currentIndex - 1;
+    const wasProcessing = queueState().isProcessing;
+
+    reorderItem(item.id, targetIndex, () => {
+      stopMining();
+    });
+
+    // Restart queue after reorder if it was processing
+    if (wasProcessing) {
+      // Pause first to clear state, then restart
+      setTimeout(() => {
+        pauseQueue();
+        setTimeout(() => {
+          startQueue();
+        }, 50);
+      }, 200);
+    }
+  };
+
+  const handleMoveDown = (item: QueueItem, currentIndex: number) => {
+    const allItems = getAllQueuedItems();
+    if (currentIndex === allItems.length - 1) return; // Already at bottom
+
+    const targetIndex = currentIndex + 1;
+    const wasProcessing = queueState().isProcessing;
+
+    reorderItem(item.id, targetIndex, () => {
+      stopMining();
+    });
+
+    // Restart queue after reorder if it was processing
+    if (wasProcessing) {
+      // Pause first to clear state, then restart
+      setTimeout(() => {
+        pauseQueue();
+        setTimeout(() => {
+          startQueue();
+        }, 50);
+      }, 200);
+    }
+  };
+
+  const getAllQueuedItems = () => {
+    const state = queueState();
+    // Get ALL queued items (including active one)
+    return state.items.filter((item) => item.status === 'queued');
+  };
+
   const getCompletedItems = () => queueState().items.filter((item) => ['completed', 'failed', 'skipped'].includes(item.status));
   const getActiveItem = () => queueState().items.find((item) => item.id === queueState().activeItemId);
   const hasActiveOrQueuedItems = () => {
-    const items = queueState().items;
-    return items.some((item) => item.status === 'queued' || item.status === 'mining');
+    const state = queueState();
+    return state.items.some((item) => item.status === 'queued') || state.activeItemId !== null;
   };
 
   const formatContent = (content: string, maxLength = 50) => {
@@ -46,11 +135,10 @@ export const QueuePanel: Component = () => {
 
   const getStatusColor = (status: QueueItem['status']) => {
     switch (status) {
-      case 'mining': return 'text-blue-500';
-      case 'paused': return 'text-yellow-500';
       case 'completed': return 'text-green-500';
       case 'failed': return 'text-red-500';
       case 'skipped': return 'text-gray-500';
+      case 'queued': return 'text-blue-500';
       default: return 'text-text-secondary';
     }
   };
@@ -62,12 +150,12 @@ export const QueuePanel: Component = () => {
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
             <h3 class="text-lg font-bold">
-              Mining Queue ({getQueuedItems().length + (getActiveItem() ? 1 : 0)} {(getQueuedItems().length + (getActiveItem() ? 1 : 0)) === 1 ? 'item' : 'items'})
+              Mining Queue ({getAllQueuedItems().length} {getAllQueuedItems().length === 1 ? 'item' : 'items'})
             </h3>
             <Show when={queueState().isProcessing}>
               <span class="text-xs px-2 py-1 bg-blue-500/20 text-blue-500 rounded">Processing</span>
             </Show>
-            <Show when={!queueState().isProcessing && getQueuedItems().length > 0}>
+            <Show when={!queueState().isProcessing && getAllQueuedItems().length > 0}>
               <span class="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-500 rounded">Paused</span>
             </Show>
           </div>
@@ -120,61 +208,37 @@ export const QueuePanel: Component = () => {
           </div>
         </div>
 
-        {/* Active mining item */}
-        <Show when={getActiveItem()}>
-          {(activeItem) => (
-            <div class="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded">
-              <div class="flex items-start justify-between mb-2">
-                <div class="flex items-center gap-2">
-                  <span class="text-lg">{getTypeIcon(activeItem().type)}</span>
-                  <div>
-                    <div class="text-sm font-semibold">
-                      Currently Mining
-                      <span class="ml-2 text-xs text-blue-500">
-                        ({activeItem().type})
-                      </span>
-                    </div>
-                    <div class="text-xs text-text-secondary mt-0.5">
-                      Difficulty: {activeItem().difficulty}
-                    </div>
-                  </div>
+        {/* Mining stats - show above queue when mining */}
+        <Show when={miningState().mining && getActiveItem()}>
+          <div class="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4 text-xs">
+                <div>
+                  <span class="text-text-secondary">Hash Rate: </span>
+                  <span class="font-mono text-accent">{miningState().hashRate.toFixed(2)} KH/s</span>
                 </div>
-                <button
-                  onClick={handleSkip}
-                  class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
-                >
-                  Skip
-                </button>
-              </div>
-
-              <div class="text-sm text-text-primary mb-2">
-                {formatContent(activeItem().content, 100)}
-              </div>
-
-              {/* Mining stats */}
-              <Show when={miningState().mining}>
-                <div class="flex items-center gap-4 text-xs">
+                <Show when={miningState().overallBestPow !== null}>
                   <div>
-                    <span class="text-text-secondary">Hash Rate: </span>
-                    <span class="font-mono text-accent">{miningState().hashRate.toFixed(2)} KH/s</span>
+                    <span class="text-text-secondary">Best POW: </span>
+                    <span class="font-mono text-accent">{miningState().overallBestPow}</span>
                   </div>
-                  <Show when={miningState().overallBestPow !== null}>
-                    <div>
-                      <span class="text-text-secondary">Best POW: </span>
-                      <span class="font-mono text-accent">{miningState().overallBestPow}</span>
-                    </div>
-                  </Show>
-                </div>
-              </Show>
+                </Show>
+              </div>
+              <button
+                onClick={handleSkip}
+                class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
+              >
+                Skip Current
+              </button>
             </div>
-          )}
+          </div>
         </Show>
 
-        {/* Queued items */}
+        {/* Queue items (all including active) */}
         <Show
-          when={getQueuedItems().length > 0}
+          when={getAllQueuedItems().length > 0}
           fallback={
-            <Show when={getCompletedItems().length === 0 && !getActiveItem()}>
+            <Show when={getCompletedItems().length === 0}>
               <div class="text-center py-8 text-text-secondary opacity-60">
                 <div class="text-3xl mb-2">📭</div>
                 <div class="text-sm">Queue is empty</div>
@@ -184,56 +248,84 @@ export const QueuePanel: Component = () => {
         >
           <div class="space-y-2">
             <div class="text-xs text-text-secondary mb-2 opacity-60">
-              Queued Items
+              Queue ({getAllQueuedItems().length} {getAllQueuedItems().length === 1 ? 'item' : 'items'})
             </div>
-            <For each={getQueuedItems()}>
-              {(item, index) => (
-                <div class="p-3 bg-bg-secondary/50 rounded flex items-start justify-between hover:bg-bg-tertiary/50 transition-colors">
-                  <div class="flex items-start gap-2 flex-1">
-                    <span class="text-lg">{getTypeIcon(item.type)}</span>
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2 mb-1">
-                        <span class="text-xs text-text-secondary">
-                          #{index() + 1}
-                        </span>
-                        <span class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded">
-                          {item.type}
-                        </span>
-                        <span class="text-xs text-accent">
-                          POW: {item.difficulty}
-                        </span>
-                      </div>
-                      <div class="text-sm text-text-primary">
-                        {formatContent(item.content, 80)}
-                      </div>
-                      <Show when={item.metadata?.reactionContent}>
-                        <div class="text-xs text-text-secondary mt-1">
-                          Reaction: {item.metadata?.reactionContent}
+            <For each={getAllQueuedItems()}>
+              {(item, index) => {
+                // Make isActive reactive by accessing queueState() in a function
+                const isActive = () => queueState().activeItemId === item.id;
+                const allItems = getAllQueuedItems();
+                return (
+                  <div
+                    class="p-3 rounded flex items-start justify-between hover:bg-bg-tertiary/50 transition-colors"
+                    classList={{
+                      'bg-blue-500/10 border border-blue-500/30': isActive(),
+                      'bg-bg-secondary/50': !isActive(),
+                    }}
+                  >
+                    <div class="flex items-start gap-2 flex-1">
+                      <span class="text-lg">{getTypeIcon(item.type)}</span>
+                      <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="text-xs text-text-secondary">
+                            #{index() + 1}
+                          </span>
+                          <Show when={isActive()}>
+                            <span class="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-500 rounded font-semibold">
+                              ACTIVE
+                            </span>
+                          </Show>
+                          <span class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded">
+                            {item.type}
+                          </span>
+                          <span class="text-xs text-accent">
+                            POW: {item.difficulty}
+                          </span>
                         </div>
+                        <div class="text-sm text-text-primary">
+                          {formatContent(item.content, 80)}
+                        </div>
+                        <Show when={item.metadata?.reactionContent}>
+                          <div class="text-xs text-text-secondary mt-1">
+                            Reaction: {item.metadata?.reactionContent}
+                          </div>
+                        </Show>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1 ml-2">
+                      {/* Up button */}
+                      <Show when={index() > 0}>
+                        <button
+                          onClick={() => handleMoveUp(item, index())}
+                          class="text-xs px-2 py-1 bg-bg-tertiary rounded hover:bg-accent/20 hover:text-accent transition-colors"
+                          title="Move up"
+                        >
+                          ▲
+                        </button>
                       </Show>
+                      {/* Down button */}
+                      <Show when={index() < allItems.length - 1}>
+                        <button
+                          onClick={() => handleMoveDown(item, index())}
+                          class="text-xs px-2 py-1 bg-bg-tertiary rounded hover:bg-accent/20 hover:text-accent transition-colors"
+                          title="Move down"
+                        >
+                          ▼
+                        </button>
+                      </Show>
+                      {/* Delete button */}
+                      <button
+                        onClick={() => handleDelete(item)}
+                        class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
-
-                  <div class="flex items-center gap-1 ml-2">
-                    <Show when={index() > 0}>
-                      <button
-                        onClick={() => moveToTop(item.id)}
-                        class="text-xs px-2 py-1 bg-bg-tertiary rounded hover:bg-accent/20 hover:text-accent transition-colors"
-                        title="Move to top"
-                      >
-                        ⬆
-                      </button>
-                    </Show>
-                    <button
-                      onClick={() => removeFromQueue(item.id)}
-                      class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
-                      title="Remove"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              )}
+                );
+              }}
             </For>
           </div>
         </Show>
@@ -256,7 +348,7 @@ export const QueuePanel: Component = () => {
                       </span>
                     </div>
                     <button
-                      onClick={() => removeFromQueue(item.id)}
+                      onClick={() => handleDelete(item)}
                       class="text-text-secondary hover:text-red-500 transition-colors"
                     >
                       ✕
@@ -266,6 +358,21 @@ export const QueuePanel: Component = () => {
               </For>
             </div>
           </details>
+        </Show>
+
+        {/* Confirmation Dialog */}
+        <Show when={itemToDelete()}>
+          {(item) => (
+            <ConfirmDialog
+              isOpen={true}
+              title="Delete Queue Item?"
+              message={`This item has saved mining progress. Are you sure you want to delete it? Progress: ${item().miningState ? 'Saved' : 'None'}`}
+              confirmText="Delete"
+              cancelText="Cancel"
+              onConfirm={() => confirmDelete(item())}
+              onCancel={cancelDelete}
+            />
+          )}
         </Show>
       </div>
     </div>

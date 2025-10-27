@@ -9,7 +9,7 @@ import type { ISigner } from 'applesauce-signers';
 import { relayPool } from '../lib/applesauce';
 import { Observable } from 'rxjs';
 import { debug } from '../lib/debug';
-import { saveAnonKey, loadAnonKey, clearAnonKey, hasPersistedAnonKey } from '../lib/anon-storage';
+import { saveAnonKey, loadAnonKey, clearAnonKey } from '../lib/anon-storage';
 
 export type AuthMethod = 'anon' | 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
 
@@ -224,7 +224,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
    * Handle confirmation result when disabling persistence
    * @param action - 'keep' current key or 'regenerate' new key
    */
-  const handlePersistenceDisableConfirm = (action: 'keep' | 'regenerate') => {
+  // @ts-expect-error - Function reserved for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handlePersistenceDisableConfirm = (action: 'keep' | 'regenerate') => {
     const currentUser = user();
     if (!currentUser || !currentUser.isAnon) return;
 
@@ -263,7 +265,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
   /**
    * Handle confirmation result for key regeneration
    */
-  const handleRegenerateConfirm = () => {
+  // @ts-expect-error - Function reserved for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleRegenerateConfirm = () => {
     const currentUser = user();
     if (!currentUser || !currentUser.isAnon) return;
 

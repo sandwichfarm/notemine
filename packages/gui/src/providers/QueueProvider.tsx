@@ -8,6 +8,7 @@ interface QueueContextType {
   addToQueue: (item: Omit<QueueItem, 'id' | 'status' | 'createdAt'>) => string;
   removeFromQueue: (itemId: string) => void;
   moveToTop: (itemId: string) => void;
+  reorderItem: (itemId: string, toIndex: number, stopMiningCallback?: () => void) => void;
   clearCompleted: () => void;
   clearQueue: () => void;
   updateItemStatus: (itemId: string, status: QueueItem['status'], error?: string) => void;
@@ -35,10 +36,10 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     DEFAULT_QUEUE_STATE
   );
 
-  // On mount, if there are items with mining or queued status, ensure isProcessing is true
+  // On mount, if there are items with queued status, ensure isProcessing is true
   // This handles page reload scenarios
   const state = queueState();
-  if (!state.isProcessing && state.items.some((item) => ['queued', 'mining'].includes(item.status))) {
+  if (!state.isProcessing && state.items.some((item) => item.status === 'queued')) {
     debug('[QueueProvider] Detected pending items on mount, auto-starting queue');
     setQueueState((prev) => ({
       ...prev,
@@ -100,6 +101,45 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       };
     });
     debug('[Queue] Moved to top:', itemId);
+  };
+
+  // Reorder item to specific index (supports moving active items)
+  const reorderItem = (itemId: string, toIndex: number, stopMiningCallback?: () => void) => {
+    const state = queueState();
+    const item = state.items.find((i) => i.id === itemId);
+
+    if (!item || item.status !== 'queued') {
+      debug('[Queue] Cannot reorder: item not found or not queued');
+      return;
+    }
+
+    // Reorder the items array
+    const otherItems = state.items.filter((i) => i.id !== itemId);
+    otherItems.splice(toIndex, 0, item);
+
+    // Find the item at position 0 among queued items
+    const queuedItems = otherItems.filter((i) => i.status === 'queued');
+    const newActiveItemId = queuedItems.length > 0 ? queuedItems[0].id : null;
+
+    // Check if active item changed
+    const activeItemChanged = state.activeItemId !== newActiveItemId;
+
+    if (activeItemChanged) {
+      debug('[Queue] Active item changed from', state.activeItemId, 'to', newActiveItemId);
+
+      // Stop mining the old active item if callback provided
+      if (state.activeItemId && stopMiningCallback) {
+        stopMiningCallback();
+      }
+    }
+
+    setQueueState((prev) => ({
+      ...prev,
+      items: otherItems,
+      activeItemId: newActiveItemId, // Always update to item at position 0
+    }));
+
+    debug('[Queue] Reordered:', itemId, 'to index', toIndex, 'newActive:', newActiveItemId);
   };
 
   // Clear completed/failed/skipped items
@@ -209,6 +249,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     addToQueue,
     removeFromQueue,
     moveToTop,
+    reorderItem,
     clearCompleted,
     clearQueue,
     updateItemStatus,

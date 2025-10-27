@@ -13,7 +13,7 @@ import { clearAnonKey } from '../lib/anon-storage';
 
 const Layout: Component<{ children?: any }> = (props) => {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout, authAnon, setAnonPersistence, regenerateAnonKey } = useUser();
+  const { user, logout, authAnon, setAnonPersistence } = useUser();
   const { activeTooltip, tooltipContent, setActiveTooltip, setCloseAllPanels } = useTooltip();
   const { miningState } = useMining();
   const [showLoginModal, setShowLoginModal] = createSignal(false);

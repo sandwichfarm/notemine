@@ -31,9 +31,9 @@ export const QueueProcessor: Component = () => {
       return;
     }
 
-    // Check if there's already a mining item that needs to be resumed
-    const miningItem = state.items.find((item) => item.id === state.activeItemId && item.status === 'mining');
-    const nextItem = miningItem || getNextQueuedItem();
+    // Check if there's already an active item that needs to be resumed
+    const activeItem = state.activeItemId ? state.items.find((item) => item.id === state.activeItemId && item.status === 'queued') : null;
+    const nextItem = activeItem || getNextQueuedItem();
 
     if (!nextItem) {
       debug('[QueueProcessor] No items in queue');
@@ -44,7 +44,7 @@ export const QueueProcessor: Component = () => {
       id: nextItem.id,
       type: nextItem.type,
       status: nextItem.status,
-      isMiningItem: !!miningItem,
+      isActiveItem: !!activeItem,
     });
 
     const currentUser = user();
@@ -65,10 +65,9 @@ export const QueueProcessor: Component = () => {
         return;
       }
 
-      // Set as active and update status (only if not already mining)
-      if (nextItem.status !== 'mining') {
+      // Set as active (if not already)
+      if (state.activeItemId !== nextItem.id) {
         setActiveItem(nextItem.id);
-        updateItemStatus(nextItem.id, 'mining');
       }
 
       // Resume from saved state if available, otherwise start fresh
@@ -102,9 +101,9 @@ export const QueueProcessor: Component = () => {
       }
 
       // If minedEvent is null, it means mining was paused or cancelled
-      // Keep the item in 'mining' state so it can be resumed later
+      // Keep the item as active with saved miningState so it can be resumed later
       if (!minedEvent) {
-        debug('[QueueProcessor] Mining was paused/cancelled, keeping item in mining state');
+        debug('[QueueProcessor] Mining was paused/cancelled, keeping item active for resume');
         processingLock = false;
         return;
       }
@@ -175,14 +174,14 @@ export const QueueProcessor: Component = () => {
       currentQueueItemId: currentQueueItemId,
       activeItemId: state.activeItemId,
       queuedItems: state.items.filter(item => item.status === 'queued').length,
-      miningItems: state.items.filter(item => item.status === 'mining').length,
     });
 
-    // Check if currently mining item was removed from queue or stopped
+    // Check if currently mining item was removed from queue or is no longer active
     if (miningState().mining && currentQueueItemId) {
       const currentItem = state.items.find(item => item.id === currentQueueItemId);
-      // Stop mining if item was removed OR if its status is no longer 'mining'
-      if (!currentItem || currentItem.status !== 'mining') {
+      // Stop mining if item was removed OR if it's no longer the active item OR status changed to terminal
+      const isTerminalStatus = currentItem && ['completed', 'failed', 'skipped'].includes(currentItem.status);
+      if (!currentItem || state.activeItemId !== currentQueueItemId || isTerminalStatus) {
         debug('[QueueProcessor] Currently mining item was removed or stopped, stopping mining');
         stopMining();
         processingLock = false;
@@ -197,14 +196,14 @@ export const QueueProcessor: Component = () => {
     // Auto-start processing when:
     // 1. Queue is active (isProcessing=true)
     // 2. Auto-process is enabled
-    // 3. There are queued OR mining items
+    // 3. There are queued items OR an active item to resume
     // 4. No item is currently being mined by the hook
     // 5. Not already locked
     if (state.isProcessing && state.autoProcess && !miningState().mining && !processingLock) {
       const hasQueuedItems = state.items.some((item) => item.status === 'queued');
-      const hasMiningItems = state.items.some((item) => item.status === 'mining');
+      const hasActiveItem = state.activeItemId && state.items.some((item) => item.id === state.activeItemId && item.status === 'queued');
 
-      if (hasQueuedItems || hasMiningItems) {
+      if (hasQueuedItems || hasActiveItem) {
         debug('[QueueProcessor] Queue active with pending items, starting processing');
         processNextItem();
       }

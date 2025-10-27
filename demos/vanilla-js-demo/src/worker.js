@@ -34,9 +34,15 @@ self.onmessage = async function (e) {
         if(typeof hashRate == 'number') {
             postMessage({ ...header, workerId, hashRate });
         }
-        if(bestPow !== null) {
-            const { best_pow, nonce, hash } = destructureMap(bestPow);
-            postMessage({ ...header, workerId, best_pow, nonce, event, hash });
+        if(bestPow !== null && bestPow !== undefined) {
+            // Check if it's a primitive array [pow, nonce] from optimized Rust
+            if (Array.isArray(bestPow) && bestPow.length >= 2) {
+                postMessage({ ...header, workerId, best_pow: bestPow[0], nonce: bestPow[1], event, hash: '' });
+            } else {
+                // Fallback for old format
+                const { best_pow, nonce, hash } = destructureMap(bestPow);
+                postMessage({ ...header, workerId, best_pow, nonce, event, hash });
+            }
         }
     }
 

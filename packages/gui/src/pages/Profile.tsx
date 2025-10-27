@@ -316,7 +316,7 @@ const Profile: Component = () => {
                 <div class="p-3 bg-bg-primary dark:bg-bg-tertiary border border-border rounded-lg">
                   <div class="text-sm text-text-primary space-y-1">
                     <div>⛏️ Mining profile update with POW...</div>
-                    <div>Hash rate: {miningState().hashRate.toFixed(2)} H/s</div>
+                    <div>Hash rate: {miningState().hashRate.toFixed(2)} KH/s</div>
                     <Show when={miningState().overallBestPow !== null}>
                       <div>Best POW: {miningState().overallBestPow}</div>
                     </Show>

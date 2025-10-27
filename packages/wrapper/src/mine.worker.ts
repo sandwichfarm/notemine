@@ -17,7 +17,12 @@ const destructureBestPowData = (data: BestPowDataMap | any): BestPowData => {
   let nonce: string;
   let hash: string;
 
-  if (typeof data.get === 'function') {
+  // Check if it's a primitive array [pow, nonce] from optimized Rust
+  if (Array.isArray(data) && data.length >= 2) {
+    bestPow = data[0];
+    nonce = data[1];
+    hash = ''; // Not needed for progress updates
+  } else if (typeof data.get === 'function') {
     bestPow = data.get('best_pow') as number;
     nonce = data.get('nonce') as string;
     hash = data.get('hash') as string;
@@ -29,14 +34,14 @@ const destructureBestPowData = (data: BestPowDataMap | any): BestPowData => {
     throw new Error('Invalid bestPowData received from mine_event');
   }
 
-  if (bestPow === undefined || nonce === undefined || hash === undefined) {
+  if (bestPow === undefined || nonce === undefined) {
     throw new Error('Incomplete bestPowData received from mine_event');
   }
 
   return {
     bestPow,
     nonce,
-    hash,
+    hash: hash || '',
   };
 };
 

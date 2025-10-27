@@ -50,6 +50,3 @@ export function debugError(...args: any[]): void {
     console.error(...args);
   }
 }
-
-// Always log errors (not affected by debug mode)
-export { console as Console };

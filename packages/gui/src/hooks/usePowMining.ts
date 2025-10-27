@@ -123,29 +123,15 @@ export function usePowMining() {
     });
     subscriptions.push(bestPowSub);
 
-    // Subscribe to progress (for hash rate)
-    // Capture the current notemine instance in the closure to avoid stale references
+    // Subscribe to progress (for hash rate) - simplified to match svelte demo
     const currentInstance = notemine;
-    const progressSub = currentInstance.progress$.subscribe((progressData) => {
-      const instanceHashRate = Number(currentInstance.totalHashRate) || 0; // KH/s
-      const workerId = progressData.workerId;
-      const workerHashRate = Number(progressData.hashRate ?? 0); // Worker hash rate in H/s
+    const progressSub = currentInstance.progress$.subscribe(() => {
+      const hashRate = currentInstance.totalHashRate;
 
-      setState((prev) => {
-        const nextWorkersHashRates = { ...prev.workersHashRates };
-        if (workerHashRate > 0) {
-          nextWorkersHashRates[workerId] = workerHashRate;
-        }
-
-        const summedHashRate = Object.values(nextWorkersHashRates).reduce((sum, rate) => sum + rate, 0) / 1000; // KH/s
-        const totalHashRate = instanceHashRate > 0 ? instanceHashRate : summedHashRate;
-
-        return {
-          ...prev,
-          hashRate: totalHashRate,
-          workersHashRates: nextWorkersHashRates,
-        };
-      });
+      setState((prev) => ({
+        ...prev,
+        hashRate
+      }));
 
       // Save mining state for queue if callback provided
       if (onMiningStateUpdate) {
@@ -285,29 +271,15 @@ export function usePowMining() {
       });
       subscriptions.push(bestPowSub);
 
-      // Subscribe to progress (for hash rate)
-      // Capture the current notemine instance in the closure to avoid stale references
+      // Subscribe to progress (for hash rate) - simplified to match svelte demo
       const currentInstance = notemine;
-      const progressSub = currentInstance.progress$.subscribe((progressData) => {
-        const instanceHashRate = Number(currentInstance.totalHashRate) || 0; // KH/s
-        const workerId = progressData.workerId;
-        const workerHashRate = Number(progressData.hashRate ?? 0); // Worker hash rate in H/s
+      const progressSub = currentInstance.progress$.subscribe(() => {
+        const hashRate = currentInstance.totalHashRate;
 
-        setState((prev) => {
-          const nextWorkersHashRates = { ...prev.workersHashRates };
-          if (workerHashRate > 0) {
-            nextWorkersHashRates[workerId] = workerHashRate;
-          }
-
-          const summedHashRate = Object.values(nextWorkersHashRates).reduce((sum, rate) => sum + rate, 0) / 1000; // KH/s
-          const totalHashRate = instanceHashRate > 0 ? instanceHashRate : summedHashRate;
-
-          return {
-            ...prev,
-            hashRate: totalHashRate,
-            workersHashRates: nextWorkersHashRates,
-          };
-        });
+        setState((prev) => ({
+          ...prev,
+          hashRate
+        }));
 
         // Save mining state for queue if callback provided
         if (onMiningStateUpdate) {

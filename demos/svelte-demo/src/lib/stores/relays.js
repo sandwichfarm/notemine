@@ -21,20 +21,22 @@ export const activeRelays = derived(
 export const fetchNip66Relays = async () => {
   return new Promise( (resolve) => {
       const NIP66_RELAYS = [
-          'wss://relay.nostr.watch'
+          'wss://relay.nostr.watch',
+          'wss://relaypag.es',
+          'wss://monitorlizard.nostr1.com'
       ]
       const nip66pool = new SimplePool();
       const relays = new Set()
       let events = 0
       nip66pool.subscribeMany(
           NIP66_RELAYS,
-          [
+          // [
             {
               since: Math.floor(Date.now()/1000)-24*60*60,
               kinds: [30166],
               "#R": [ "pow" ]
-            }
-          ],
+            },
+          // ],
           {
               onevent(event) {
                   try {

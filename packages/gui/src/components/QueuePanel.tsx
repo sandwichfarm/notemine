@@ -123,16 +123,6 @@ export const QueuePanel: Component = () => {
     return content.slice(0, maxLength) + '...';
   };
 
-  const getTypeIcon = (type: QueueItem['type']) => {
-    switch (type) {
-      case 'note': return '📝';
-      case 'reply': return '💬';
-      case 'reaction': return '❤️';
-      case 'profile': return '👤';
-      default: return '📄';
-    }
-  };
-
   const getStatusColor = (status: QueueItem['status']) => {
     switch (status) {
       case 'completed': return 'text-green-500';
@@ -263,8 +253,29 @@ export const QueuePanel: Component = () => {
                       'bg-bg-secondary/50': !isActive(),
                     }}
                   >
-                    <div class="flex items-start gap-2 flex-1">
-                      <span class="text-lg">{getTypeIcon(item.type)}</span>
+                    <div class="flex items-start gap-3 flex-1">
+                      {/* Reorder arrows on the left */}
+                      <div class="flex flex-col items-center gap-0.5 pt-1">
+                        <Show when={index() > 0}>
+                          <button
+                            onClick={() => handleMoveUp(item, index())}
+                            class="text-3xl leading-none hover:text-accent transition-colors"
+                            title="Move up"
+                          >
+                            ▲
+                          </button>
+                        </Show>
+                        <Show when={index() < allItems.length - 1}>
+                          <button
+                            onClick={() => handleMoveDown(item, index())}
+                            class="text-3xl leading-none hover:text-accent transition-colors"
+                            title="Move down"
+                          >
+                            ▼
+                          </button>
+                        </Show>
+                      </div>
+
                       <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                           <span class="text-xs text-text-secondary">
@@ -290,31 +301,28 @@ export const QueuePanel: Component = () => {
                             Reaction: {item.metadata?.reactionContent}
                           </div>
                         </Show>
+                        {/* Additional metadata */}
+                        <div class="flex items-center gap-3 text-xs text-text-secondary mt-1.5">
+                          <span>
+                            Kind: <span class="font-mono text-text-primary">{item.kind}</span>
+                          </span>
+                          {/* Only show saved mining progress for inactive jobs */}
+                          <Show when={!isActive() && item.miningState?.bestPow}>
+                            <span>
+                              Best POW: <span class="font-mono text-accent">{item.miningState?.bestPow?.bestPow}</span>
+                            </span>
+                          </Show>
+                          <Show when={!isActive() && item.miningState?.bestPow?.nonce}>
+                            <span>
+                              Nonce: <span class="font-mono text-text-primary">{item.miningState?.bestPow?.nonce}</span>
+                            </span>
+                          </Show>
+                        </div>
                       </div>
                     </div>
 
-                    <div class="flex items-center gap-1 ml-2">
-                      {/* Up button */}
-                      <Show when={index() > 0}>
-                        <button
-                          onClick={() => handleMoveUp(item, index())}
-                          class="text-xs px-2 py-1 bg-bg-tertiary rounded hover:bg-accent/20 hover:text-accent transition-colors"
-                          title="Move up"
-                        >
-                          ▲
-                        </button>
-                      </Show>
-                      {/* Down button */}
-                      <Show when={index() < allItems.length - 1}>
-                        <button
-                          onClick={() => handleMoveDown(item, index())}
-                          class="text-xs px-2 py-1 bg-bg-tertiary rounded hover:bg-accent/20 hover:text-accent transition-colors"
-                          title="Move down"
-                        >
-                          ▼
-                        </button>
-                      </Show>
-                      {/* Delete button */}
+                    {/* Delete button on the right */}
+                    <div class="flex items-start ml-2 pt-1">
                       <button
                         onClick={() => handleDelete(item)}
                         class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
@@ -341,7 +349,6 @@ export const QueuePanel: Component = () => {
                 {(item) => (
                   <div class="p-2 bg-bg-secondary/30 rounded text-xs flex items-center justify-between">
                     <div class="flex items-center gap-2 flex-1">
-                      <span>{getTypeIcon(item.type)}</span>
                       <span class={getStatusColor(item.status)}>{item.status}</span>
                       <span class="text-text-secondary">
                         {formatContent(item.content, 60)}

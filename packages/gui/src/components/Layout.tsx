@@ -9,15 +9,18 @@ import { MiningStatsButton, MiningPanel } from './MiningStatsButton';
 import { useMining } from '../providers/MiningProvider';
 import { QueueButton } from './QueueButton';
 import { QueuePanel } from './QueuePanel';
+import { clearAnonKey } from '../lib/anon-storage';
 
 const Layout: Component<{ children?: any }> = (props) => {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useUser();
+  const { user, logout, authAnon, setAnonPersistence, regenerateAnonKey } = useUser();
   const { activeTooltip, tooltipContent, setActiveTooltip, setCloseAllPanels } = useTooltip();
   const { miningState } = useMining();
   const [showLoginModal, setShowLoginModal] = createSignal(false);
   const [showProfileModal, setShowProfileModal] = createSignal(false);
   const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | 'queue' | null>(null);
+  const [showPersistenceConfirm, setShowPersistenceConfirm] = createSignal(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = createSignal(false);
   const [headerHeight, setHeaderHeight] = createSignal(80); // Default fallback
 
   let headerRef: HTMLDivElement | undefined;
@@ -79,7 +82,14 @@ const Layout: Component<{ children?: any }> = (props) => {
                 title="Click to view profile"
               >
                 <Show when={user()?.isAnon}>
-                  <span class="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-500 rounded">anon</span>
+                  <Show
+                    when={user()?.isAnonPersisted}
+                    fallback={
+                      <span class="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-500 rounded">anon</span>
+                    }
+                  >
+                    <span class="text-xs px-2 py-0.5 bg-green-500/20 text-green-500 rounded">anon 💾</span>
+                  </Show>
                 </Show>
                 {user()?.pubkey.slice(0, 8)}...
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,9 +159,58 @@ const Layout: Component<{ children?: any }> = (props) => {
                 </div>
                 <div class="font-mono text-xs break-all">{user()?.pubkey}</div>
                 <div class="text-xs text-accent mt-1">
-                  {user()?.authMethod} {user()?.isAnon && '(ephemeral)'}
+                  {user()?.authMethod} {user()?.isAnon && (user()?.isAnonPersisted ? '(persisted)' : '(ephemeral)')}
                 </div>
               </div>
+
+              {/* Anon user controls */}
+              <Show when={user()?.isAnon}>
+                <div class="px-3 py-2 mb-2 space-y-2">
+                  {/* Persistence toggle */}
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm">Persist Key</span>
+                      <span class="text-xs text-text-secondary">💾</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const isPersisted = user()?.isAnonPersisted;
+                        if (isPersisted) {
+                          // Disabling: show confirmation
+                          setShowPersistenceConfirm(true);
+                        } else {
+                          // Enabling: just turn it on
+                          setAnonPersistence(true);
+                        }
+                      }}
+                      class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors"
+                      classList={{
+                        'bg-green-500': user()?.isAnonPersisted,
+                        'bg-gray-500': !user()?.isAnonPersisted,
+                      }}
+                    >
+                      <span
+                        class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform"
+                        classList={{
+                          'translate-x-6': user()?.isAnonPersisted,
+                          'translate-x-1': !user()?.isAnonPersisted,
+                        }}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Regenerate button (only when persisted) */}
+                  <Show when={user()?.isAnonPersisted}>
+                    <button
+                      onClick={() => setShowRegenerateConfirm(true)}
+                      class="w-full px-3 py-2 text-left text-sm bg-bg-secondary dark:bg-bg-tertiary hover:bg-accent/20 rounded transition-colors flex items-center justify-between"
+                    >
+                      <span>Regenerate Key</span>
+                      <span class="text-xs">🔄</span>
+                    </button>
+                  </Show>
+                </div>
+              </Show>
 
               <Show when={!user()?.isAnon}>
                 <button
@@ -207,6 +266,89 @@ const Layout: Component<{ children?: any }> = (props) => {
                 </button>
               </div>
               <Profile />
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Persistence Disable Confirmation */}
+      <Show when={showPersistenceConfirm()}>
+        <div
+          class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPersistenceConfirm(false)}
+        >
+          <div
+            class="card p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 class="text-lg font-bold mb-3">Disable Key Persistence?</h3>
+            <p class="text-sm text-text-secondary mb-4">
+              Your anonymous key will no longer be saved. What would you like to do?
+            </p>
+            <div class="space-y-2">
+              <button
+                onClick={() => {
+                  // Keep current key, just clear storage
+                  clearAnonKey();
+                  setAnonPersistence(false);
+                  setShowPersistenceConfirm(false);
+                }}
+                class="w-full px-4 py-2 bg-accent hover:bg-accent/80 rounded transition-colors text-sm font-medium"
+              >
+                Keep Current Key (Ephemeral)
+              </button>
+              <button
+                onClick={() => {
+                  // Generate new key
+                  clearAnonKey();
+                  authAnon(undefined, false);
+                  setShowPersistenceConfirm(false);
+                }}
+                class="w-full px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary rounded transition-colors text-sm"
+              >
+                Generate New Key
+              </button>
+              <button
+                onClick={() => setShowPersistenceConfirm(false)}
+                class="w-full px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary rounded transition-colors text-sm text-text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Regenerate Key Confirmation */}
+      <Show when={showRegenerateConfirm()}>
+        <div
+          class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowRegenerateConfirm(false)}
+        >
+          <div
+            class="card p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 class="text-lg font-bold mb-3">Regenerate Anonymous Key?</h3>
+            <p class="text-sm text-text-secondary mb-4">
+              This will generate a new anonymous key and save it. Your old key will be permanently lost.
+            </p>
+            <div class="space-y-2">
+              <button
+                onClick={() => {
+                  authAnon(undefined, true);
+                  setShowRegenerateConfirm(false);
+                }}
+                class="w-full px-4 py-2 bg-red-500 hover:bg-red-600 rounded transition-colors text-sm font-medium"
+              >
+                Regenerate Key
+              </button>
+              <button
+                onClick={() => setShowRegenerateConfirm(false)}
+                class="w-full px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary rounded transition-colors text-sm text-text-secondary"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

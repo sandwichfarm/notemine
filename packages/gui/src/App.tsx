@@ -24,7 +24,7 @@ import { debug } from './lib/debug';
 
 // App initialization component
 const AppInit: ParentComponent = (props) => {
-  const { authAnon } = useUser();
+  const { authAnon, loadPersistedAnonKey } = useUser();
   const [relaysReady, setRelaysReady] = createSignal(false);
 
   onMount(async () => {
@@ -62,8 +62,15 @@ const AppInit: ParentComponent = (props) => {
       console.error('[App] Failed to fetch NIP-66 relays:', error);
     }
 
-    // Initialize with anonymous user
-    authAnon();
+    // Initialize with anonymous user - check for persisted key first
+    const persistedKey = loadPersistedAnonKey();
+    if (persistedKey) {
+      debug('[App] Loading persisted anonymous key');
+      authAnon(persistedKey, true);
+    } else {
+      debug('[App] Creating new ephemeral anonymous key');
+      authAnon();
+    }
 
     // Signal that relays are ready and children can mount
     setRelaysReady(true);

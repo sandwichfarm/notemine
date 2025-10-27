@@ -9,6 +9,7 @@ import type { ISigner } from 'applesauce-signers';
 import { relayPool } from '../lib/applesauce';
 import { Observable } from 'rxjs';
 import { debug } from '../lib/debug';
+import { saveAnonKey, loadAnonKey, clearAnonKey, hasPersistedAnonKey } from '../lib/anon-storage';
 
 export type AuthMethod = 'anon' | 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
 
@@ -19,16 +20,21 @@ export interface User {
   signer?: ISigner;
   // For anon only - direct access to secret key
   secret?: Uint8Array;
+  // For anon only - whether key is persisted
+  isAnonPersisted?: boolean;
 }
 
 interface UserContextType {
   user: () => User | null;
-  authAnon: () => void;
+  authAnon: (secret?: Uint8Array, persist?: boolean) => void;
   authExtension: () => Promise<void>;
   authPrivateKey: (keyInput: string) => Promise<void>;
   authBunker: (bunkerUri: string) => Promise<void>;
   authNostrConnect: (connectUri: string) => Promise<void>;
   logout: () => void;
+  setAnonPersistence: (persist: boolean, onConfirm?: (action: 'keep' | 'regenerate') => void) => void;
+  regenerateAnonKey: (onConfirm?: () => void) => void;
+  loadPersistedAnonKey: () => Uint8Array | null;
 }
 
 const UserContext = createContext<UserContextType>();
@@ -59,14 +65,21 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     setupNostrConnectMethods();
   });
 
-  const authAnon = () => {
-    const secret = generateSecretKey();
-    const pubkey = getPublicKey(secret);
+  const authAnon = (secret?: Uint8Array, persist: boolean = false) => {
+    const finalSecret = secret || generateSecretKey();
+    const pubkey = getPublicKey(finalSecret);
+
+    // Save to localStorage if persist is true
+    if (persist) {
+      saveAnonKey(finalSecret);
+    }
+
     setUser({
       isAnon: true,
       pubkey,
-      secret,
+      secret: finalSecret,
       authMethod: 'anon',
+      isAnonPersisted: persist,
     });
   };
 
@@ -174,6 +187,98 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     setUser(null);
   };
 
+  /**
+   * Toggle anonymous key persistence
+   * @param persist - Whether to persist the key
+   * @param onConfirm - Callback for when disabling persistence (action: 'keep' or 'regenerate')
+   */
+  const setAnonPersistence = (persist: boolean, onConfirm?: (action: 'keep' | 'regenerate') => void) => {
+    const currentUser = user();
+    if (!currentUser || !currentUser.isAnon || !currentUser.secret) {
+      return;
+    }
+
+    if (persist) {
+      // Enable persistence: save current key
+      saveAnonKey(currentUser.secret);
+      setUser({
+        ...currentUser,
+        isAnonPersisted: true,
+      });
+    } else {
+      // Disable persistence: ask user what to do via callback
+      if (onConfirm) {
+        onConfirm('keep'); // Caller will handle the confirmation dialog
+      } else {
+        // No callback, just clear storage and keep current key
+        clearAnonKey();
+        setUser({
+          ...currentUser,
+          isAnonPersisted: false,
+        });
+      }
+    }
+  };
+
+  /**
+   * Handle confirmation result when disabling persistence
+   * @param action - 'keep' current key or 'regenerate' new key
+   */
+  const handlePersistenceDisableConfirm = (action: 'keep' | 'regenerate') => {
+    const currentUser = user();
+    if (!currentUser || !currentUser.isAnon) return;
+
+    clearAnonKey();
+
+    if (action === 'regenerate') {
+      // Generate new ephemeral key
+      authAnon(undefined, false);
+    } else {
+      // Keep current key, just mark as not persisted
+      setUser({
+        ...currentUser,
+        isAnonPersisted: false,
+      });
+    }
+  };
+
+  /**
+   * Regenerate anonymous key (keeps persistence setting)
+   * @param onConfirm - Confirmation callback before regenerating
+   */
+  const regenerateAnonKey = (onConfirm?: () => void) => {
+    const currentUser = user();
+    if (!currentUser || !currentUser.isAnon) return;
+
+    if (onConfirm) {
+      // Caller will handle confirmation dialog
+      onConfirm();
+    } else {
+      // No confirmation needed, regenerate immediately
+      const wasPersisted = currentUser.isAnonPersisted;
+      authAnon(undefined, wasPersisted);
+    }
+  };
+
+  /**
+   * Handle confirmation result for key regeneration
+   */
+  const handleRegenerateConfirm = () => {
+    const currentUser = user();
+    if (!currentUser || !currentUser.isAnon) return;
+
+    const wasPersisted = currentUser.isAnonPersisted;
+    authAnon(undefined, wasPersisted);
+  };
+
+  /**
+   * Load persisted anonymous key from localStorage
+   * @returns Uint8Array secret key or null if not found
+   */
+  const loadPersistedAnonKey = (): Uint8Array | null => {
+    return loadAnonKey();
+  };
+
   return (
     <UserContext.Provider
       value={{
@@ -184,6 +289,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         authBunker,
         authNostrConnect,
         logout,
+        setAnonPersistence,
+        regenerateAnonKey,
+        loadPersistedAnonKey,
       }}
     >
       {props.children}

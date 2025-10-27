@@ -30,7 +30,9 @@ interface UserContextType {
   authExtension: () => Promise<void>;
   authPrivateKey: (keyInput: string) => Promise<void>;
   authBunker: (bunkerUri: string) => Promise<void>;
-  authNostrConnect: (connectUri: string) => Promise<void>;
+  authNostrConnect: (signer: ISigner, pubkey: string) => Promise<void>;
+  restoreNostrConnectSession: () => Promise<void>;
+  fetchUserData: (pubkey: string) => Promise<void>;
   logout: () => void;
   setAnonPersistence: (persist: boolean, onConfirm?: (action: 'keep' | 'regenerate') => void) => void;
   regenerateAnonKey: (onConfirm?: () => void) => void;
@@ -143,33 +145,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     }
   };
 
-  const authNostrConnect = async (connectUri: string) => {
+  const authNostrConnect = async (signer: ISigner, pubkey: string) => {
     try {
-      debug('[Auth] Parsing nostrconnect URI:', connectUri);
-
-      // Parse the nostrconnect:// URI
-      const url = new URL(connectUri);
-      const clientPubkey = url.hostname || url.pathname.replace('//', '');
-      const secret = url.searchParams.get('secret');
-      const relays = url.searchParams.getAll('relay');
-
-      if (!secret || !relays.length) {
-        throw new Error('Invalid nostrconnect URI: missing secret or relays');
-      }
-
-      debug('[Auth] Creating NostrConnect signer with relays:', relays);
-
-      // Create signer with the provided client pubkey and secret
-      const signer = new NostrConnectSigner({
-        relays,
-        remote: clientPubkey,
-        secret,
-      });
-
-      // Connect and get pubkey
-      const pubkey = await signer.getPublicKey();
-
-      debug('[Auth] NostrConnect connected, pubkey:', pubkey);
+      debug('[Auth] NostrConnect authentication with pubkey:', pubkey);
 
       setUser({
         isAnon: false,
@@ -183,7 +161,124 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     }
   };
 
-  const logout = () => {
+  const restoreNostrConnectSession = async () => {
+    try {
+      const { loadNostrConnectSession } = await import('../lib/nostrconnect-storage');
+      const session = loadNostrConnectSession();
+
+      if (!session) {
+        debug('[Auth] No persisted NostrConnect session found');
+        return;
+      }
+
+      debug('[Auth] Restoring NostrConnect session');
+
+      // Convert hex client secret back to Uint8Array
+      const clientSecret = new Uint8Array(session.clientSecret.length / 2);
+      for (let i = 0; i < session.clientSecret.length; i += 2) {
+        clientSecret[i / 2] = parseInt(session.clientSecret.substring(i, i + 2), 16);
+      }
+
+      // Create PrivateKeySigner from the stored client secret
+      const clientSigner = new PrivateKeySigner(clientSecret);
+
+      // Create NostrConnectSigner with the restored session
+      const signer = new NostrConnectSigner({
+        relays: session.relays,
+        remote: session.remotePubkey,
+        secret: session.secret,
+        signer: clientSigner,
+        pubkey: session.userPubkey,
+      });
+
+      // Open connection
+      await signer.open();
+
+      debug('[Auth] NostrConnect session restored, pubkey:', session.userPubkey);
+
+      setUser({
+        isAnon: false,
+        pubkey: session.userPubkey,
+        signer,
+        authMethod: 'nostrconnect',
+      });
+    } catch (error) {
+      console.error('[Auth] Failed to restore NostrConnect session:', error);
+      // Clear invalid session
+      const { clearNostrConnectSession } = await import('../lib/nostrconnect-storage');
+      clearNostrConnectSession();
+    }
+  };
+
+  // Fetch user profile data (kind 0, 3, 10002) after authentication
+  const fetchUserData = async (pubkey: string) => {
+    try {
+      debug('[Auth] Fetching user data for:', pubkey);
+
+      // Import the necessary functions
+      const { relayPool, eventStore, PROFILE_RELAYS } = await import('../lib/applesauce');
+
+      // Ensure PROFILE_RELAYS are connected
+      debug('[Auth] Connecting to profile relays:', PROFILE_RELAYS);
+      PROFILE_RELAYS.forEach(url => {
+        relayPool.relay(url);
+      });
+
+      // Fetch all three kinds in a single subscription
+      const filter = {
+        kinds: [0, 3, 10002],
+        authors: [pubkey],
+      };
+
+      debug('[Auth] Fetching kind 0, 3, 10002 from profile relays');
+
+      const subscription = relayPool.req(PROFILE_RELAYS, filter).subscribe({
+        next: (response) => {
+          if (response !== 'EOSE') {
+            if (response.kind === 0) {
+              eventStore.add(response);
+              debug('[Auth] Stored kind 0 event');
+            } else if (response.kind === 3) {
+              eventStore.add(response);
+              debug('[Auth] Stored kind 3 event');
+            } else if (response.kind === 10002) {
+              eventStore.add(response);
+              debug('[Auth] Stored kind 10002 event');
+            }
+          }
+        },
+        error: (err) => {
+          console.error('[Auth] Subscription error:', err);
+        },
+        complete: () => {
+          debug('[Auth] Profile data fetch complete');
+        },
+      });
+
+      // Clean up subscription after timeout
+      setTimeout(() => {
+        subscription.unsubscribe();
+      }, 5000);
+    } catch (error) {
+      console.error('[Auth] Failed to fetch user data:', error);
+      // Non-fatal error, continue with authentication
+    }
+  };
+
+  const logout = async () => {
+    const currentUser = user();
+
+    // Clear nostrconnect session if applicable
+    if (currentUser?.authMethod === 'nostrconnect') {
+      const { clearNostrConnectSession } = await import('../lib/nostrconnect-storage');
+      clearNostrConnectSession();
+
+      // Close the signer connection
+      if (currentUser.signer && 'close' in currentUser.signer) {
+        (currentUser.signer as NostrConnectSigner).close();
+      }
+    }
+
     setUser(null);
   };
 
@@ -292,6 +387,8 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         authPrivateKey,
         authBunker,
         authNostrConnect,
+        restoreNostrConnectSession,
+        fetchUserData,
         logout,
         setAnonPersistence,
         regenerateAnonKey,

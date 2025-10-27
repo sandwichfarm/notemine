@@ -1,4 +1,4 @@
-import { Component, ParentComponent, onMount, createSignal, Show } from 'solid-js';
+import { Component, ParentComponent, onMount, createSignal, createEffect, Show } from 'solid-js';
 import { Router, Route } from '@solidjs/router';
 import { EventStoreProvider } from './providers/EventStoreProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
@@ -24,7 +24,7 @@ import { debug } from './lib/debug';
 
 // App initialization component
 const AppInit: ParentComponent = (props) => {
-  const { authAnon, loadPersistedAnonKey } = useUser();
+  const { user, authAnon, loadPersistedAnonKey, restoreNostrConnectSession, fetchUserData } = useUser();
   const [relaysReady, setRelaysReady] = createSignal(false);
 
   onMount(async () => {
@@ -62,18 +62,39 @@ const AppInit: ParentComponent = (props) => {
       console.error('[App] Failed to fetch NIP-66 relays:', error);
     }
 
-    // Initialize with anonymous user - check for persisted key first
-    const persistedKey = loadPersistedAnonKey();
-    if (persistedKey) {
-      debug('[App] Loading persisted anonymous key');
-      authAnon(persistedKey, true);
+    // Try to restore NostrConnect session first
+    const { hasPersistedNostrConnectSession } = await import('./lib/nostrconnect-storage');
+    if (hasPersistedNostrConnectSession()) {
+      debug('[App] Restoring NostrConnect session');
+      await restoreNostrConnectSession();
     } else {
-      debug('[App] Creating new ephemeral anonymous key');
-      authAnon();
+      // Initialize with anonymous user - check for persisted key first
+      const persistedKey = loadPersistedAnonKey();
+      if (persistedKey) {
+        debug('[App] Loading persisted anonymous key');
+        authAnon(persistedKey, true);
+      } else {
+        debug('[App] Creating new ephemeral anonymous key');
+        authAnon();
+      }
     }
 
     // Signal that relays are ready and children can mount
     setRelaysReady(true);
+  });
+
+  // Fetch user profile data once when a non-anonymous user is first set
+  let lastFetchedPubkey: string | null = null;
+  createEffect(() => {
+    const currentUser = user();
+    if (currentUser && !currentUser.isAnon && relaysReady()) {
+      // Only fetch if we haven't fetched for this pubkey yet
+      if (lastFetchedPubkey !== currentUser.pubkey) {
+        debug('[App] Fetching user profile data on session load');
+        fetchUserData(currentUser.pubkey);
+        lastFetchedPubkey = currentUser.pubkey;
+      }
+    }
   });
 
   return (

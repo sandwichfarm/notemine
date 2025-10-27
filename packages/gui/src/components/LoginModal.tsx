@@ -1,7 +1,9 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createSignal, Show, onCleanup } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
 import { QRCodeSVG } from 'solid-qr-code';
 import { NostrConnectSigner } from 'applesauce-signers/signers';
+import { saveNostrConnectSession } from '../lib/nostrconnect-storage';
+import { debug } from '../lib/debug';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -11,7 +13,7 @@ interface LoginModalProps {
 type AuthTab = 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
 
 export const LoginModal: Component<LoginModalProps> = (props) => {
-  const { authExtension, authPrivateKey, authBunker } = useUser();
+  const { authExtension, authPrivateKey, authBunker, authNostrConnect } = useUser();
 
   const [activeTab, setActiveTab] = createSignal<AuthTab>('extension');
   const [privateKeyInput, setPrivateKeyInput] = createSignal('');
@@ -19,10 +21,16 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [nostrConnectUri, setNostrConnectUri] = createSignal<string>('');
+  const [nostrConnectSigner, setNostrConnectSigner] = createSignal<NostrConnectSigner | null>(null);
+  const [nostrConnectStatus, setNostrConnectStatus] = createSignal<'waiting' | 'connected' | 'success'>('waiting');
 
   // Generate nostrconnect URI when tab is activated
-  const generateNostrConnectUri = () => {
+  const generateNostrConnectUri = async () => {
     try {
+      // Reset state
+      setNostrConnectStatus('waiting');
+      setError(null);
+
       // Create a new signer for this connection
       const signer = new NostrConnectSigner({
         relays: [
@@ -32,6 +40,9 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
         ],
       });
 
+      // Store the signer instance
+      setNostrConnectSigner(signer);
+
       // Get the nostrconnect URI with metadata
       const uri = signer.getNostrConnectURI({
         name: 'notemine.io',
@@ -40,9 +51,58 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
       });
 
       setNostrConnectUri(uri);
+
+      // Wait for remote signer to connect
+      debug('[LoginModal] Waiting for remote signer to connect...');
+
+      // Call waitForSigner in the background
+      waitForRemoteConnection(signer);
     } catch (err) {
       console.error('[LoginModal] Failed to generate nostrconnect URI:', err);
       setError('Failed to generate connection URI');
+    }
+  };
+
+  // Wait for remote signer to connect and complete authentication
+  const waitForRemoteConnection = async (signer: NostrConnectSigner) => {
+    try {
+      // Wait for the remote signer to connect
+      await signer.waitForSigner();
+
+      debug('[LoginModal] Remote signer connected!');
+      setNostrConnectStatus('connected');
+
+      // Get the user's pubkey
+      const pubkey = await signer.getPublicKey();
+      debug('[LoginModal] Got pubkey from remote signer:', pubkey);
+
+      // Save connection details to localStorage
+      const session = {
+        clientSecret: Array.from(signer.signer.key)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join(''),
+        remotePubkey: signer.remote!,
+        userPubkey: pubkey,
+        relays: signer.relays,
+        secret: signer.secret,
+      };
+      saveNostrConnectSession(session);
+
+      // Complete authentication
+      await authNostrConnect(signer, pubkey);
+
+      setNostrConnectStatus('success');
+
+      // Close modal after a brief delay to show success message
+      setTimeout(() => {
+        props.onClose();
+      }, 1500);
+    } catch (err: any) {
+      console.error('[LoginModal] Failed to connect:', err);
+      if (err.message !== 'Aborted') {
+        setError(err.message || 'Failed to connect to remote signer');
+      }
+      setNostrConnectStatus('waiting');
     }
   };
 
@@ -100,11 +160,28 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
     setActiveTab(tab);
     setError(null);
 
+    // Cleanup previous nostrconnect signer if switching away
+    if (tab !== 'nostrconnect') {
+      const signer = nostrConnectSigner();
+      if (signer) {
+        signer.close();
+        setNostrConnectSigner(null);
+      }
+    }
+
     // Generate nostrconnect URI when switching to that tab
     if (tab === 'nostrconnect' && !nostrConnectUri()) {
       generateNostrConnectUri();
     }
   };
+
+  // Cleanup on unmount
+  onCleanup(() => {
+    const signer = nostrConnectSigner();
+    if (signer) {
+      signer.close();
+    }
+  });
 
   return (
     <Show when={props.isOpen}>
@@ -327,15 +404,38 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
                       </div>
                     </div>
 
-                    <p class="text-sm text-text-secondary text-center">
-                      Waiting for connection from your signer app...
-                    </p>
+                    {/* Connection Status */}
+                    <div class="text-center">
+                      <Show when={nostrConnectStatus() === 'waiting'}>
+                        <div class="flex items-center justify-center space-x-2 text-text-secondary">
+                          <div class="animate-spin h-4 w-4 border-2 border-accent border-t-transparent rounded-full"></div>
+                          <p class="text-sm">Waiting for connection from your signer app...</p>
+                        </div>
+                      </Show>
+                      <Show when={nostrConnectStatus() === 'connected'}>
+                        <div class="flex items-center justify-center space-x-2 text-accent">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <p class="text-sm font-medium">Connected! Completing authentication...</p>
+                        </div>
+                      </Show>
+                      <Show when={nostrConnectStatus() === 'success'}>
+                        <div class="flex items-center justify-center space-x-2 text-green-500">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <p class="text-sm font-medium">Successfully authenticated!</p>
+                        </div>
+                      </Show>
+                    </div>
                   </div>
                 </Show>
 
                 <button
                   onClick={generateNostrConnectUri}
                   class="btn-secondary w-full"
+                  disabled={nostrConnectStatus() === 'connected' || nostrConnectStatus() === 'success'}
                 >
                   Generate New QR Code
                 </button>

@@ -13,6 +13,7 @@ export interface ProfileMetadata {
   nip05?: string;
   lud16?: string;
   website?: string;
+  bot?: boolean;
 }
 
 export interface Profile {

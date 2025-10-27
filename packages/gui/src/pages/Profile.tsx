@@ -1,82 +1,56 @@
-import { Component, createSignal, Show, onMount } from 'solid-js';
+import { Component, createSignal, Show, createEffect } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
-import { useMining } from '../providers/MiningProvider';
-import { relayPool, getActiveRelays, getUserOutboxRelays } from '../lib/applesauce';
-import { finalizeEvent } from 'nostr-tools/pure';
-import type { NostrEvent } from 'nostr-tools/core';
+import { useProfile } from '../hooks/useProfile';
+import { useQueue } from '../providers/QueueProvider';
 import { nip19 } from 'nostr-tools';
 import { debug } from '../lib/debug';
 
 interface ProfileMetadata {
   name?: string;
+  display_name?: string;
   about?: string;
   picture?: string;
+  banner?: string;
+  website?: string;
   nip05?: string;
+  lud16?: string;
+  bot?: boolean;
 }
 
 const DEFAULT_DIFFICULTY = 20;
 
 const Profile: Component = () => {
   const { user } = useUser();
-  const { miningState, startMining } = useMining();
+  const { queueState, addToQueue, removeFromQueue } = useQueue();
 
   const [isEditing, setIsEditing] = createSignal(false);
-  const [profileData, setProfileData] = createSignal<ProfileMetadata>({});
   const [editData, setEditData] = createSignal<ProfileMetadata>({});
   const [difficulty, setDifficulty] = createSignal(DEFAULT_DIFFICULTY);
-  const [loading, setLoading] = createSignal(true);
-  const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [success, setSuccess] = createSignal(false);
+  const [profileQueueItemId, setProfileQueueItemId] = createSignal<string | null>(null);
 
-  onMount(async () => {
-    const currentUser = user();
-    if (!currentUser) {
-      setLoading(false);
-      return;
-    }
+  // Use the useProfile hook to get profile data from EventStore
+  const profile = useProfile(() => user()?.pubkey);
 
-    try {
-      // Fetch kind 0 metadata for current user
-      const relays = getActiveRelays();
-      debug('[Profile] Fetching metadata from relays:', relays);
+  // Check if profile update is in queue or being processed
+  const profileInQueue = () => {
+    const itemId = profileQueueItemId();
+    if (!itemId) return false;
+    const item = queueState().items.find(i => i.id === itemId);
+    return item && (item.status === 'queued' || queueState().activeItemId === itemId);
+  };
 
-      const filter = {
-        kinds: [0],
-        authors: [currentUser.pubkey],
-        limit: 1,
-      };
-
-      // Subscribe to get profile metadata
-      const subscription = relayPool.req(relays, filter).subscribe({
-        next: (response) => {
-          if (response !== 'EOSE' && response.kind === 0) {
-            try {
-              const metadata: ProfileMetadata = JSON.parse(response.content);
-              setProfileData(metadata);
-              setEditData(metadata);
-            } catch (err) {
-              console.error('[Profile] Failed to parse metadata:', err);
-            }
-          }
-        },
-        complete: () => {
-          setLoading(false);
-        },
-      });
-
-      setTimeout(() => {
-        subscription.unsubscribe();
-        setLoading(false);
-      }, 3000);
-    } catch (err) {
-      console.error('[Profile] Error fetching metadata:', err);
-      setError(String(err));
-      setLoading(false);
+  // Initialize editData when profile metadata first loads
+  createEffect(() => {
+    const metadata = profile().metadata;
+    if (metadata && !editData().name && !editData().about) {
+      // Only set if editData is empty (initial load)
+      setEditData(metadata);
     }
   });
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const currentUser = user();
     if (!currentUser) {
       setError('No user authenticated');
@@ -85,16 +59,27 @@ const Profile: Component = () => {
 
     setError(null);
     setSuccess(false);
-    setSaving(true);
 
     try {
-      debug('[Profile] Mining kind 0 event with POW...');
+      debug('[Profile] Adding profile update to queue');
 
       // Create kind 0 event content
       const content = JSON.stringify(editData());
 
-      // Mine with POW
-      const minedEvent = await startMining({
+      // Check if there's already a profile update in queue
+      const existingProfileItem = queueState().items.find(
+        item => item.type === 'profile' && (item.status === 'queued' || queueState().activeItemId === item.id)
+      );
+
+      if (existingProfileItem) {
+        // Remove old profile update and add new one
+        debug('[Profile] Replacing existing profile update in queue');
+        removeFromQueue(existingProfileItem.id);
+      }
+
+      // Add to queue
+      const itemId = addToQueue({
+        type: 'profile',
         content,
         pubkey: currentUser.pubkey,
         difficulty: difficulty(),
@@ -102,52 +87,20 @@ const Profile: Component = () => {
         kind: 0,
       });
 
-      if (!minedEvent) {
-        throw new Error('Mining failed: no event returned');
-      }
-
-      debug('[Profile] POW mining complete, publishing...');
-
-      // Sign the event
-      let signedEvent: NostrEvent;
-      if (currentUser.isAnon && currentUser.secret) {
-        signedEvent = finalizeEvent(minedEvent as any, currentUser.secret);
-      } else if (currentUser.signer) {
-        signedEvent = await currentUser.signer.signEvent(minedEvent as any);
-      } else if (window.nostr) {
-        signedEvent = await window.nostr.signEvent(minedEvent);
-      } else {
-        throw new Error('Cannot sign event: no signing method available');
-      }
-
-      // Publish to relays (using NIP-65 outbox relays)
-      const activeRelays = await getUserOutboxRelays(currentUser.pubkey);
-      debug('[Profile] Publishing to user outbox relays:', activeRelays);
-
-      const promises = activeRelays.map(async (relayUrl) => {
-        const relay = relayPool.relay(relayUrl);
-        return relay.publish(signedEvent);
-      });
-
-      await Promise.allSettled(promises);
-
-      // Success!
-      setProfileData(editData());
+      setProfileQueueItemId(itemId);
       setIsEditing(false);
       setSuccess(true);
-      debug('[Profile] Profile updated successfully');
+      debug('[Profile] Profile update added to queue:', itemId);
 
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      console.error('[Profile] Error saving profile:', err);
+      console.error('[Profile] Error adding profile to queue:', err);
       setError(String(err));
-    } finally {
-      setSaving(false);
     }
   };
 
   const handleCancel = () => {
-    setEditData(profileData());
+    setEditData(profile().metadata || {});
     setIsEditing(false);
     setError(null);
   };
@@ -189,7 +142,7 @@ const Profile: Component = () => {
                 {npub()}
               </div>
             </div>
-            <Show when={!isEditing() && !loading()}>
+            <Show when={!isEditing() && !profile().loading}>
               <button onClick={() => setIsEditing(true)} class="btn-primary">
                 Edit Profile
               </button>
@@ -197,7 +150,7 @@ const Profile: Component = () => {
           </div>
 
           {/* Loading */}
-          <Show when={loading()}>
+          <Show when={profile().loading}>
             <div class="text-center py-8">
               <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-accent border-t-transparent mb-4"></div>
               <p class="text-text-secondary">Loading profile...</p>
@@ -205,12 +158,24 @@ const Profile: Component = () => {
           </Show>
 
           {/* View Mode */}
-          <Show when={!isEditing() && !loading()}>
+          <Show when={!isEditing() && !profile().loading}>
             <div class="space-y-4">
-              <Show when={profileData().picture}>
+              {/* Banner */}
+              <Show when={profile().metadata?.banner}>
+                <div class="w-full h-32 rounded-lg overflow-hidden">
+                  <img
+                    src={profile().metadata!.banner}
+                    alt="Banner"
+                    class="w-full h-full object-cover"
+                  />
+                </div>
+              </Show>
+
+              {/* Profile Picture */}
+              <Show when={profile().metadata?.picture}>
                 <div class="flex justify-center">
                   <img
-                    src={profileData().picture}
+                    src={profile().metadata!.picture}
                     alt="Profile"
                     class="w-24 h-24 rounded-full object-cover border-2 border-accent"
                   />
@@ -220,23 +185,59 @@ const Profile: Component = () => {
               <div>
                 <label class="block text-sm font-medium text-text-secondary mb-1">Name</label>
                 <div class="text-text-primary">
-                  {profileData().name || <span class="text-text-tertiary italic">Not set</span>}
+                  {profile().metadata?.name || <span class="text-text-tertiary italic">Not set</span>}
                 </div>
               </div>
+
+              <Show when={profile().metadata?.display_name}>
+                <div>
+                  <label class="block text-sm font-medium text-text-secondary mb-1">Display Name</label>
+                  <div class="text-text-primary">
+                    {profile().metadata!.display_name}
+                  </div>
+                </div>
+              </Show>
 
               <div>
                 <label class="block text-sm font-medium text-text-secondary mb-1">About</label>
                 <div class="text-text-primary whitespace-pre-wrap">
-                  {profileData().about || <span class="text-text-tertiary italic">Not set</span>}
+                  {profile().metadata?.about || <span class="text-text-tertiary italic">Not set</span>}
                 </div>
               </div>
+
+              <Show when={profile().metadata?.website}>
+                <div>
+                  <label class="block text-sm font-medium text-text-secondary mb-1">Website</label>
+                  <a href={profile().metadata!.website} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">
+                    {profile().metadata!.website}
+                  </a>
+                </div>
+              </Show>
 
               <div>
                 <label class="block text-sm font-medium text-text-secondary mb-1">NIP-05</label>
                 <div class="text-text-primary font-mono text-sm">
-                  {profileData().nip05 || <span class="text-text-tertiary italic">Not set</span>}
+                  {profile().metadata?.nip05 || <span class="text-text-tertiary italic">Not set</span>}
                 </div>
               </div>
+
+              <Show when={profile().metadata?.lud16}>
+                <div>
+                  <label class="block text-sm font-medium text-text-secondary mb-1">Lightning Address</label>
+                  <div class="text-text-primary font-mono text-sm">
+                    {profile().metadata!.lud16}
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={profile().metadata?.bot}>
+                <div class="p-3 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg">
+                  <div class="flex items-center space-x-2">
+                    <span class="text-text-secondary">🤖</span>
+                    <span class="text-sm text-text-secondary">This is a bot account</span>
+                  </div>
+                </div>
+              </Show>
             </div>
           </Show>
 
@@ -244,14 +245,27 @@ const Profile: Component = () => {
           <Show when={isEditing()}>
             <div class="space-y-4">
               <div>
+                <label class="block text-sm font-medium mb-2">Banner Image URL</label>
+                <input
+                  type="url"
+                  value={editData().banner || ''}
+                  onInput={(e) => setEditData({ ...editData(), banner: e.currentTarget.value })}
+                  placeholder="https://example.com/banner.jpg"
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
+                />
+                <p class="text-xs text-text-secondary mt-1">Wide banner image (~1024x768)</p>
+              </div>
+
+              <div>
                 <label class="block text-sm font-medium mb-2">Profile Picture URL</label>
                 <input
                   type="url"
                   value={editData().picture || ''}
                   onInput={(e) => setEditData({ ...editData(), picture: e.currentTarget.value })}
                   placeholder="https://example.com/avatar.jpg"
-                  class="w-full px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                  disabled={miningState().mining || saving()}
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
                 />
               </div>
 
@@ -262,9 +276,23 @@ const Profile: Component = () => {
                   value={editData().name || ''}
                   onInput={(e) => setEditData({ ...editData(), name: e.currentTarget.value })}
                   placeholder="Your name"
-                  class="w-full px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                  disabled={miningState().mining || saving()}
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
                 />
+                <p class="text-xs text-text-secondary mt-1">Short unique identifier</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">Display Name</label>
+                <input
+                  type="text"
+                  value={editData().display_name || ''}
+                  onInput={(e) => setEditData({ ...editData(), display_name: e.currentTarget.value })}
+                  placeholder="Your display name"
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
+                />
+                <p class="text-xs text-text-secondary mt-1">Full name with richer characters</p>
               </div>
 
               <div>
@@ -274,8 +302,20 @@ const Profile: Component = () => {
                   onInput={(e) => setEditData({ ...editData(), about: e.currentTarget.value })}
                   placeholder="Tell us about yourself..."
                   rows={4}
-                  class="w-full px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent resize-none"
-                  disabled={miningState().mining || saving()}
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent resize-none placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">Website</label>
+                <input
+                  type="url"
+                  value={editData().website || ''}
+                  onInput={(e) => setEditData({ ...editData(), website: e.currentTarget.value })}
+                  placeholder="https://example.com"
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
                 />
               </div>
 
@@ -286,9 +326,35 @@ const Profile: Component = () => {
                   value={editData().nip05 || ''}
                   onInput={(e) => setEditData({ ...editData(), nip05: e.currentTarget.value })}
                   placeholder="name@example.com"
-                  class="w-full px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                  disabled={miningState().mining || saving()}
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
                 />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">Lightning Address (LUD-16)</label>
+                <input
+                  type="text"
+                  value={editData().lud16 || ''}
+                  onInput={(e) => setEditData({ ...editData(), lud16: e.currentTarget.value })}
+                  placeholder="you@getalby.com"
+                  class="w-full px-3 py-2 bg-neutral-800 text-white border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-neutral-400"
+                  disabled={profileInQueue()}
+                />
+              </div>
+
+              <div>
+                <label class="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editData().bot || false}
+                    onChange={(e) => setEditData({ ...editData(), bot: e.currentTarget.checked })}
+                    class="w-4 h-4 text-accent bg-neutral-800 border-neutral-700 rounded focus:ring-2 focus:ring-accent"
+                    disabled={profileInQueue()}
+                  />
+                  <span class="text-sm font-medium">Bot Account</span>
+                </label>
+                <p class="text-xs text-text-secondary mt-1">Check if this account is automated</p>
               </div>
 
               {/* Difficulty slider */}
@@ -304,22 +370,18 @@ const Profile: Component = () => {
                   value={difficulty()}
                   onInput={(e) => setDifficulty(Number(e.currentTarget.value))}
                   class="w-full"
-                  disabled={miningState().mining || saving()}
+                  disabled={profileInQueue()}
                 />
                 <div class="text-xs text-text-secondary mt-1">
                   Profile updates require POW to prevent spam
                 </div>
               </div>
 
-              {/* Mining stats */}
-              <Show when={miningState().mining}>
-                <div class="p-3 bg-bg-primary dark:bg-bg-tertiary border border-border rounded-lg">
-                  <div class="text-sm text-text-primary space-y-1">
-                    <div>⛏️ Mining profile update with POW...</div>
-                    <div>Hash rate: {miningState().hashRate.toFixed(2)} KH/s</div>
-                    <Show when={miningState().overallBestPow !== null}>
-                      <div>Best POW: {miningState().overallBestPow}</div>
-                    </Show>
+              {/* Queue status */}
+              <Show when={profileInQueue()}>
+                <div class="p-3 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg">
+                  <div class="text-sm text-text-secondary">
+                    Profile update queued for mining. Check the queue panel to see progress.
                   </div>
                 </div>
               </Show>
@@ -334,14 +396,7 @@ const Profile: Component = () => {
               {/* Success message */}
               <Show when={success()}>
                 <div class="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 text-green-700 dark:text-green-400 rounded-lg text-sm">
-                  ✅ Profile updated successfully!
-                </div>
-              </Show>
-
-              {/* Mining error */}
-              <Show when={miningState().error}>
-                <div class="p-3 bg-red-100 dark:bg-red-900/20 border border-red-500 text-red-700 dark:text-red-400 rounded-lg text-sm">
-                  Mining error: {miningState().error}
+                  ✅ Profile update added to queue!
                 </div>
               </Show>
 
@@ -349,16 +404,14 @@ const Profile: Component = () => {
               <div class="flex gap-2 pt-4">
                 <button
                   onClick={handleSave}
-                  disabled={miningState().mining || saving()}
+                  disabled={profileInQueue()}
                   class="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Show when={!miningState().mining && !saving()} fallback="Mining...">
-                    Save Profile
-                  </Show>
+                  {profileInQueue() ? 'Queued for Mining' : 'Save Profile'}
                 </button>
                 <button
                   onClick={handleCancel}
-                  disabled={miningState().mining || saving()}
+                  disabled={profileInQueue()}
                   class="px-4 py-2 btn disabled:opacity-50"
                 >
                   Cancel

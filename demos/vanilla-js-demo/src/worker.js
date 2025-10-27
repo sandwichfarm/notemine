@@ -1,18 +1,9 @@
-import init, { mine_event } from './lib/notemine/notemine.js';
+import init, { mine_event } from './lib/notemine/dist/notemine.js';
 
-let wasm;
+let wasmInitialized = false;
 let mining = false;
 let workerId;
 let miningCancelled = false;
-
-async function initWasm() {
-    try {
-        wasm = await init({});
-        postMessage({ type: 'ready', workerId });
-    } catch (error) {
-        postMessage({ type: 'error', error: `WASM initialization failed: ${error.message}`, workerId });
-    }
-}
 
 function shouldCancel() {
     return miningCancelled;
@@ -27,7 +18,7 @@ function destructureMap (map) {
   }
 
 self.onmessage = async function (e) {
-    const { type, event, difficulty, workerId, totalWorkers } = e.data;
+    const { type, event, difficulty, workerId: msgWorkerId, totalWorkers } = e.data;
 
     function reportProgress(hashRate = undefined, bestPow = undefined) {
         let header = { type: 'progress' }
@@ -48,14 +39,21 @@ self.onmessage = async function (e) {
 
     if (type === 'cancel' && mining) {
         console.log('Mining cancellation requested.');
-        miningCancelled = true;1
+        miningCancelled = true;
     }
     else if (type === 'init') {
-        initWasm();
+        workerId = msgWorkerId;
     } else if (type === 'mine' && !mining) {
         try {
             miningCancelled = false;
             mining = true;
+
+            // Initialize WASM on first mine call
+            if (!wasmInitialized) {
+                await init('./lib/notemine/dist/notemine_bg.wasm');
+                wasmInitialized = true;
+            }
+
             const startNonce = BigInt(workerId);
             const nonceStep = BigInt(totalWorkers);
 

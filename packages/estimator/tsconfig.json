@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "Bundler",
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "lib": ["ES2020", "DOM", "WebWorker"],
+    "types": []
+  },
+  "include": ["src"]
+}
+

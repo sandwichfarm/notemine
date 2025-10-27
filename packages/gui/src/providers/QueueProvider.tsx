@@ -1,4 +1,4 @@
-import { createContext, useContext, Component, JSX } from 'solid-js';
+import { createContext, useContext, Component, JSX, onMount, onCleanup } from 'solid-js';
 import type { QueueItem, QueueState } from '../types/queue';
 import { createLocalStore } from '../lib/localStorage';
 import { debug } from '../lib/debug';
@@ -31,10 +31,15 @@ const DEFAULT_QUEUE_STATE: QueueState = {
 };
 
 export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
-  const [queueState, setQueueState] = createLocalStore<QueueState>(
+  // Use lazy mode: keep state in-memory, only flush on page exit or critical operations
+  const store = createLocalStore<QueueState>(
     'notemine:miningQueue',
-    DEFAULT_QUEUE_STATE
+    DEFAULT_QUEUE_STATE,
+    { lazy: true }
   );
+  const queueState = store.value;
+  const setQueueState = store.setValue;
+  const flushQueue = store.flush;
 
   // On mount, if there are items with queued status, ensure isProcessing is true
   // This handles page reload scenarios
@@ -46,6 +51,42 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       isProcessing: true,
     }));
   }
+
+  // Add event listeners to flush queue state on page exit
+  onMount(() => {
+    const handleFlush = () => {
+      debug('[QueueProvider] Flushing queue to localStorage on page exit');
+      flushQueue();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        debug('[QueueProvider] Flushing queue to localStorage on tab hide');
+        flushQueue();
+      }
+    };
+
+    // beforeunload: Universal support, fires on page exit (refresh, close, navigate away)
+    window.addEventListener('beforeunload', handleFlush);
+
+    // pagehide: More reliable on mobile Safari (iOS)
+    window.addEventListener('pagehide', handleFlush);
+
+    // visibilitychange: Fires when user switches tabs, gives more time to persist
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    debug('[QueueProvider] Added event listeners for queue persistence');
+  });
+
+  onCleanup(() => {
+    debug('[QueueProvider] Cleanup: flushing queue and removing listeners');
+    flushQueue(); // Flush one last time on cleanup
+    window.removeEventListener('beforeunload', flushQueue);
+    window.removeEventListener('pagehide', flushQueue);
+    document.removeEventListener('visibilitychange', () => {
+      if (document.hidden) flushQueue();
+    });
+  });
 
   // Add item to queue
   const addToQueue = (item: Omit<QueueItem, 'id' | 'status' | 'createdAt'>): string => {
@@ -65,6 +106,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     }));
 
     debug('[Queue] Added item:', newItem);
+    flushQueue(); // Persist immediately after queue modification
     return id;
   };
 
@@ -86,6 +128,8 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     if (isActiveItem) {
       debug('[Queue] Removed active item, mining should stop');
     }
+
+    flushQueue(); // Persist immediately after queue modification
   };
 
   // Move item to top of queue
@@ -101,6 +145,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       };
     });
     debug('[Queue] Moved to top:', itemId);
+    flushQueue(); // Persist immediately after queue modification
   };
 
   // Reorder item to specific index (supports moving active items)
@@ -151,12 +196,14 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       ),
     }));
     debug('[Queue] Cleared completed items');
+    flushQueue(); // Persist immediately after queue modification
   };
 
   // Clear entire queue
   const clearQueue = () => {
     setQueueState(DEFAULT_QUEUE_STATE);
     debug('[Queue] Cleared all items');
+    flushQueue(); // Persist immediately after queue modification
   };
 
   // Update item status
@@ -177,6 +224,11 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       ),
     }));
     debug(`[Queue] Updated item ${itemId} status:`, status);
+
+    // Only flush on final states (completed/failed/skipped), not during active mining (e.g., 'mining' status)
+    if (['completed', 'failed', 'skipped'].includes(status)) {
+      flushQueue();
+    }
   };
 
   // Update item mining state

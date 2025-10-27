@@ -97,6 +97,9 @@ export const MiningProvider: ParentComponent = (props) => {
     activeWorkerIds.clear();
     lastStateUpdateTime = 0; // Phase 5: Reset throttle timer
 
+    // Cache debug mode to avoid repeated preferences() calls in hot path
+    const debugMode = preferences().debugMode;
+
     currentQueueItemId = queueItemId || null;
     onMiningStateUpdate = onStateUpdate || null;
 
@@ -161,10 +164,9 @@ export const MiningProvider: ParentComponent = (props) => {
     });
     subscriptions.push(bestPowSub);
 
-    // Subscribe to progress (for hash rate) - populate per-worker rates
+    // Subscribe to progress (for hash rate)
     const currentInstance = notemine;
     const progressSub = currentInstance.progress$.subscribe(({ workerId, hashRate: workerHashRate }) => {
-      activeWorkerIds.add(workerId);
       const totalHashRate = currentInstance.totalHashRate;
 
       setMiningState((prev) => ({
@@ -176,11 +178,6 @@ export const MiningProvider: ParentComponent = (props) => {
           : prev.workersHashRates,
       }));
 
-      // Occasionally log active workers and total hash rate
-      if (preferences().debugMode && activeWorkerIds.size === (currentInstance.numberOfWorkers || activeWorkerIds.size)) {
-        debug('[MiningProvider] progress: active workers:', Array.from(activeWorkerIds.values()).sort(), 'total kH/s:', totalHashRate.toFixed(2));
-      }
-
       // Phase 5: Save mining state for queue if callback provided (with throttling)
       if (onMiningStateUpdate) {
         const now = Date.now();
@@ -189,18 +186,14 @@ export const MiningProvider: ParentComponent = (props) => {
         // Throttle: only update every 500ms to avoid excessive writes
         if (timeSinceLastUpdate >= STATE_UPDATE_THROTTLE_MS) {
           const miningStateData = currentInstance.getState();
-          // Guard: don't overwrite saved state with uninitialized nonces ("0..N-1")
-          const n = currentInstance.numberOfWorkers || 0;
-          const defaults = Array.from({ length: n }, (_, i) => String(i));
-          const isDefault = miningStateData.workerNonces.length === n && miningStateData.workerNonces.every((v, i) => v === defaults[i]);
-          if (preferences().debugMode) {
-            debug('[MiningProvider] getState nonces (sample):', miningStateData.workerNonces.slice(0, 4), '... (throttled)');
-          }
-          if (!isDefault) {
-            onMiningStateUpdate(miningStateData);
-            lastStateUpdateTime = now;
-          } else if (preferences().debugMode) {
-            debug('[MiningProvider] Skipping miningState update due to default nonces');
+          onMiningStateUpdate(miningStateData);
+          lastStateUpdateTime = now;
+
+          if (debugMode) {
+            debug('[MiningProvider] State update:', {
+              nonces: miningStateData.workerNonces.length,
+              hashRate: (totalHashRate / 1000).toFixed(2) + ' kH/s'
+            });
           }
         }
       }
@@ -337,6 +330,9 @@ export const MiningProvider: ParentComponent = (props) => {
       activeWorkerIds.clear();
       lastStateUpdateTime = 0; // Phase 5: Reset throttle timer
 
+      // Cache debug mode to avoid repeated preferences() calls in hot path
+      const debugMode = preferences().debugMode;
+
       currentQueueItemId = queueItem.id || null;
       onMiningStateUpdate = onStateUpdate || null;
 
@@ -401,7 +397,6 @@ export const MiningProvider: ParentComponent = (props) => {
       // Subscribe to progress (for hash rate)
       const currentInstance = notemine;
       const progressSub = currentInstance.progress$.subscribe(({ workerId, hashRate: workerHashRate }) => {
-        activeWorkerIds.add(workerId);
         const totalHashRate = currentInstance.totalHashRate;
 
         setMiningState((prev) => ({
@@ -413,10 +408,6 @@ export const MiningProvider: ParentComponent = (props) => {
             : prev.workersHashRates,
         }));
 
-        if (preferences().debugMode && activeWorkerIds.size === (currentInstance.numberOfWorkers || activeWorkerIds.size)) {
-          debug('[MiningProvider] progress: active workers:', Array.from(activeWorkerIds.values()).sort(), 'total kH/s:', totalHashRate.toFixed(2));
-        }
-
         // Phase 5: Save mining state for queue if callback provided (with throttling)
         if (onMiningStateUpdate) {
           const now = Date.now();
@@ -425,17 +416,14 @@ export const MiningProvider: ParentComponent = (props) => {
           // Throttle: only update every 500ms to avoid excessive writes
           if (timeSinceLastUpdate >= STATE_UPDATE_THROTTLE_MS) {
             const miningStateData = currentInstance.getState();
-            const n = currentInstance.numberOfWorkers || 0;
-            const defaults = Array.from({ length: n }, (_, i) => String(i));
-            const isDefault = miningStateData.workerNonces.length === n && miningStateData.workerNonces.every((v, i) => v === defaults[i]);
-            if (preferences().debugMode) {
-              debug('[MiningProvider] getState nonces (sample):', miningStateData.workerNonces.slice(0, 4), '... (throttled)');
-            }
-            if (!isDefault) {
-              onMiningStateUpdate(miningStateData);
-              lastStateUpdateTime = now;
-            } else if (preferences().debugMode) {
-              debug('[MiningProvider] Skipping miningState update due to default nonces');
+            onMiningStateUpdate(miningStateData);
+            lastStateUpdateTime = now;
+
+            if (debugMode) {
+              debug('[MiningProvider] State update (resume):', {
+                nonces: miningStateData.workerNonces.length,
+                hashRate: (totalHashRate / 1000).toFixed(2) + ' kH/s'
+              });
             }
           }
         }

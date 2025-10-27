@@ -36,6 +36,7 @@ export const PROFILE_RELAYS = [
 ];
 
 import { createSignal } from 'solid-js';
+import { debug } from '../lib/debug';
 
 // NIP-66 POW relays (from svelte demo)
 const [powRelays, setPowRelaysSignal] = createSignal<string[]>([]);
@@ -121,7 +122,7 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
     const subscription = eventStore.mailboxes(pubkey).subscribe({
       next: (mailboxes) => {
         if (mailboxes?.outboxes && mailboxes.outboxes.length > 0) {
-          console.log('[NIP-65] Found outbox relays:', mailboxes.outboxes);
+          debug('[NIP-65] Found outbox relays:', mailboxes.outboxes);
           resolve(mailboxes.outboxes);
           subscription.unsubscribe();
         }
@@ -142,7 +143,7 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
           if (response !== 'EOSE' && response.kind === 10002 && !found) {
             found = true;
             eventStore.add(response);
-            console.log('[NIP-65] Fetched kind 10002 from profile relays');
+            debug('[NIP-65] Fetched kind 10002 from profile relays');
           }
         },
       });
@@ -152,7 +153,7 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
     setTimeout(() => {
       clearTimeout(fetchTimeout);
       subscription.unsubscribe();
-      console.log('[NIP-65] No outbox relays found, using defaults');
+      debug('[NIP-65] No outbox relays found, using defaults');
       resolve(getActiveRelays());
     }, 3000);
   });
@@ -164,7 +165,7 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
     const subscription = eventStore.mailboxes(pubkey).subscribe({
       next: (mailboxes) => {
         if (mailboxes?.inboxes && mailboxes.inboxes.length > 0) {
-          console.log('[NIP-65] Found inbox relays:', mailboxes.inboxes);
+          debug('[NIP-65] Found inbox relays:', mailboxes.inboxes);
           resolve(mailboxes.inboxes);
           subscription.unsubscribe();
         }
@@ -185,7 +186,7 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
           if (response !== 'EOSE' && response.kind === 10002 && !found) {
             found = true;
             eventStore.add(response);
-            console.log('[NIP-65] Fetched kind 10002 from profile relays');
+            debug('[NIP-65] Fetched kind 10002 from profile relays');
           }
         },
       });
@@ -195,7 +196,7 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
     setTimeout(() => {
       clearTimeout(fetchTimeout);
       subscription.unsubscribe();
-      console.log('[NIP-65] No inbox relays found, using defaults');
+      debug('[NIP-65] No inbox relays found, using defaults');
       resolve(getActiveRelays());
     }, 3000);
   });
@@ -203,18 +204,24 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
 
 // Check if localhost relay is available
 export function isLocalhostRelayAvailable(): boolean {
-  const localhostRelay = relayPool.relays.get('ws://localhost:3334');
+  const localhostRelay = relayPool.relays.get('ws://localhost:3334') as
+    | { status?: number; socket?: { readyState?: number } }
+    | undefined;
   if (!localhostRelay) return false;
 
   // Check if the relay is actually connected
-  return localhostRelay.status === 1; // 1 = OPEN in WebSocket
+  const readyState =
+    typeof localhostRelay.status === 'number'
+      ? localhostRelay.status
+      : localhostRelay.socket?.readyState;
+  return readyState === 1; // 1 = OPEN in WebSocket
 }
 
 // Get relays for publishing - prefers localhost in dev mode if available
 export function getPublishRelays(userRelays: string[] = []): string[] {
   // In dev mode, if localhost relay is available, only publish there
   if (import.meta.env.DEV && isLocalhostRelayAvailable()) {
-    console.log('[Publish] Using localhost relay only (dev mode)');
+    debug('[Publish] Using localhost relay only (dev mode)');
     return ['ws://localhost:3334'];
   }
 
@@ -223,12 +230,12 @@ export function getPublishRelays(userRelays: string[] = []): string[] {
 }
 
 // Batch fetch metadata (kind 0) for multiple pubkeys
-export function batchFetchMetadata(pubkeys: string[], relays?: string[]): void {
+export function batchFetchMetadata(pubkeys: string[]): void {
   if (pubkeys.length === 0) return;
 
   // Always use profile relays for kind 0, ignoring the relays parameter
   const targetRelays = PROFILE_RELAYS;
-  console.log(`[Metadata] Batch fetching kind 0 for ${pubkeys.length} pubkeys from profile relays`);
+  debug(`[Metadata] Batch fetching kind 0 for ${pubkeys.length} pubkeys from profile relays`);
 
   const filter = {
     kinds: [0],
@@ -244,7 +251,7 @@ export function batchFetchMetadata(pubkeys: string[], relays?: string[]): void {
       }
     },
     complete: () => {
-      console.log('[Metadata] Batch fetch complete');
+      debug('[Metadata] Batch fetch complete');
     },
   });
 }

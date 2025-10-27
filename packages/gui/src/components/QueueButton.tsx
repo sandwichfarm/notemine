@@ -1,5 +1,6 @@
 import { Component } from 'solid-js';
 import { useQueue } from '../providers/QueueProvider';
+import { debug } from '../lib/debug';
 
 interface QueueButtonProps {
   onToggle: () => void;
@@ -13,7 +14,7 @@ export const QueueButton: Component<QueueButtonProps> = (props) => {
     const state = queueState();
     // Only count the item that's actually set as active
     const activeItem = state.items.find((item) => item.id === state.activeItemId && item.status === 'mining');
-    console.log('[QueueButton] Active item:', activeItem ? { id: activeItem.id, status: activeItem.status, content: activeItem.content } : 'none');
+    debug('[QueueButton] Active item:', activeItem ? { id: activeItem.id, status: activeItem.status, content: activeItem.content } : 'none');
     return activeItem ? 1 : 0;
   };
   const getPendingCount = () => queueState().items.filter((item) => item.status === 'queued').length;

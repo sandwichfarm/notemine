@@ -87,9 +87,9 @@ export const MiningPanel: Component = () => {
                     {(worker, index) => (
                       <div class="text-xs font-mono text-text-primary bg-bg-primary/50 dark:bg-bg-secondary/50 p-2 rounded">
                         <span class="text-text-secondary">Miner #{index()}:</span>{' '}
-                        <span class="text-accent">PoW: {worker.bestPow || 0}</span>
+                        <span class="text-accent">{((state().workersHashRates[index()] || 0) / 1000).toFixed(2)} KH/s</span>
                         <div class="text-[10px] text-text-tertiary mt-1">
-                          Nonce: {worker.nonce || 'N/A'} | Hash: {worker.hash?.slice(0, 12) || 'N/A'}...
+                          PoW: {worker.bestPow || 0} | Nonce: {worker.nonce || 'N/A'}
                         </div>
                       </div>
                     )}

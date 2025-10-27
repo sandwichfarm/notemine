@@ -1,7 +1,8 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { eventStore, relayPool, PROFILE_RELAYS } from '../lib/applesauce';
 import { Subscription } from 'rxjs';
+import { debug } from '../lib/debug';
 
 export interface ProfileMetadata {
   name?: string;
@@ -25,9 +26,9 @@ export interface Profile {
  * Hook to fetch and subscribe to profile metadata (kind 0) for a pubkey
  * Uses inbox/outbox relays if available, falls back to active relays
  */
-export function useProfile(pubkey: string | undefined): () => Profile {
+export function useProfile(pubkeyInput: string | (() => string | undefined) | undefined): () => Profile {
   const [profile, setProfile] = createSignal<Profile>({
-    pubkey: pubkey || '',
+    pubkey: '',
     metadata: null,
     loading: true,
   });
@@ -35,47 +36,57 @@ export function useProfile(pubkey: string | undefined): () => Profile {
   let subscription: Subscription | null = null;
   let fetchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  onMount(async () => {
-    if (!pubkey || typeof pubkey !== 'string' || pubkey.length === 0) {
+  const cleanup = () => {
+    subscription?.unsubscribe();
+    subscription = null;
+    if (fetchTimeout) {
+      clearTimeout(fetchTimeout);
+      fetchTimeout = null;
+    }
+  };
+
+  createEffect(() => {
+    const resolvedPubkey =
+      typeof pubkeyInput === 'function' ? pubkeyInput() : pubkeyInput;
+
+    cleanup();
+
+    if (!resolvedPubkey || resolvedPubkey.length === 0) {
       setProfile({ pubkey: '', metadata: null, loading: false });
       return;
     }
 
-    // First, check if metadata is already in the event store
-    subscription = eventStore.replaceable(0, pubkey).subscribe({
+    setProfile({ pubkey: resolvedPubkey, metadata: null, loading: true });
+
+    subscription = eventStore.replaceable(0, resolvedPubkey).subscribe({
       next: (event) => {
         if (event) {
           try {
             const metadata: ProfileMetadata = JSON.parse(event.content);
             setProfile({
-              pubkey,
+              pubkey: resolvedPubkey,
               metadata,
               loading: false,
               event,
             });
-            console.log(`[useProfile] Got metadata for ${typeof pubkey === 'string' ? pubkey.slice(0, 8) : 'unknown'} from store`);
+            debug(`[useProfile] Got metadata for ${resolvedPubkey.slice(0, 8)} from store`);
           } catch (error) {
             console.error('[useProfile] Failed to parse metadata:', error);
-            setProfile({ pubkey, metadata: null, loading: false });
+            setProfile({ pubkey: resolvedPubkey, metadata: null, loading: false });
           }
         }
       },
     });
 
-    // If not found in store after 200ms, fetch from relays
     fetchTimeout = setTimeout(async () => {
-      // Check if we already got data from store
       if (profile().metadata) return;
 
-      console.log(`[useProfile] Fetching metadata for ${typeof pubkey === 'string' ? pubkey.slice(0, 8) : 'unknown'} from profile relays`);
+      debug(`[useProfile] Fetching metadata for ${resolvedPubkey.slice(0, 8)} from profile relays`);
 
-      // Always use well-known profile relays for kind 0 (profiles)
       const relays = PROFILE_RELAYS;
-
-      // Fetch from relays
       const filter = {
         kinds: [0],
-        authors: [pubkey],
+        authors: [resolvedPubkey],
         limit: 1,
       };
 
@@ -87,33 +98,28 @@ export function useProfile(pubkey: string | undefined): () => Profile {
             try {
               const metadata: ProfileMetadata = JSON.parse(event.content);
               setProfile({
-                pubkey,
+                pubkey: resolvedPubkey,
                 metadata,
                 loading: false,
                 event,
               });
-              // Add to event store for caching
               eventStore.add(event);
-              console.log(`[useProfile] Got metadata for ${typeof pubkey === 'string' ? pubkey.slice(0, 8) : 'unknown'} from relays`);
+              debug(`[useProfile] Got metadata for ${resolvedPubkey.slice(0, 8)} from relays`);
             } catch (error) {
               console.error('[useProfile] Failed to parse metadata:', error);
             }
           }
         },
         complete: () => {
-          // If still no metadata after complete, stop loading
           if (!profile().metadata) {
-            setProfile({ pubkey, metadata: null, loading: false });
+            setProfile({ pubkey: resolvedPubkey, metadata: null, loading: false });
           }
         },
       });
     }, 200);
   });
 
-  onCleanup(() => {
-    subscription?.unsubscribe();
-    if (fetchTimeout) clearTimeout(fetchTimeout);
-  });
+  onCleanup(cleanup);
 
   return profile;
 }

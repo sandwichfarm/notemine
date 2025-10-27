@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, Show, For } from 'solid-js';
+import { Component, createSignal, onMount, Show } from 'solid-js';
 import { useParams, useNavigate } from '@solidjs/router';
 import { nip19, type NostrEvent } from 'nostr-tools';
 import { relayPool, getActiveRelays, eventStore } from '../lib/applesauce';
@@ -7,6 +7,7 @@ import { ReactionBreakdown } from '../components/ReactionBreakdown';
 import { ThreadedReplies } from '../components/ThreadedReplies';
 import { ProfileName } from '../components/ProfileName';
 import { ParsedContent } from '../components/ParsedContent';
+import { debug } from '../lib/debug';
 
 // Minimum POW threshold for replies/reactions
 const MIN_POW_THRESHOLD = 16;
@@ -72,7 +73,7 @@ const NoteDetail: Component = () => {
         eventId = identifier;
       }
 
-      console.log('[NoteDetail] Fetching event:', eventId);
+      debug('[NoteDetail] Fetching event:', eventId);
 
       // Check event store synchronously first
       let foundInStore = false;
@@ -80,7 +81,7 @@ const NoteDetail: Component = () => {
         next: (evt) => {
           if (evt && !foundInStore) {
             foundInStore = true;
-            console.log('[NoteDetail] Found event in store:', evt.id);
+            debug('[NoteDetail] Found event in store:', evt.id);
             setNote(evt);
             setLoading(false);
             loadRepliesAndReactions(evt, relays);
@@ -92,17 +93,17 @@ const NoteDetail: Component = () => {
       // If not found in store after 100ms, fetch from relays
       setTimeout(() => {
         if (!foundInStore) {
-          console.log('[NoteDetail] Not found in store, fetching from relays...');
+          debug('[NoteDetail] Not found in store, fetching from relays...');
           storeSubscription.unsubscribe();
 
           // Fetch from relays
           const relay$ = relayPool.req(relays, { ids: [eventId] });
           relay$.subscribe({
             next: (response) => {
-              console.log('[NoteDetail] Relay response:', response);
+              debug('[NoteDetail] Relay response:', response);
               if (response !== 'EOSE' && response.id === eventId) {
                 const evt = response as NostrEvent;
-                console.log('[NoteDetail] Found event from relay');
+                debug('[NoteDetail] Found event from relay');
                 setNote(evt);
                 setLoading(false);
                 loadRepliesAndReactions(evt, relays);
@@ -114,7 +115,7 @@ const NoteDetail: Component = () => {
               setLoading(false);
             },
             complete: () => {
-              console.log('[NoteDetail] Relay subscription complete');
+              debug('[NoteDetail] Relay subscription complete');
               if (!note()) {
                 setError('Note not found');
               }
@@ -131,7 +132,7 @@ const NoteDetail: Component = () => {
   });
 
   const loadRepliesAndReactions = (event: NostrEvent, relays: string[]) => {
-    console.log('[NoteDetail] Loading replies and reactions for:', event.id);
+    debug('[NoteDetail] Loading replies and reactions for:', event.id);
 
     // Load reactions (kind 7)
     const reactionsObs = relayPool.req(relays, {
@@ -159,7 +160,7 @@ const NoteDetail: Component = () => {
         }
       },
       complete: () => {
-        console.log('[NoteDetail] Loaded', allReactions.length, 'reactions');
+        debug('[NoteDetail] Loaded', allReactions.length, 'reactions');
       },
     });
 
@@ -189,7 +190,7 @@ const NoteDetail: Component = () => {
         }
       },
       complete: () => {
-        console.log('[NoteDetail] Loaded', allReplies.length, 'replies');
+        debug('[NoteDetail] Loaded', allReplies.length, 'replies');
       },
     });
 

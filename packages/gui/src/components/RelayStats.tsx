@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, For, Show, createEffect } from 'solid-js';
+import { Component, createSignal, onMount, For, Show } from 'solid-js';
 import { relayPool, getPowRelays, DEFAULT_POW_RELAY } from '../lib/applesauce';
 import { relayStatsTracker } from '../lib/relay-stats';
 

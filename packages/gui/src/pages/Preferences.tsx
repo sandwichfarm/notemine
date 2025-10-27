@@ -1,6 +1,5 @@
-import { Component, createSignal, Show, For } from 'solid-js';
+import { Component, createSignal, Show } from 'solid-js';
 import { usePreferences } from '../providers/PreferencesProvider';
-import { getActiveRelays } from '../lib/applesauce';
 
 export const Preferences: Component = () => {
   const { preferences, updatePreference, resetPreferences } = usePreferences();
@@ -10,9 +9,6 @@ export const Preferences: Component = () => {
     resetPreferences();
     setShowResetConfirm(false);
   };
-
-  // Get all known relays
-  const allRelays = () => getActiveRelays();
 
   return (
     <div class="max-w-4xl mx-auto p-6">
@@ -361,6 +357,29 @@ export const Preferences: Component = () => {
               Collapse reply threads after this depth (default: 2)
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* Debug Settings */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Debug Settings</h2>
+        <div class="card">
+          <label class="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={preferences().debugMode}
+              onChange={(e) => updatePreference('debugMode', e.currentTarget.checked)}
+              class="w-5 h-5"
+            />
+            <div>
+              <span class="block text-sm font-medium text-text-secondary">
+                Enable Debug Mode
+              </span>
+              <p class="text-xs text-text-tertiary opacity-50">
+                Shows detailed console logs (may impact mining performance)
+              </p>
+            </div>
+          </label>
         </div>
       </section>
 

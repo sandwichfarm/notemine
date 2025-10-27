@@ -4,6 +4,7 @@ import { usePreferences } from '../providers/PreferencesProvider';
 import { useQueue } from '../providers/QueueProvider';
 import type { NostrEvent } from 'nostr-tools/core';
 import { MentionAutocomplete } from './MentionAutocomplete';
+import { debug } from '../lib/debug';
 
 const CLIENT_TAG = 'notemine.io';
 
@@ -55,7 +56,7 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
     }
 
     try {
-      console.log('[ReplyComposer] Adding reply to mining queue...');
+      debug('[ReplyComposer] Adding reply to mining queue...');
 
       // Build reply tags
       const replyTags: string[][] = [
@@ -91,7 +92,7 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
       // Success!
       setQueueSuccess(true);
       setContent('');
-      console.log('[ReplyComposer] Reply added to queue');
+      debug('[ReplyComposer] Reply added to queue');
 
       props.onSuccess?.();
 

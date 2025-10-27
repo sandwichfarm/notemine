@@ -95,15 +95,35 @@ self.onmessage = async function (e: MessageEvent) {
           let currentNonce: string | undefined;
           let parsedBestPowData: BestPowData | undefined;
 
-          if (bestPowData) {
+          const extractCurrentNonce = (data: any) => {
+            if (typeof data?.get === 'function') {
+              const nonce = data.get('currentNonce');
+              return typeof nonce === 'string' ? nonce : undefined;
+            }
+            if (typeof data === 'object' && data !== null) {
+              const nonce = (data as any).currentNonce;
+              return typeof nonce === 'string' ? nonce : undefined;
+            }
+            return undefined;
+          };
+
+          const hasBestPowFields = (data: any) => {
+            if (!data) return false;
+            if (typeof data?.get === 'function') {
+              return data.get('best_pow') !== undefined || data.get('bestPow') !== undefined;
+            }
+            if (typeof data === 'object' && data !== null) {
+              return 'best_pow' in data || 'bestPow' in data;
+            }
+            return false;
+          };
+
+          if (bestPowData && hasBestPowFields(bestPowData)) {
             const destructured = destructureBestPowData(bestPowData);
             parsedBestPowData = destructured;
-            // Extract currentNonce if it's in the data
-            if (typeof bestPowData.get === 'function') {
-              currentNonce = bestPowData.get('currentNonce') as string;
-            } else if (typeof bestPowData === 'object' && bestPowData !== null) {
-              currentNonce = bestPowData.currentNonce;
-            }
+            currentNonce = extractCurrentNonce(bestPowData);
+          } else if (bestPowData) {
+            currentNonce = extractCurrentNonce(bestPowData);
           }
 
           const message: any = {

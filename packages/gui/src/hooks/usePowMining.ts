@@ -9,12 +9,14 @@ import {
 import type { NostrEvent } from 'nostr-tools/core';
 import type { Subscription } from 'rxjs';
 import { useMining } from '../providers/MiningProvider';
+import { usePreferences } from '../providers/PreferencesProvider';
 
 export interface MiningState {
   mining: boolean;
   hashRate: number;
   overallBestPow: number | null;
   workersBestPow: BestPowData[];
+  workersHashRates: Record<number, number>; // Hash rate per worker in H/s
   result: NostrEvent | null;
   error: string | null;
 }
@@ -32,14 +34,23 @@ export function usePowMining() {
   let notemine: Notemine | null = null;
   let subscriptions: Subscription[] = [];
   const { setGlobalMiningState } = useMining();
+  const { preferences } = usePreferences();
   let currentQueueItemId: string | null = null;
   let onMiningStateUpdate: ((state: WrapperMiningState) => void) | null = null;
+
+  // Debug logger helper
+  const debug = (...args: any[]) => {
+    if (preferences().debugMode) {
+      console.log(...args);
+    }
+  };
 
   const [state, setState] = createSignal<MiningState>({
     mining: false,
     hashRate: 0,
     overallBestPow: null,
     workersBestPow: [],
+    workersHashRates: {},
     result: null,
     error: null,
   });
@@ -48,7 +59,7 @@ export function usePowMining() {
   createEffect(() => {
     const currentState = state();
     setGlobalMiningState(currentState);
-    console.log('[usePowMining] Syncing to global state:', {
+    debug('[usePowMining] Syncing to global state:', {
       mining: currentState.mining,
       hashRate: currentState.hashRate
     });
@@ -60,7 +71,7 @@ export function usePowMining() {
     onStateUpdate?: (state: WrapperMiningState) => void
   ): Promise<NostrEvent | null> => {
     // Clean up any existing subscriptions and instance first
-    console.log('[usePowMining] Starting mining, cleaning up old instance');
+    debug('[usePowMining] Starting mining, cleaning up old instance');
     subscriptions.forEach((sub) => sub.unsubscribe());
     subscriptions = [];
     if (notemine) {
@@ -76,6 +87,7 @@ export function usePowMining() {
       hashRate: 0,
       overallBestPow: null,
       workersBestPow: [],
+      workersHashRates: {},
       result: null,
       error: null,
     });
@@ -90,6 +102,7 @@ export function usePowMining() {
       numberOfWorkers: options.numberOfWorkers || defaultWorkers,
       tags: options.tags || [],
       kind: options.kind, // Pass the kind parameter
+      debug: preferences().debugMode,
     });
 
     // Subscribe to workers' POW progress
@@ -114,27 +127,28 @@ export function usePowMining() {
     // Capture the current notemine instance in the closure to avoid stale references
     const currentInstance = notemine;
     const progressSub = currentInstance.progress$.subscribe((progressData) => {
-      const hashRate = currentInstance.totalHashRate;
-      // Note: totalHashRate is actually in KH/s (divided by 1000 in wrapper)
-      const actualHashRate = hashRate * 1000; // Convert back to H/s
-      console.log(`[POW Mining] Progress event received:`, {
-        progressData,
-        totalHashRate: hashRate,
-        totalHashRateMHs: (actualHashRate / 1000000).toFixed(2),
-        numberOfWorkers: currentInstance.numberOfWorkers
+      const instanceHashRate = Number(currentInstance.totalHashRate) || 0; // KH/s
+      const workerId = progressData.workerId;
+      const workerHashRate = Number(progressData.hashRate ?? 0); // Worker hash rate in H/s
+
+      setState((prev) => {
+        const nextWorkersHashRates = { ...prev.workersHashRates };
+        if (workerHashRate > 0) {
+          nextWorkersHashRates[workerId] = workerHashRate;
+        }
+
+        const summedHashRate = Object.values(nextWorkersHashRates).reduce((sum, rate) => sum + rate, 0) / 1000; // KH/s
+        const totalHashRate = instanceHashRate > 0 ? instanceHashRate : summedHashRate;
+
+        return {
+          ...prev,
+          hashRate: totalHashRate,
+          workersHashRates: nextWorkersHashRates,
+        };
       });
-      setState((prev) => ({
-        ...prev,
-        hashRate,
-      }));
 
       // Save mining state for queue if callback provided
       if (onMiningStateUpdate) {
-        console.log('[POW Mining] About to call getState, instance:', {
-          hasGetState: typeof currentInstance.getState === 'function',
-          instanceType: currentInstance.constructor.name,
-          instanceKeys: Object.keys(currentInstance).slice(0, 10)
-        });
         const miningState = currentInstance.getState();
         onMiningStateUpdate(miningState);
       }
@@ -209,7 +223,7 @@ export function usePowMining() {
       const queueItem = queueItemOrNonces;
 
       // Clean up any existing subscriptions and instance first
-      console.log('[usePowMining] Resuming mining, cleaning up old instance');
+      debug('[usePowMining] Resuming mining, cleaning up old instance');
       subscriptions.forEach((sub) => sub.unsubscribe());
       subscriptions = [];
       if (notemine) {
@@ -220,8 +234,8 @@ export function usePowMining() {
       currentQueueItemId = queueItem.id || null;
       onMiningStateUpdate = onStateUpdate || null;
 
-      console.log('[usePowMining] Resuming with queue item:', queueItem.id);
-      console.log('[usePowMining] Resume state:', {
+      debug('[usePowMining] Resuming with queue item:', queueItem.id);
+      debug('[usePowMining] Resume state:', {
         workerNonces: queueItem.miningState?.workerNonces,
         numberOfWorkers: queueItem.miningState?.numberOfWorkers,
         hasState: !!queueItem.miningState
@@ -236,17 +250,18 @@ export function usePowMining() {
         numberOfWorkers: queueItem.miningState?.numberOfWorkers || defaultWorkers,
         tags: queueItem.tags || [],
         kind: queueItem.kind,
+        debug: preferences().debugMode,
       });
 
       // Restore the saved state
-      console.log('[usePowMining] Calling restoreState with:', {
+      debug('[usePowMining] Calling restoreState with:', {
         fullState: queueItem.miningState,
         workerNonces: queueItem.miningState?.workerNonces,
         numberOfWorkers: queueItem.miningState?.numberOfWorkers,
         bestPow: queueItem.miningState?.bestPow
       });
       notemine.restoreState(queueItem.miningState);
-      console.log('[usePowMining] restoreState complete');
+      debug('[usePowMining] restoreState complete');
 
       // Subscribe to observables (same as startMining)
       subscriptions.forEach(sub => sub.unsubscribe());
@@ -274,22 +289,30 @@ export function usePowMining() {
       // Capture the current notemine instance in the closure to avoid stale references
       const currentInstance = notemine;
       const progressSub = currentInstance.progress$.subscribe((progressData) => {
-        const hashRate = currentInstance.totalHashRate;
-        console.log(`[POW Mining] Progress event received:`, {
-          progressData,
-          totalHashRate: hashRate,
-          totalHashRateMHs: ((hashRate * 1000) / 1000000).toFixed(2),
-          numberOfWorkers: currentInstance.numberOfWorkers
+        const instanceHashRate = Number(currentInstance.totalHashRate) || 0; // KH/s
+        const workerId = progressData.workerId;
+        const workerHashRate = Number(progressData.hashRate ?? 0); // Worker hash rate in H/s
+
+        setState((prev) => {
+          const nextWorkersHashRates = { ...prev.workersHashRates };
+          if (workerHashRate > 0) {
+            nextWorkersHashRates[workerId] = workerHashRate;
+          }
+
+          const summedHashRate = Object.values(nextWorkersHashRates).reduce((sum, rate) => sum + rate, 0) / 1000; // KH/s
+          const totalHashRate = instanceHashRate > 0 ? instanceHashRate : summedHashRate;
+
+          return {
+            ...prev,
+            hashRate: totalHashRate,
+            workersHashRates: nextWorkersHashRates,
+          };
         });
-        setState((prev) => ({
-          ...prev,
-          hashRate,
-        }));
 
         // Save mining state for queue if callback provided
         if (onMiningStateUpdate) {
           const miningState = currentInstance.getState();
-          console.log('[POW Mining] Saving mining state:', {
+          debug('[POW Mining] Saving mining state:', {
             workerNonces: miningState.workerNonces,
             bestPow: currentInstance.highestPow$.getValue()?.bestPow
           });
@@ -334,7 +357,7 @@ export function usePowMining() {
         subscriptions.push(errorSub);
 
         // Resume mining
-        console.log('[usePowMining] Calling resume with nonces:', queueItem.miningState.workerNonces);
+        debug('[usePowMining] Calling resume with nonces:', queueItem.miningState.workerNonces);
         notemine!.resume(queueItem.miningState.workerNonces).catch(reject);
       });
     } else {

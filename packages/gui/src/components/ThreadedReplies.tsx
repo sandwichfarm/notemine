@@ -1,7 +1,6 @@
 import { Component, For, Show, createSignal, createMemo } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { getPowDifficulty, formatPowDifficulty } from '../lib/pow';
-import { nip19 } from 'nostr-tools';
+import { getPowDifficulty } from '../lib/pow';
 import { ProfileName } from './ProfileName';
 
 interface ThreadedRepliesProps {
@@ -40,8 +39,6 @@ const ThreadedReply: Component<{
   };
 
   const powDifficulty = () => getPowDifficulty(props.node.event);
-  const indentClass = () => `ml-${Math.min(props.depth * 4, 12)}`;
-
   return (
     <div class="border-l-2 border-border/30 pl-3 py-2" style={{ 'margin-left': `${props.depth * 1}rem` }}>
       {/* Reply Header */}

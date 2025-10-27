@@ -1,5 +1,6 @@
 import { Component, createSignal, onMount, Show } from 'solid-js';
 import { getCacheStats, clearCache } from '../lib/cache';
+import { debug } from '../lib/debug';
 
 export const CacheStats: Component = () => {
   const [stats, setStats] = createSignal<{
@@ -32,7 +33,7 @@ export const CacheStats: Component = () => {
     try {
       await clearCache();
       await loadStats(); // Reload stats
-      console.log('[CacheStats] Cache cleared successfully');
+      debug('[CacheStats] Cache cleared successfully');
     } catch (error) {
       console.error('[CacheStats] Error clearing cache:', error);
     } finally {

@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { RelatrClient, type SearchProfilesOutput } from '../ctxcn/RelatrClient';
+import { RelatrClient } from '../ctxcn/RelatrClient';
 
 let relatrClient: RelatrClient | null = null;
 

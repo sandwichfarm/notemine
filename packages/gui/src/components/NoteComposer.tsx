@@ -3,6 +3,7 @@ import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useQueue } from '../providers/QueueProvider';
 import { MentionAutocomplete } from './MentionAutocomplete';
+import { debug } from '../lib/debug';
 
 const CLIENT_TAG = 'notemine.io';
 
@@ -48,7 +49,7 @@ export const NoteComposer: Component = () => {
     }
 
     try {
-      console.log('[NoteComposer] Adding note to mining queue...');
+      debug('[NoteComposer] Adding note to mining queue...');
 
       // Add to queue
       addToQueue({
@@ -63,7 +64,7 @@ export const NoteComposer: Component = () => {
       // Success!
       setQueueSuccess(true);
       setContent('');
-      console.log('[NoteComposer] Note added to queue');
+      debug('[NoteComposer] Note added to queue');
 
       // Reset success message after 2 seconds
       setTimeout(() => setQueueSuccess(false), 2000);

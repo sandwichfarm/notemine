@@ -1,10 +1,11 @@
-import { Component, createEffect, onCleanup } from 'solid-js';
+import { Component, createEffect } from 'solid-js';
 import { useQueue } from '../providers/QueueProvider';
 import { useUser } from '../providers/UserProvider';
 import { usePowMining } from '../hooks/usePowMining';
-import { relayPool, getPublishRelays, getUserOutboxRelays, eventStore } from '../lib/applesauce';
+import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
+import { debug } from '../lib/debug';
 
 /**
  * QueueProcessor handles automatic processing of queued mining operations.
@@ -14,20 +15,20 @@ export const QueueProcessor: Component = () => {
   const { queueState, updateItemStatus, updateItemMiningState, setActiveItem, getNextQueuedItem } = useQueue();
   const { user } = useUser();
   const powMining = usePowMining();
-  const { startMining, resumeMining, restoreMiningState, stopMining, state: miningState } = powMining;
+  const { startMining, resumeMining, stopMining, state: miningState } = powMining;
 
   let processingLock = false;
 
   // Process next queue item
   const processNextItem = async () => {
     if (processingLock) {
-      console.log('[QueueProcessor] Already processing, skipping');
+      debug('[QueueProcessor] Already processing, skipping');
       return;
     }
 
     const state = queueState();
     if (!state.isProcessing || !state.autoProcess) {
-      console.log('[QueueProcessor] Queue not active or auto-process disabled');
+      debug('[QueueProcessor] Queue not active or auto-process disabled');
       return;
     }
 
@@ -36,11 +37,11 @@ export const QueueProcessor: Component = () => {
     const nextItem = miningItem || getNextQueuedItem();
 
     if (!nextItem) {
-      console.log('[QueueProcessor] No items in queue');
+      debug('[QueueProcessor] No items in queue');
       return;
     }
 
-    console.log('[QueueProcessor] Processing item:', {
+    debug('[QueueProcessor] Processing item:', {
       id: nextItem.id,
       type: nextItem.type,
       status: nextItem.status,
@@ -58,7 +59,7 @@ export const QueueProcessor: Component = () => {
     try {
       // Check if item is still valid
       if (!isItemValid(nextItem)) {
-        console.log('[QueueProcessor] Item is invalid, skipping:', nextItem.id);
+        debug('[QueueProcessor] Item is invalid, skipping:', nextItem.id);
         updateItemStatus(nextItem.id, 'skipped', 'Target event no longer exists');
         processingLock = false;
         setTimeout(processNextItem, 100); // Process next item
@@ -75,7 +76,7 @@ export const QueueProcessor: Component = () => {
       let minedEvent: NostrEvent | null = null;
 
       if (nextItem.miningState) {
-        console.log('[QueueProcessor] Resuming from saved state:', nextItem.miningState);
+        debug('[QueueProcessor] Resuming from saved state:', nextItem.miningState);
         // Resume flow: restore state, then resume mining (which returns a promise)
         minedEvent = await resumeMining(
           nextItem,
@@ -84,7 +85,7 @@ export const QueueProcessor: Component = () => {
           }
         );
       } else {
-        console.log('[QueueProcessor] Starting fresh mining');
+        debug('[QueueProcessor] Starting fresh mining');
         minedEvent = await startMining(
           {
             content: nextItem.content,
@@ -105,7 +106,7 @@ export const QueueProcessor: Component = () => {
         throw new Error('Mining failed: no event returned');
       }
 
-      console.log('[QueueProcessor] Mining complete, signing and publishing...');
+      debug('[QueueProcessor] Mining complete, signing and publishing...');
 
       // Sign the event
       let signedEvent: NostrEvent;
@@ -122,7 +123,7 @@ export const QueueProcessor: Component = () => {
       // Publish to relays
       const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
       const publishRelays = getPublishRelays(outboxRelays);
-      console.log('[QueueProcessor] Publishing to relays:', publishRelays);
+      debug('[QueueProcessor] Publishing to relays:', publishRelays);
 
       const promises = publishRelays.map(async (relayUrl) => {
         const relay = relayPool.relay(relayUrl);
@@ -131,7 +132,7 @@ export const QueueProcessor: Component = () => {
 
       await Promise.allSettled(promises);
 
-      console.log('[QueueProcessor] Event published successfully');
+      debug('[QueueProcessor] Event published successfully');
 
       // Mark as completed
       updateItemStatus(nextItem.id, 'completed');
@@ -152,7 +153,7 @@ export const QueueProcessor: Component = () => {
   };
 
   // Check if queue item is still valid (e.g., target event exists for reactions/replies)
-  const isItemValid = (item: any): boolean => {
+  const isItemValid = (_item: any): boolean => {
     // All items with event IDs in their tags are valid
     // We don't need to check if the target event is in the store,
     // as long as we have the event ID to reference in the tags
@@ -164,7 +165,7 @@ export const QueueProcessor: Component = () => {
   createEffect(() => {
     const state = queueState();
 
-    console.log('[QueueProcessor] State changed:', {
+    debug('[QueueProcessor] State changed:', {
       isProcessing: state.isProcessing,
       autoProcess: state.autoProcess,
       mining: miningState().mining,
@@ -179,7 +180,7 @@ export const QueueProcessor: Component = () => {
       const currentItem = state.items.find(item => item.id === powMining.currentQueueItemId);
       // Stop mining if item was removed OR if its status is no longer 'mining'
       if (!currentItem || currentItem.status !== 'mining') {
-        console.log('[QueueProcessor] Currently mining item was removed or stopped, stopping mining');
+        debug('[QueueProcessor] Currently mining item was removed or stopped, stopping mining');
         stopMining();
         processingLock = false;
         // After stopping, trigger processing of next item if queue is still active
@@ -201,7 +202,7 @@ export const QueueProcessor: Component = () => {
       const hasMiningItems = state.items.some((item) => item.status === 'mining');
 
       if (hasQueuedItems || hasMiningItems) {
-        console.log('[QueueProcessor] Queue active with pending items, starting processing');
+        debug('[QueueProcessor] Queue active with pending items, starting processing');
         processNextItem();
       }
     }

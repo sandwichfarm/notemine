@@ -5,6 +5,7 @@ import { relayPool, getActiveRelays, getUserOutboxRelays } from '../lib/applesau
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
 import { nip19 } from 'nostr-tools';
+import { debug } from '../lib/debug';
 
 interface ProfileMetadata {
   name?: string;
@@ -38,7 +39,7 @@ const Profile: Component = () => {
     try {
       // Fetch kind 0 metadata for current user
       const relays = getActiveRelays();
-      console.log('[Profile] Fetching metadata from relays:', relays);
+      debug('[Profile] Fetching metadata from relays:', relays);
 
       const filter = {
         kinds: [0],
@@ -87,7 +88,7 @@ const Profile: Component = () => {
     setSaving(true);
 
     try {
-      console.log('[Profile] Mining kind 0 event with POW...');
+      debug('[Profile] Mining kind 0 event with POW...');
 
       // Create kind 0 event content
       const content = JSON.stringify(editData());
@@ -105,7 +106,7 @@ const Profile: Component = () => {
         throw new Error('Mining failed: no event returned');
       }
 
-      console.log('[Profile] POW mining complete, publishing...');
+      debug('[Profile] POW mining complete, publishing...');
 
       // Sign the event
       let signedEvent: NostrEvent;
@@ -121,7 +122,7 @@ const Profile: Component = () => {
 
       // Publish to relays (using NIP-65 outbox relays)
       const activeRelays = await getUserOutboxRelays(currentUser.pubkey);
-      console.log('[Profile] Publishing to user outbox relays:', activeRelays);
+      debug('[Profile] Publishing to user outbox relays:', activeRelays);
 
       const promises = activeRelays.map(async (relayUrl) => {
         const relay = relayPool.relay(relayUrl);
@@ -134,7 +135,7 @@ const Profile: Component = () => {
       setProfileData(editData());
       setIsEditing(false);
       setSuccess(true);
-      console.log('[Profile] Profile updated successfully');
+      debug('[Profile] Profile updated successfully');
 
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {

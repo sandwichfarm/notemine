@@ -27,6 +27,13 @@ export const Note: Component<NoteProps> = (props) => {
   const hasPow = () => hasValidPow(props.event, 1);
   const formattedPow = () => formatPowDifficulty(powDifficulty());
   const stats = useNoteStats(props.event);
+  const contentClass = () =>
+    [
+      'text-text-primary break-words font-sans text-base leading-relaxed mb-4',
+      !hasPow() ? 'opacity-70' : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   // Unique ID for this note's tooltip
   const tooltipId = `note-${props.event.id}`;
@@ -130,10 +137,7 @@ export const Note: Component<NoteProps> = (props) => {
       {/* Content - HIGH CONTRAST, the focus */}
       <ParsedContent
         content={props.event.content}
-        class="text-text-primary break-words font-sans text-base leading-relaxed mb-4"
-        classList={{
-          'opacity-70': !hasPow(),
-        }}
+        class={contentClass()}
       />
 
       {/* Interaction Stats - Subtle, low contrast */}

@@ -2,6 +2,7 @@ import { Component, createSignal, Show, For, onCleanup, createEffect } from 'sol
 import { useRelatrSearch } from '../hooks/useRelatr';
 import { useProfile } from '../hooks/useProfile';
 import { nip19 } from 'nostr-tools';
+import { debug } from '../lib/debug';
 
 interface MentionAutocompleteProps {
   /** Position from the top of the textarea */
@@ -35,7 +36,7 @@ const MentionResultItem: Component<{
     const name = profile()?.metadata?.display_name
       || profile()?.metadata?.name
       || `${props.result.pubkey.slice(0, 8)}...`;
-    console.log('[MentionResultItem]', props.result.pubkey.slice(0, 8), 'displayName:', name, 'profile:', profile());
+    debug('[MentionResultItem]', props.result.pubkey.slice(0, 8), 'displayName:', name, 'profile:', profile());
     return name;
   };
 
@@ -96,9 +97,9 @@ export const MentionAutocomplete: Component<MentionAutocompleteProps> = (props) 
       return;
     }
 
-    console.log('[MentionAutocomplete] Searching for:', query);
+    debug('[MentionAutocomplete] Searching for:', query);
     const searchResults = await searchProfiles(query, 5);
-    console.log('[MentionAutocomplete] Search results:', searchResults);
+    debug('[MentionAutocomplete] Search results:', searchResults);
     setResults(searchResults);
     setSelectedIndex(0);
   });

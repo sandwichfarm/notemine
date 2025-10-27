@@ -14,7 +14,7 @@ class RelayStatsTracker {
   /**
    * Record that an event was received from a relay
    */
-  recordEvent(relayUrl: string, eventId: string) {
+  recordEvent(relayUrl: string, _eventId: string) {
     const existing = this.stats.get(relayUrl);
 
     if (existing) {

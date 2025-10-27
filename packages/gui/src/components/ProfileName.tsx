@@ -19,7 +19,7 @@ interface ProfileNameProps {
  * Falls back to short npub if no name is set
  */
 export const ProfileName: Component<ProfileNameProps> = (props) => {
-  const profile = useProfile(() => props.pubkey);
+  const profile = useProfile(props.pubkey);
 
   const displayName = () => {
     const prof = profile();

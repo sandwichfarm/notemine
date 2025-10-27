@@ -1,4 +1,5 @@
 import { SimplePool } from 'nostr-tools/pool';
+import { debug } from '../lib/debug';
 
 const NIP66_RELAYS = ['wss://relay.nostr.watch'];
 
@@ -40,7 +41,7 @@ export async function fetchNip66PowRelays(): Promise<string[]> {
             const relayUrl = new URL(dTag[1]).toString();
             if (!relays.has(relayUrl)) {
               relays.add(relayUrl);
-              console.log('[NIP-66] Found POW relay:', relayUrl);
+              debug('[NIP-66] Found POW relay:', relayUrl);
             }
           } catch (e) {
             // Silently ignore malformed events
@@ -48,7 +49,7 @@ export async function fetchNip66PowRelays(): Promise<string[]> {
         },
         oneose() {
           const relayArray = Array.from(relays);
-          console.log(`[NIP-66] Discovered ${relayArray.length} POW relays`);
+          debug(`[NIP-66] Discovered ${relayArray.length} POW relays`);
           resolve(relayArray);
         },
       }

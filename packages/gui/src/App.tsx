@@ -17,8 +17,9 @@ import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
 import { Preferences } from './pages/Preferences';
 import { fetchNip66PowRelays } from './lib/nip66';
-import { setPowRelays, connectToRelays, getActiveRelays, eventStore } from './lib/applesauce';
-import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
+import { setPowRelays, connectToRelays, getActiveRelays } from './lib/applesauce';
+// import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
+import { debug } from './lib/debug';
 
 // App initialization component
 const AppInit: ParentComponent = (props) => {
@@ -33,11 +34,11 @@ const AppInit: ParentComponent = (props) => {
     // Initialize local cache
     // try {
     //   await initializeCache();
-    //   console.log('[App] Cache initialized');
+    //   debug('[App] Cache initialized');
 
     //   // Load cached events into event store
     //   const cachedCount = await loadCachedEvents(eventStore);
-    //   console.log(`[App] Loaded ${cachedCount} events from cache`);
+    //   debug(`[App] Loaded ${cachedCount} events from cache`);
 
     //   // Set up automatic cache persistence
     //   setupCachePersistence(eventStore);
@@ -45,7 +46,7 @@ const AppInit: ParentComponent = (props) => {
     //   console.error('[App] Cache initialization failed:', error);
     //   // Continue without cache
     // }
-    console.log('[App] Cache disabled - WASM threading conflict with relay WebSockets');
+    debug('[App] Cache disabled - WASM threading conflict with relay WebSockets');
 
     // Fetch NIP-66 POW relays BEFORE mounting children
     try {
@@ -55,7 +56,7 @@ const AppInit: ParentComponent = (props) => {
       // Connect to relays
       const activeRelays = getActiveRelays();
       connectToRelays(activeRelays);
-      console.log('[App] Connected to relays:', activeRelays);
+      debug('[App] Connected to relays:', activeRelays);
     } catch (error) {
       console.error('[App] Failed to fetch NIP-66 relays:', error);
     }

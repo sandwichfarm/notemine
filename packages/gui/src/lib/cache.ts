@@ -7,6 +7,7 @@ import { Database } from '@tursodatabase/database-wasm';
 import { TursoWasmEventDatabase } from 'applesauce-sqlite/turso-wasm';
 import { AsyncEventStore } from 'applesauce-core/event-store';
 import { persistEventsToCache } from 'applesauce-core/helpers';
+import { debug } from '../lib/debug';
 
 let cacheDatabase: TursoWasmEventDatabase | null = null;
 let cacheEventStore: AsyncEventStore | null = null;
@@ -17,24 +18,24 @@ let persistUnsubscribe: (() => void) | null = null;
  * Uses IndexedDB via Turso WASM for browser-based SQLite storage
  */
 export async function initializeCache(): Promise<AsyncEventStore> {
-  console.log('[Cache] Initializing local cache...');
+  debug('[Cache] Initializing local cache...');
 
   try {
     // Create database instance with IndexedDB backend
     const db = new Database(':notemine-cache:');
 
     // Connect to the database
-    console.log('[Cache] Connecting to database...');
+    debug('[Cache] Connecting to database...');
     await db.connect();
 
     // Initialize the event database
-    console.log('[Cache] Creating TursoWasmEventDatabase...');
+    debug('[Cache] Creating TursoWasmEventDatabase...');
     cacheDatabase = await TursoWasmEventDatabase.fromDatabase(db);
 
     // Create AsyncEventStore with the database
     cacheEventStore = new AsyncEventStore(cacheDatabase);
 
-    console.log('[Cache] Local cache initialized successfully');
+    debug('[Cache] Local cache initialized successfully');
 
     return cacheEventStore;
   } catch (error) {
@@ -53,7 +54,7 @@ export function setupCachePersistence(mainEventStore: any): void {
     return;
   }
 
-  console.log('[Cache] Setting up cache persistence...');
+  debug('[Cache] Setting up cache persistence...');
 
   // Set up automatic persistence from main event store to cache
   persistUnsubscribe = persistEventsToCache(
@@ -79,7 +80,7 @@ export function setupCachePersistence(mainEventStore: any): void {
     }
   );
 
-  console.log('[Cache] Cache persistence enabled');
+  debug('[Cache] Cache persistence enabled');
 }
 
 /**
@@ -92,7 +93,7 @@ export async function loadCachedEvents(mainEventStore: any, limit: number = 1000
     return 0;
   }
 
-  console.log('[Cache] Loading cached events...');
+  debug('[Cache] Loading cached events...');
 
   try {
     // Load kind 1 notes (most recent first)
@@ -129,7 +130,7 @@ export async function loadCachedEvents(mainEventStore: any, limit: number = 1000
       }
     }
 
-    console.log(`[Cache] Loaded ${loadedCount} cached events`);
+    debug(`[Cache] Loaded ${loadedCount} cached events`);
     return loadedCount;
   } catch (error) {
     console.error('[Cache] Error loading cached events:', error);
@@ -146,11 +147,11 @@ export async function clearCache(): Promise<void> {
     return;
   }
 
-  console.log('[Cache] Clearing cache...');
+  debug('[Cache] Clearing cache...');
 
   try {
     await cacheDatabase.removeByFilters([{}]);
-    console.log('[Cache] Cache cleared');
+    debug('[Cache] Cache cleared');
   } catch (error) {
     console.error('[Cache] Error clearing cache:', error);
     throw error;
@@ -200,6 +201,6 @@ export async function closeCache(): Promise<void> {
     await cacheDatabase.close();
     cacheDatabase = null;
     cacheEventStore = null;
-    console.log('[Cache] Cache closed');
+    debug('[Cache] Cache closed');
   }
 }

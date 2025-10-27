@@ -2,6 +2,7 @@ import { Component, createSignal, Show, For } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useQueue } from '../providers/QueueProvider';
+import { debug } from '../lib/debug';
 
 interface ReactionPickerProps {
   eventId: string;
@@ -46,7 +47,7 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
     }
 
     try {
-      console.log('[ReactionPicker] Adding reaction to mining queue...');
+      debug('[ReactionPicker] Adding reaction to mining queue...');
 
       // Add to queue
       addToQueue({
@@ -67,7 +68,7 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
         },
       });
 
-      console.log('[ReactionPicker] Reaction added to queue');
+      debug('[ReactionPicker] Reaction added to queue');
 
       // Show success and close modal
       setQueueSuccess(true);

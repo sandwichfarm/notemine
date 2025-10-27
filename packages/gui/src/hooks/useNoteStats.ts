@@ -4,6 +4,7 @@ import { relayPool, getActiveRelays } from '../lib/applesauce';
 import { getPowDifficulty, calculatePowScore, getPubkeyPowDifficulty } from '../lib/pow';
 import { Subscription } from 'rxjs';
 import { usePreferences } from '../providers/PreferencesProvider';
+import { debug } from '../lib/debug';
 
 export interface NoteStats {
   reactionCount: number;
@@ -71,7 +72,7 @@ export function useNoteStats(event: NostrEvent) {
           // Ensure this is a kind 7 reaction event
           if (reaction.kind === 7 && !reactions.find(r => r.id === reaction.id)) {
             reactions.push(reaction);
-            console.log(`[useNoteStats] Reaction added for ${event.id.slice(0, 8)}: ${reaction.content}`);
+            debug(`[useNoteStats] Reaction added for ${event.id.slice(0, 8)}: ${reaction.content}`);
             updateStats();
           }
         }
@@ -91,7 +92,7 @@ export function useNoteStats(event: NostrEvent) {
           // Ensure this is a kind 1 reply event (not a kind 7 reaction)
           if (reply.kind === 1 && !replies.find(r => r.id === reply.id)) {
             replies.push(reply);
-            console.log(`[useNoteStats] Reply added for ${event.id.slice(0, 8)}`);
+            debug(`[useNoteStats] Reply added for ${event.id.slice(0, 8)}`);
             updateStats();
           }
         }
@@ -139,7 +140,7 @@ export function useNoteStats(event: NostrEvent) {
       // Weighted contributed work is what actually affects the score
       const weightedContributedWork = score.reactionsPow + score.repliesPow;
 
-      console.log(`[useNoteStats] Stats for ${event.id.slice(0, 8)}: reactions=${reactions.length}, replies=${replies.length}`);
+      debug(`[useNoteStats] Stats for ${event.id.slice(0, 8)}: reactions=${reactions.length}, replies=${replies.length}`);
 
       setStats({
         reactionCount: reactions.length,

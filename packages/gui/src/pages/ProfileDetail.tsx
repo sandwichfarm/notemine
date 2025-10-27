@@ -5,6 +5,7 @@ import { relayPool, getActiveRelays, getUserInboxRelays } from '../lib/applesauc
 import { useProfile } from '../hooks/useProfile';
 import { Note } from '../components/Note';
 import { getPowDifficulty } from '../lib/pow';
+import { debug } from '../lib/debug';
 
 const MIN_POW_DIFFICULTY = 16;
 
@@ -18,7 +19,7 @@ const ProfileDetail: Component = () => {
   const [loadingNotes, setLoadingNotes] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
 
-  const profile = useProfile(pubkey);
+  const profile = useProfile(() => pubkey() || undefined);
 
   onMount(async () => {
     try {
@@ -73,7 +74,7 @@ const ProfileDetail: Component = () => {
       const inboxRelays = await getUserInboxRelays(userPubkey);
       const relays = inboxRelays.length > 0 ? inboxRelays : getActiveRelays();
 
-      console.log('[ProfileDetail] Fetching notes from:', relays);
+      debug('[ProfileDetail] Fetching notes from:', relays);
 
       const filter = {
         kinds: [1, 30023],
@@ -108,7 +109,7 @@ const ProfileDetail: Component = () => {
           allNotes.sort((a, b) => b.created_at - a.created_at);
           setNotes(allNotes);
           setLoadingNotes(false);
-          console.log(`[ProfileDetail] Loaded ${allNotes.length} notes`);
+          debug(`[ProfileDetail] Loaded ${allNotes.length} notes`);
         },
       });
     } catch (err) {

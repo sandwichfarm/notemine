@@ -1,6 +1,7 @@
 import { createContext, useContext, Component, JSX } from 'solid-js';
 import type { QueueItem, QueueState } from '../types/queue';
 import { createLocalStore } from '../lib/localStorage';
+import { debug } from '../lib/debug';
 
 interface QueueContextType {
   queueState: () => QueueState;
@@ -38,7 +39,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
   // This handles page reload scenarios
   const state = queueState();
   if (!state.isProcessing && state.items.some((item) => ['queued', 'mining'].includes(item.status))) {
-    console.log('[QueueProvider] Detected pending items on mount, auto-starting queue');
+    debug('[QueueProvider] Detected pending items on mount, auto-starting queue');
     setQueueState((prev) => ({
       ...prev,
       isProcessing: true,
@@ -60,7 +61,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       items: [...prev.items, newItem],
     }));
 
-    console.log('[Queue] Added item:', newItem);
+    debug('[Queue] Added item:', newItem);
     return id;
   };
 
@@ -75,12 +76,12 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       activeItemId: prev.activeItemId === itemId ? null : prev.activeItemId,
     }));
 
-    console.log('[Queue] Removed item:', itemId, 'wasActive:', isActiveItem);
+    debug('[Queue] Removed item:', itemId, 'wasActive:', isActiveItem);
 
     // If we removed the active item, we need to signal that mining should stop
     // The QueueProcessor will handle starting the next item
     if (isActiveItem) {
-      console.log('[Queue] Removed active item, mining should stop');
+      debug('[Queue] Removed active item, mining should stop');
     }
   };
 
@@ -96,7 +97,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
         items: [item, ...otherItems],
       };
     });
-    console.log('[Queue] Moved to top:', itemId);
+    debug('[Queue] Moved to top:', itemId);
   };
 
   // Clear completed/failed/skipped items
@@ -107,13 +108,13 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
         (item) => !['completed', 'failed', 'skipped'].includes(item.status)
       ),
     }));
-    console.log('[Queue] Cleared completed items');
+    debug('[Queue] Cleared completed items');
   };
 
   // Clear entire queue
   const clearQueue = () => {
     setQueueState(DEFAULT_QUEUE_STATE);
-    console.log('[Queue] Cleared all items');
+    debug('[Queue] Cleared all items');
   };
 
   // Update item status
@@ -133,12 +134,12 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
           : item
       ),
     }));
-    console.log(`[Queue] Updated item ${itemId} status:`, status);
+    debug(`[Queue] Updated item ${itemId} status:`, status);
   };
 
   // Update item mining state
   const updateItemMiningState = (itemId: string, miningState: any) => {
-    console.log(`[Queue] Updating mining state for ${itemId}:`, {
+    debug(`[Queue] Updating mining state for ${itemId}:`, {
       workerNonces: miningState?.workerNonces,
       numberOfWorkers: miningState?.numberOfWorkers
     });
@@ -166,7 +167,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       ...prev,
       isProcessing: true,
     }));
-    console.log('[Queue] Started processing');
+    debug('[Queue] Started processing');
   };
 
   // Pause queue processing
@@ -175,7 +176,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       ...prev,
       isProcessing: false,
     }));
-    console.log('[Queue] Paused processing');
+    debug('[Queue] Paused processing');
   };
 
   // Skip current item

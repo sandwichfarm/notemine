@@ -14,6 +14,7 @@ export const MiningProvider: ParentComponent = (props) => {
     hashRate: 0,
     overallBestPow: null,
     workersBestPow: [],
+    workersHashRates: {},
     result: null,
     error: null,
   });

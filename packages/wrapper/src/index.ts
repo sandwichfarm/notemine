@@ -16,6 +16,8 @@ export interface MinerOptions {
   numberOfWorkers?: number;
   /** Event kind (default: 1) */
   kind?: number;
+  /** Enable debug logging (default: false) */
+  debug?: boolean;
 }
 
 /** Data structure representing a progress event during mining */
@@ -104,12 +106,16 @@ export class Notemine {
   private _difficulty: number;
   private _numberOfWorkers: number;
   private _kind: number;
+  private _debug: boolean;
   private _workerMaxHashRates = new Map<number, number>();
   private _workerHashRates = new Map<number, number[]>();
   private _lastRefresh = 0;
   private _totalHashRate = 0;
   private _workerNonces = new Map<number, string>();
   private _resumeNonces: string[] | undefined;
+  // Fallback sampling for rate when workers only send nonces
+  private _workerLastNonce = new Map<number, bigint>();
+  private _workerLastTime = new Map<number, number>();
   static _defaultTags: string[][] = [['miner', 'notemine']];
 
   /** Observable indicating whether mining is currently active */
@@ -152,6 +158,7 @@ export class Notemine {
     this._difficulty = options?.difficulty || 20;
     this._numberOfWorkers = options?.numberOfWorkers || navigator.hardwareConcurrency || 4;
     this._kind = options?.kind || 1;
+    this._debug = options?.debug || false;
   }
 
   /** Sets the content to be used in the mining event */
@@ -212,6 +219,16 @@ export class Notemine {
   /** Gets the event kind */
   get kind(): number {
     return this._kind;
+  }
+
+  /** Sets debug mode */
+  set debug(debug: boolean) {
+    this._debug = debug;
+  }
+
+  /** Gets debug mode */
+  get debug(): boolean {
+    return this._debug;
   }
 
   /** Sets the last refresh interval */
@@ -308,8 +325,13 @@ export class Notemine {
     if (workerNonces && workerNonces.length > 0) {
       this._resumeNonces = workerNonces;
     } else if (this._workerNonces.size > 0) {
-      // Convert Map to array
-      this._resumeNonces = Array.from(this._workerNonces.values());
+      // Build an ordered array keyed by worker id to preserve resume alignment
+      const orderedNonces: string[] = [];
+      for (let i = 0; i < this.numberOfWorkers; i++) {
+        const nonce = this._workerNonces.get(i);
+        orderedNonces[i] = nonce ?? i.toString();
+      }
+      this._resumeNonces = orderedNonces;
     }
 
     this.paused$.next(false);
@@ -418,7 +440,7 @@ export class Notemine {
    */
   private handleWorkerMessage(e: MessageEvent): void {
     const data = e.data;
-    const { type, workerId, hashRate } = data;
+    const { type, workerId } = data;
 
     ////console.log('Message from worker:', data);
 
@@ -455,7 +477,7 @@ export class Notemine {
 
       this.calculateHashRate(workerId, data.hashRate);
 
-      this.progressSubject.next({ workerId, hashRate, bestPowData });
+      this.progressSubject.next({ workerId, hashRate: data.hashRate, bestPowData });
     } else if (type === 'result') {
       ////console.log('Mining result received:', data.data);
       this.result$.next(data.data);
@@ -504,7 +526,9 @@ export class Notemine {
    * @param hashRate - The hash rate to track
    */
   private calculateHashRate(workerId: number, hashRate: number) {
-    if (!hashRate) return;
+    if (!hashRate || hashRate <= 0) {
+      return;
+    }
 
     let workerHashRates: number[] = this._workerHashRates.get(workerId) || [];
     workerHashRates.push(hashRate);
@@ -561,7 +585,7 @@ export class Notemine {
         }
     });
 
-    this._totalHashRate = Math.round(totalRate/1000);
+    this._totalHashRate = totalRate / 1000;
     this._lastRefresh = Date.now();
   }
 }

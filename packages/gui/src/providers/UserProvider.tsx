@@ -8,6 +8,7 @@ import {
 import type { ISigner } from 'applesauce-signers';
 import { relayPool } from '../lib/applesauce';
 import { Observable } from 'rxjs';
+import { debug } from '../lib/debug';
 
 export type AuthMethod = 'anon' | 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
 
@@ -105,7 +106,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
 
   const authBunker = async (bunkerUri: string) => {
     try {
-      console.log('[Auth] Connecting to bunker:', bunkerUri);
+      debug('[Auth] Connecting to bunker:', bunkerUri);
 
       // Use NostrConnectSigner.fromBunkerURI to connect
       const signer = await NostrConnectSigner.fromBunkerURI(bunkerUri, {
@@ -115,7 +116,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       // Wait for connection and get pubkey
       const pubkey = await signer.getPublicKey();
 
-      console.log('[Auth] Bunker connected, pubkey:', pubkey);
+      debug('[Auth] Bunker connected, pubkey:', pubkey);
 
       setUser({
         isAnon: false,
@@ -131,7 +132,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
 
   const authNostrConnect = async (connectUri: string) => {
     try {
-      console.log('[Auth] Parsing nostrconnect URI:', connectUri);
+      debug('[Auth] Parsing nostrconnect URI:', connectUri);
 
       // Parse the nostrconnect:// URI
       const url = new URL(connectUri);
@@ -143,7 +144,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         throw new Error('Invalid nostrconnect URI: missing secret or relays');
       }
 
-      console.log('[Auth] Creating NostrConnect signer with relays:', relays);
+      debug('[Auth] Creating NostrConnect signer with relays:', relays);
 
       // Create signer with the provided client pubkey and secret
       const signer = new NostrConnectSigner({
@@ -155,7 +156,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       // Connect and get pubkey
       const pubkey = await signer.getPublicKey();
 
-      console.log('[Auth] NostrConnect connected, pubkey:', pubkey);
+      debug('[Auth] NostrConnect connected, pubkey:', pubkey);
 
       setUser({
         isAnon: false,

@@ -1,5 +1,6 @@
-import { createContext, useContext, Component, JSX, Accessor } from 'solid-js';
+import { createContext, useContext, Component, JSX, Accessor, createEffect } from 'solid-js';
 import { createLocalStore } from '../lib/localStorage';
+import { setDebugEnabled } from '../lib/debug';
 
 /**
  * User preferences with all configurable magic numbers
@@ -32,6 +33,9 @@ export interface UserPreferences {
 
   // UI settings
   threadedRepliesCollapseDepth: number;
+
+  // Debug settings
+  debugMode: boolean;
 
   // Relay settings
   enabledRelays: {
@@ -67,6 +71,9 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
   // UI defaults
   threadedRepliesCollapseDepth: 2,
+
+  // Debug defaults
+  debugMode: false,
 
   // Relay defaults (empty initially, will be populated when relays are discovered)
   enabledRelays: {},
@@ -158,6 +165,11 @@ export const PreferencesProvider: Component<{ children: JSX.Element }> = (props)
     toggleRelay,
     getEnabledRelays,
   };
+
+  // Sync debug mode to global debug utility
+  createEffect(() => {
+    setDebugEnabled(preferences().debugMode);
+  });
 
   return (
     <PreferencesContext.Provider value={value}>

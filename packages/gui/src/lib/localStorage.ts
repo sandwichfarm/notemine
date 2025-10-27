@@ -16,14 +16,17 @@ export function createLocalStore<T>(
   const [value, setValue] = createSignal<T>(initialValue);
 
   // Wrapper setter that syncs to localStorage
-  const setValueAndStore: Setter<T> = (newValue) => {
-    setValue(newValue);
-    const valueToStore = typeof newValue === 'function'
-      ? (newValue as (prev: T) => T)(value())
-      : newValue;
-    localStorage.setItem(key, JSON.stringify(valueToStore));
-    return valueToStore;
-  };
+  const setValueAndStore = ((next: T | ((prev: T) => T)) => {
+    return setValue((prev) => {
+      const resolvedValue =
+        typeof next === 'function'
+          ? (next as (prev: T) => T)(prev)
+          : next;
+
+      localStorage.setItem(key, JSON.stringify(resolvedValue));
+      return resolvedValue;
+    });
+  }) as Setter<T>;
 
   return [value, setValueAndStore];
 }

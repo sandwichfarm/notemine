@@ -1,10 +1,11 @@
 import { Component, createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { createTimelineStream, getActiveRelays, relayPool, eventStore, batchFetchMetadata, getPowRelays } from '../lib/applesauce';
-import { calculatePowScore, getPowDifficulty, hasValidPow } from '../lib/pow';
+import { calculatePowScore, getPowDifficulty } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
 import { relayStatsTracker } from '../lib/relay-stats';
+import { debug } from '../lib/debug';
 
 // Minimum POW difficulty required for notes to appear in timeline
 const MIN_POW_DIFFICULTY = 8;
@@ -45,10 +46,10 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
       setLoading(true);
     }
 
-    console.log('[InfiniteTimeline] Loading events', { since, isLoadingMore });
+    debug('[InfiniteTimeline] Loading events', { since, isLoadingMore });
 
     const relays = getActiveRelays();
-    console.log('[InfiniteTimeline] Active relays:', relays);
+    debug('[InfiniteTimeline] Active relays:', relays);
     let eventCount = 0;
 
     // Track EOSE from each relay
@@ -57,16 +58,16 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
 
     const checkAllComplete = () => {
       if (hasSetLoadingFalse) return;
-      console.log(`[InfiniteTimeline] checkAllComplete: ${relayCompletions.size}/${relays.length} relays done, ${eventCount} events`);
+      debug(`[InfiniteTimeline] checkAllComplete: ${relayCompletions.size}/${relays.length} relays done, ${eventCount} events`);
       if (relayCompletions.size === relays.length) {
         hasSetLoadingFalse = true;
-        console.log('[InfiniteTimeline] All relays complete', { eventCount, batchSize });
+        debug('[InfiniteTimeline] All relays complete', { eventCount, batchSize });
         setLoading(false);
         setLoadingMore(false);
 
         // If we got fewer events than requested, we've reached the end
         if (eventCount < batchSize) {
-          console.log('[InfiniteTimeline] Fewer events than batch size, marking hasMore=false');
+          debug('[InfiniteTimeline] Fewer events than batch size, marking hasMore=false');
           setHasMore(false);
         }
       }
@@ -77,15 +78,15 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
 
     relays.forEach((relayUrl) => {
       const filter = { kinds: [1, 30023], limit: batchSize, ...(since ? { until: since } : {}) };
-      console.log(`[InfiniteTimeline] Querying relay ${relayUrl} with filter:`, filter);
+      debug(`[InfiniteTimeline] Querying relay ${relayUrl} with filter:`, filter);
       const relay$ = relayPool.req([relayUrl], filter);
 
       const sub = relay$.subscribe({
         next: (response) => {
           if (response === 'EOSE') {
-            console.log(`[InfiniteTimeline] EOSE from ${relayUrl}`);
+            debug(`[InfiniteTimeline] EOSE from ${relayUrl}`);
             relayCompletions.add(relayUrl);
-            console.log(`[InfiniteTimeline] Completions: ${relayCompletions.size}/${relays.length}`);
+            debug(`[InfiniteTimeline] Completions: ${relayCompletions.size}/${relays.length}`);
             checkAllComplete();
             return;
           }
@@ -93,7 +94,7 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
           // Only process kind 1 (short notes) and kind 30023 (long-form content)
           if (response.kind === 1 || response.kind === 30023) {
             const event = response as NostrEvent;
-            console.log(`[InfiniteTimeline] Processing event from ${relayUrl}: ${event.id.slice(0, 8)} kind=${event.kind}`);
+            debug(`[InfiniteTimeline] Processing event from ${relayUrl}: ${event.id.slice(0, 8)} kind=${event.kind}`);
 
             // Track which relay sent this event
             relayStatsTracker.recordEvent(relayUrl, event.id);
@@ -101,14 +102,14 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
             // Filter out replies - ROOT NOTES ONLY (notes without 'e' tags)
             const hasETag = event.tags.some((tag) => tag[0] === 'e');
             if (hasETag) {
-              console.log(`[InfiniteTimeline] Filtering out reply ${event.id.slice(0, 8)}`);
+              debug(`[InfiniteTimeline] Filtering out reply ${event.id.slice(0, 8)}`);
               return;
             }
 
             // Filter out events that don't meet minimum POW requirement
             const powDifficulty = getPowDifficulty(event);
             if (powDifficulty < MIN_POW_DIFFICULTY) {
-              console.log(`[InfiniteTimeline] Filtering out event ${event.id.slice(0, 8)} (POW ${powDifficulty} < ${MIN_POW_DIFFICULTY})`);
+              debug(`[InfiniteTimeline] Filtering out event ${event.id.slice(0, 8)} (POW ${powDifficulty} < ${MIN_POW_DIFFICULTY})`);
               return;
             }
 
@@ -175,7 +176,7 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
           checkAllComplete();
         },
         complete: () => {
-          console.log(`[InfiniteTimeline] ${relayUrl} subscription complete`);
+          debug(`[InfiniteTimeline] ${relayUrl} subscription complete`);
           relayCompletions.add(relayUrl);
           checkAllComplete();
         },
@@ -185,9 +186,9 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
     });
 
     // Fallback timeout - if relays don't respond within 10 seconds, stop loading
-    const timeoutHandle = setTimeout(() => {
+    setTimeout(() => {
       if (!hasSetLoadingFalse) {
-        console.log('[InfiniteTimeline] Timeout reached, stopping loading and unsubscribing');
+        debug('[InfiniteTimeline] Timeout reached, stopping loading and unsubscribing');
         hasSetLoadingFalse = true;
         setLoading(false);
         setLoadingMore(false);
@@ -251,7 +252,7 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
     const oldest = oldestTimestamp();
     if (oldest === undefined) return;
 
-    console.log('[InfiniteTimeline] Loading more from', oldest);
+    debug('[InfiniteTimeline] Loading more from', oldest);
     loadEvents(oldest);
   };
 
@@ -272,13 +273,12 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
   };
 
   // Watch for relay changes and reload timeline when NIP-66 relays are discovered
-  let isInitialized = false;
   createEffect(() => {
-    // Track reactive dependency on powRelays
-    const powRelaysList = getPowRelays();
+    // Track reactive dependency on pow relays even if value is unused
+    void getPowRelays();
     const relays = getActiveRelays();
 
-    console.log('[InfiniteTimeline] Relay change detected, relays:', relays);
+    debug('[InfiniteTimeline] Relay change detected, relays:', relays);
 
     if (relays.length === 0) {
       setError('No relays connected');
@@ -307,7 +307,7 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
     };
 
     // Load initial events
-    console.log('[InfiniteTimeline] Reloading with updated relays:', relays);
+    debug('[InfiniteTimeline] Reloading with updated relays:', relays);
     loadEvents();
   });
 

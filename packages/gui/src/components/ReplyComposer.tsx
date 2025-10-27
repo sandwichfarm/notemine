@@ -5,6 +5,7 @@ import { useQueue } from '../providers/QueueProvider';
 import type { NostrEvent } from 'nostr-tools/core';
 import { MentionAutocomplete } from './MentionAutocomplete';
 import { debug } from '../lib/debug';
+import { getEventRelayHint, addRelayHintToETag, addRelayHintToPTag } from '../lib/inbox-outbox';
 
 const CLIENT_TAG = 'notemine.io';
 

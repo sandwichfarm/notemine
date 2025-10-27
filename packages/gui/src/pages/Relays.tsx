@@ -1,7 +1,18 @@
 import { Component, createSignal, onMount, For, Show } from 'solid-js';
-import { relayPool, getPowRelays, DEFAULT_POW_RELAY } from '../lib/applesauce';
+import {
+  relayPool,
+  getPowRelays,
+  DEFAULT_POW_RELAY,
+  getUserInboxRelaysSignal,
+  getUserOutboxRelaysSignal,
+} from '../lib/applesauce';
 import { relayStatsTracker } from '../lib/relay-stats';
-import { getRelaySettings, updateRelaySettings, initializeRelaySettings } from '../lib/relay-settings';
+import {
+  getRelaySettings,
+  updateRelaySettings,
+  initializeRelaySettings,
+  type RelaySource,
+} from '../lib/relay-settings';
 
 interface RelayStatus {
   url: string;
@@ -10,6 +21,8 @@ interface RelayStatus {
   error?: string;
   read: boolean;
   write: boolean;
+  source: RelaySource;
+  immutable: boolean;
 }
 
 const Relays: Component = () => {
@@ -17,19 +30,64 @@ const Relays: Component = () => {
   const [loading, setLoading] = createSignal(true);
 
   const updateRelayStats = async () => {
-    // Get all relay URLs
-    const allRelays = [DEFAULT_POW_RELAY, ...getPowRelays()];
+    // Get user relays from signals
+    const userInbox = getUserInboxRelaysSignal();
+    const userOutbox = getUserOutboxRelaysSignal();
 
-    // Check status of each relay
+    // Build relay map with source tracking and deduplication
+    // Priority: default > user > nip66
+    const relayMap = new Map<string, { source: RelaySource; defaultRead: boolean; defaultWrite: boolean }>();
+
+    // 1. Add default relay (highest priority, immutable)
+    relayMap.set(DEFAULT_POW_RELAY, { source: 'default', defaultRead: true, defaultWrite: true });
+
+    // 2. Add user relays (second priority)
+    // Determine if relay is inbox, outbox, or both
+    const userInboxSet = new Set(userInbox);
+    const userOutboxSet = new Set(userOutbox);
+
+    [...userInbox, ...userOutbox].forEach((url) => {
+      if (!relayMap.has(url)) {
+        const inInbox = userInboxSet.has(url);
+        const inOutbox = userOutboxSet.has(url);
+
+        let source: RelaySource;
+        if (inInbox && inOutbox) {
+          source = 'user-both';
+        } else if (inInbox) {
+          source = 'user-inbox';
+        } else {
+          source = 'user-outbox';
+        }
+
+        relayMap.set(url, {
+          source,
+          defaultRead: inInbox,
+          defaultWrite: inOutbox,
+        });
+      }
+    });
+
+    // 3. Add NIP-66 POW relays (lowest priority)
+    getPowRelays().forEach((url) => {
+      if (!relayMap.has(url)) {
+        relayMap.set(url, { source: 'nip66', defaultRead: true, defaultWrite: true });
+      }
+    });
+
+    // Build status array
+    const allRelays = Array.from(relayMap.entries());
     const statuses = await Promise.all(
-      allRelays.map(async (url) => {
+      allRelays.map(async ([url, { source, defaultRead, defaultWrite }]) => {
         try {
           const relay = relayPool.relay(url);
           const stats = relayStatsTracker.getRelayStats(url);
-          const settings = getRelaySettings(url);
 
-          // Initialize settings if not configured
-          initializeRelaySettings(url);
+          // Initialize settings with proper source and defaults
+          const isDefault = url === DEFAULT_POW_RELAY;
+          initializeRelaySettings(url, source, defaultRead, defaultWrite, isDefault);
+
+          const settings = getRelaySettings(url);
 
           return {
             url,
@@ -37,10 +95,13 @@ const Relays: Component = () => {
             eventCount: stats?.eventCount || 0,
             read: settings.read,
             write: settings.write,
+            source: settings.source || source,
+            immutable: settings.immutable || false,
           } as RelayStatus;
         } catch (error) {
+          const isDefault = url === DEFAULT_POW_RELAY;
+          initializeRelaySettings(url, source, defaultRead, defaultWrite, isDefault);
           const settings = getRelaySettings(url);
-          initializeRelaySettings(url);
 
           return {
             url,
@@ -49,6 +110,8 @@ const Relays: Component = () => {
             eventCount: 0,
             read: settings.read,
             write: settings.write,
+            source: settings.source || source,
+            immutable: settings.immutable || false,
           } as RelayStatus;
         }
       })
@@ -69,15 +132,23 @@ const Relays: Component = () => {
     return () => clearInterval(interval);
   });
 
-  const handleToggleRead = (url: string, currentRead: boolean) => {
-    const settings = getRelaySettings(url);
-    updateRelaySettings(url, !currentRead, settings.write);
+  const handleToggleRead = (relay: RelayStatus) => {
+    if (relay.immutable) {
+      console.warn('[Relays] Cannot toggle read for immutable relay:', relay.url);
+      return;
+    }
+    const settings = getRelaySettings(relay.url);
+    updateRelaySettings(relay.url, !relay.read, settings.write);
     updateRelayStats();
   };
 
-  const handleToggleWrite = (url: string, currentWrite: boolean) => {
-    const settings = getRelaySettings(url);
-    updateRelaySettings(url, settings.read, !currentWrite);
+  const handleToggleWrite = (relay: RelayStatus) => {
+    if (relay.immutable) {
+      console.warn('[Relays] Cannot toggle write for immutable relay:', relay.url);
+      return;
+    }
+    const settings = getRelaySettings(relay.url);
+    updateRelaySettings(relay.url, settings.read, !relay.write);
     updateRelayStats();
   };
 
@@ -148,9 +219,23 @@ const Relays: Component = () => {
                       <div class="font-mono text-sm truncate">
                         {relay.url}
                       </div>
-                      <div class="flex items-center gap-2 mt-1">
-                        <Show when={relay.url === DEFAULT_POW_RELAY}>
-                          <span class="text-xs text-accent">Default Relay</span>
+                      <div class="flex items-center gap-2 mt-1 flex-wrap">
+                        <Show when={relay.source === 'default'}>
+                          <span class="text-xs text-accent font-medium">
+                            Default Relay {relay.immutable ? '(Immutable)' : ''}
+                          </span>
+                        </Show>
+                        <Show when={relay.source === 'user-inbox'}>
+                          <span class="text-xs text-blue-400 font-medium">Your Inbox Relay</span>
+                        </Show>
+                        <Show when={relay.source === 'user-outbox'}>
+                          <span class="text-xs text-green-400 font-medium">Your Outbox Relay</span>
+                        </Show>
+                        <Show when={relay.source === 'user-both'}>
+                          <span class="text-xs text-purple-400 font-medium">Your Inbox+Outbox Relay</span>
+                        </Show>
+                        <Show when={relay.source === 'nip66'}>
+                          <span class="text-xs text-cyan-400 font-medium">NIP-66 POW Relay</span>
                         </Show>
                         <Show when={relay.eventCount > 0}>
                           <span class="text-xs text-text-secondary">
@@ -168,24 +253,42 @@ const Relays: Component = () => {
                     {/* Read/Write toggles */}
                     <div class="flex items-center gap-2">
                       <button
-                        onClick={() => handleToggleRead(relay.url, relay.read)}
+                        onClick={() => handleToggleRead(relay)}
+                        disabled={relay.immutable}
                         class="text-xs px-3 py-1.5 rounded transition-colors font-medium"
                         classList={{
-                          'bg-blue-500/20 text-blue-500': relay.read,
-                          'bg-gray-500/20 text-gray-500': !relay.read,
+                          'bg-blue-500/20 text-blue-500': relay.read && !relay.immutable,
+                          'bg-gray-500/20 text-gray-500': !relay.read && !relay.immutable,
+                          'bg-blue-500/30 text-blue-400 cursor-not-allowed': relay.immutable && relay.read,
+                          'bg-gray-500/30 text-gray-400 cursor-not-allowed': relay.immutable && !relay.read,
                         }}
-                        title={relay.read ? 'Read enabled' : 'Read disabled'}
+                        title={
+                          relay.immutable
+                            ? 'Cannot modify default relay'
+                            : relay.read
+                              ? 'Read enabled - click to disable'
+                              : 'Read disabled - click to enable'
+                        }
                       >
                         Read {relay.read ? '✓' : '✗'}
                       </button>
                       <button
-                        onClick={() => handleToggleWrite(relay.url, relay.write)}
+                        onClick={() => handleToggleWrite(relay)}
+                        disabled={relay.immutable}
                         class="text-xs px-3 py-1.5 rounded transition-colors font-medium"
                         classList={{
-                          'bg-green-500/20 text-green-500': relay.write,
-                          'bg-gray-500/20 text-gray-500': !relay.write,
+                          'bg-green-500/20 text-green-500': relay.write && !relay.immutable,
+                          'bg-gray-500/20 text-gray-500': !relay.write && !relay.immutable,
+                          'bg-green-500/30 text-green-400 cursor-not-allowed': relay.immutable && relay.write,
+                          'bg-gray-500/30 text-gray-400 cursor-not-allowed': relay.immutable && !relay.write,
                         }}
-                        title={relay.write ? 'Write enabled' : 'Write disabled'}
+                        title={
+                          relay.immutable
+                            ? 'Cannot modify default relay'
+                            : relay.write
+                              ? 'Write enabled - click to disable'
+                              : 'Write disabled - click to enable'
+                        }
                       >
                         Write {relay.write ? '✓' : '✗'}
                       </button>

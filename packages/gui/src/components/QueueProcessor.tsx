@@ -6,6 +6,7 @@ import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesa
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
 import { debug } from '../lib/debug';
+import { getPublishRelaysForInteraction } from '../lib/inbox-outbox';
 
 /**
  * QueueProcessor handles automatic processing of queued mining operations.
@@ -122,10 +123,47 @@ export const QueueProcessor: Component = () => {
         throw new Error('Cannot sign event: no signing method available');
       }
 
-      // Publish to relays
-      const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
-      const publishRelays = getPublishRelays(outboxRelays);
-      debug('[QueueProcessor] Publishing to relays:', publishRelays);
+      // Determine which relays to publish to based on event type
+      let allPublishRelays: string[];
+
+      // Check if this is a reply or reaction (interacting with another user's content)
+      const isInteraction = nextItem.type === 'reply' || nextItem.type === 'reaction';
+      const targetPubkey = isInteraction ? nextItem.tags?.find(t => t[0] === 'p')?.[1] : null;
+
+      if (isInteraction && targetPubkey) {
+        // For interactions: publish to author's inbox + your outbox + notemine.io + NIP-66 PoW relays
+        const { getNip66PowRelays } = await import('../lib/nip66');
+        const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
+        const powRelays = getNip66PowRelays();
+
+        debug('[QueueProcessor] Publishing interaction to inbox/outbox model:', {
+          targetPubkey,
+          type: nextItem.type,
+        });
+
+        allPublishRelays = await getPublishRelaysForInteraction(
+          targetPubkey,
+          currentUser.pubkey,
+          defaultRelay,
+          powRelays
+        );
+      } else {
+        // For regular notes: notemine.io + NIP-66 POW relays + user's outbox relays
+        const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
+        allPublishRelays = getPublishRelays(outboxRelays);
+      }
+
+      // Get write-enabled relays from settings
+      const { getWriteRelays } = await import('../lib/relay-settings');
+      const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
+      const writeEnabledRelays = getWriteRelays();
+
+      // Filter to write-enabled relays, but ALWAYS include notemine.io (immutable)
+      const publishRelays = allPublishRelays.filter(url => {
+        return url === defaultRelay || writeEnabledRelays.includes(url);
+      });
+
+      debug('[QueueProcessor] Publishing to write-enabled relays:', publishRelays);
 
       const promises = publishRelays.map(async (relayUrl) => {
         const relay = relayPool.relay(relayUrl);

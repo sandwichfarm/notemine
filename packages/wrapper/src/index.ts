@@ -170,7 +170,7 @@ export class Notemine {
     this._pubkey = options?.pubkey || '';
     this._difficulty = options?.difficulty || 20;
     this._numberOfWorkers = options?.numberOfWorkers || navigator.hardwareConcurrency || 4;
-    this._kind = options?.kind || 1;
+    this._kind = options?.kind ?? 1; // Use ?? instead of || to allow kind: 0
     this._debug = options?.debug || false;
   }
 

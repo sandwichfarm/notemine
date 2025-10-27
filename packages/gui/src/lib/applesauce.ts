@@ -51,6 +51,24 @@ export function setPowRelays(relays: string[]) {
   connectToRelays(relays);
 }
 
+// NIP-65 User relays (inbox/outbox)
+const [userInboxRelays, setUserInboxRelaysSignal] = createSignal<string[]>([]);
+const [userOutboxRelays, setUserOutboxRelaysSignal] = createSignal<string[]>([]);
+
+// Export getters for reactive access
+export const getUserInboxRelaysSignal = userInboxRelays;
+export const getUserOutboxRelaysSignal = userOutboxRelays;
+
+// Set user relays from NIP-65
+export function setUserRelays(inbox: string[], outbox: string[]) {
+  debug('[NIP-65] Setting user relays - inbox:', inbox, 'outbox:', outbox);
+  setUserInboxRelaysSignal(inbox);
+  setUserOutboxRelaysSignal(outbox);
+  // Connect to user's relays immediately
+  const allUserRelays = [...new Set([...inbox, ...outbox])];
+  connectToRelays(allUserRelays);
+}
+
 // Create loaders with EventStore integration
 export const addressLoader = createAddressLoader(relayPool, {
   eventStore,
@@ -123,6 +141,7 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
       next: (mailboxes) => {
         if (mailboxes?.outboxes && mailboxes.outboxes.length > 0) {
           debug('[NIP-65] Found outbox relays:', mailboxes.outboxes);
+          setUserOutboxRelaysSignal(mailboxes.outboxes);
           resolve(mailboxes.outboxes);
           subscription.unsubscribe();
         }
@@ -166,6 +185,7 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
       next: (mailboxes) => {
         if (mailboxes?.inboxes && mailboxes.inboxes.length > 0) {
           debug('[NIP-65] Found inbox relays:', mailboxes.inboxes);
+          setUserInboxRelaysSignal(mailboxes.inboxes);
           resolve(mailboxes.inboxes);
           subscription.unsubscribe();
         }

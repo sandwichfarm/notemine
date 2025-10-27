@@ -5,10 +5,14 @@
 
 import { createSignal } from 'solid-js';
 
+export type RelaySource = 'default' | 'nip66' | 'user-inbox' | 'user-outbox' | 'user-both';
+
 export interface RelaySettings {
   url: string;
   read: boolean;
   write: boolean;
+  source?: RelaySource;
+  immutable?: boolean;
 }
 
 const STORAGE_KEY = 'notemine:relaySettings';
@@ -46,7 +50,7 @@ const [relaySettings, setRelaySettings] = createSignal<Record<string, RelaySetti
  */
 export function getRelaySettings(url: string): RelaySettings {
   const settings = relaySettings();
-  return settings[url] || { url, read: true, write: true };
+  return settings[url] || { url, read: true, write: true, source: 'nip66', immutable: false };
 }
 
 /**
@@ -59,11 +63,31 @@ export function getAllRelaySettings(): Record<string, RelaySettings> {
 /**
  * Update settings for a specific relay
  */
-export function updateRelaySettings(url: string, read: boolean, write: boolean) {
+export function updateRelaySettings(
+  url: string,
+  read: boolean,
+  write: boolean,
+  source?: RelaySource,
+  immutable?: boolean
+) {
   setRelaySettings((prev) => {
+    const existing = prev[url];
+
+    // Prevent modification of immutable relays
+    if (existing?.immutable && (read !== existing.read || write !== existing.write)) {
+      console.warn(`[RelaySettings] Cannot modify immutable relay: ${url}`);
+      return prev;
+    }
+
     const updated = {
       ...prev,
-      [url]: { url, read, write },
+      [url]: {
+        url,
+        read,
+        write,
+        source: source || existing?.source || 'nip66',
+        immutable: immutable ?? existing?.immutable ?? false,
+      },
     };
     saveSettings(updated);
     return updated;
@@ -86,12 +110,28 @@ export function removeRelaySettings(url: string) {
  * Initialize settings for a relay if not already configured
  * Returns the settings (existing or newly created)
  */
-export function initializeRelaySettings(url: string): RelaySettings {
+export function initializeRelaySettings(
+  url: string,
+  source?: RelaySource,
+  defaultRead: boolean = true,
+  defaultWrite: boolean = true,
+  immutable?: boolean
+): RelaySettings {
   const settings = relaySettings();
   if (!settings[url]) {
-    updateRelaySettings(url, true, true);
+    updateRelaySettings(url, defaultRead, defaultWrite, source, immutable);
   }
   return getRelaySettings(url);
+}
+
+/**
+ * Get all relays by source type
+ */
+export function getRelaysBySource(source: RelaySource): string[] {
+  const settings = relaySettings();
+  return Object.values(settings)
+    .filter((s) => s.source === source)
+    .map((s) => s.url);
 }
 
 /**

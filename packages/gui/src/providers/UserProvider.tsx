@@ -96,6 +96,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'extension',
       });
+
+      // Fetch user data including relay list
+      await fetchUserData(pubkey);
     } catch (error) {
       console.error('[Auth] Extension auth failed:', error);
       throw error;
@@ -113,6 +116,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'privatekey',
       });
+
+      // Fetch user data including relay list
+      await fetchUserData(pubkey);
     } catch (error) {
       console.error('[Auth] Private key auth failed:', error);
       throw error;
@@ -139,6 +145,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'bunker',
       });
+
+      // Fetch user data including relay list
+      await fetchUserData(pubkey);
     } catch (error) {
       console.error('[Auth] Bunker auth failed:', error);
       throw error;
@@ -155,6 +164,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'nostrconnect',
       });
+
+      // Fetch user data including relay list
+      await fetchUserData(pubkey);
     } catch (error) {
       console.error('[Auth] NostrConnect auth failed:', error);
       throw error;
@@ -202,6 +214,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'nostrconnect',
       });
+
+      // Fetch user data including relay list
+      await fetchUserData(session.userPubkey);
     } catch (error) {
       console.error('[Auth] Failed to restore NostrConnect session:', error);
       // Clear invalid session
@@ -216,7 +231,13 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       debug('[Auth] Fetching user data for:', pubkey);
 
       // Import the necessary functions
-      const { relayPool, eventStore, PROFILE_RELAYS } = await import('../lib/applesauce');
+      const {
+        relayPool,
+        eventStore,
+        PROFILE_RELAYS,
+        getUserInboxRelays,
+        getUserOutboxRelays,
+      } = await import('../lib/applesauce');
 
       // Ensure PROFILE_RELAYS are connected
       debug('[Auth] Connecting to profile relays:', PROFILE_RELAYS);
@@ -244,6 +265,15 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
             } else if (response.kind === 10002) {
               eventStore.add(response);
               debug('[Auth] Stored kind 10002 event');
+
+              // Trigger relay list population (updates signals)
+              debug('[Auth] Triggering NIP-65 relay list population');
+              getUserInboxRelays(pubkey).catch(err =>
+                console.error('[Auth] Failed to get inbox relays:', err)
+              );
+              getUserOutboxRelays(pubkey).catch(err =>
+                console.error('[Auth] Failed to get outbox relays:', err)
+              );
             }
           }
         },
@@ -259,6 +289,15 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       setTimeout(() => {
         subscription.unsubscribe();
       }, 5000);
+
+      // Also trigger relay fetch immediately (in case data is already in cache)
+      debug('[Auth] Triggering immediate relay list check from cache');
+      getUserInboxRelays(pubkey).catch(err =>
+        console.error('[Auth] Failed to get inbox relays:', err)
+      );
+      getUserOutboxRelays(pubkey).catch(err =>
+        console.error('[Auth] Failed to get outbox relays:', err)
+      );
     } catch (error) {
       console.error('[Auth] Failed to fetch user data:', error);
       // Non-fatal error, continue with authentication

@@ -9,6 +9,8 @@ import { MiningStatsButton, MiningPanel } from './MiningStatsButton';
 import { useMining } from '../providers/MiningProvider';
 import { QueueButton } from './QueueButton';
 import { QueuePanel } from './QueuePanel';
+import { PublishingButton } from './PublishingButton';
+import { PublishingPanel } from './PublishingPanel';
 import { clearAnonKey } from '../lib/anon-storage';
 
 const Layout: Component<{ children?: any }> = (props) => {
@@ -18,7 +20,7 @@ const Layout: Component<{ children?: any }> = (props) => {
   const { miningState } = useMining();
   const [showLoginModal, setShowLoginModal] = createSignal(false);
   const [showProfileModal, setShowProfileModal] = createSignal(false);
-  const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | 'queue' | null>(null);
+  const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | 'queue' | 'publishing' | null>(null);
   const [showPersistenceConfirm, setShowPersistenceConfirm] = createSignal(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = createSignal(false);
   const [headerHeight, setHeaderHeight] = createSignal(80); // Default fallback
@@ -31,7 +33,7 @@ const Layout: Component<{ children?: any }> = (props) => {
   });
 
   // Close tooltip when opening a panel
-  const openPanel = (panel: 'mining' | 'user' | 'queue') => {
+  const openPanel = (panel: 'mining' | 'user' | 'queue' | 'publishing') => {
     setActiveTooltip(null);
     setActivePanel(activePanel() === panel ? null : panel);
   };
@@ -73,6 +75,7 @@ const Layout: Component<{ children?: any }> = (props) => {
         <div class="flex items-center justify-center py-4 bg-black/90">
           <div class="flex items-center gap-2">
             <QueueButton onToggle={() => openPanel('queue')} isActive={activePanel() === 'queue'} />
+            <PublishingButton onToggle={() => openPanel('publishing')} isActive={activePanel() === 'publishing'} />
             <MiningStatsButton onToggle={() => openPanel('mining')} isActive={activePanel() === 'mining'} />
 
             <Show when={user()}>
@@ -147,6 +150,11 @@ const Layout: Component<{ children?: any }> = (props) => {
         {/* Queue Panel */}
         <Show when={activePanel() === 'queue'}>
           <QueuePanel />
+        </Show>
+
+        {/* Publishing Panel */}
+        <Show when={activePanel() === 'publishing'}>
+          <PublishingPanel />
         </Show>
 
         {/* User Panel */}

@@ -41,33 +41,21 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
   const setQueueState = store.setValue;
   const flushQueue = store.flush;
 
-  // Add event listeners to flush queue state on page exit
-  // Also handle auto-start after children mount
-  onMount(() => {
-    // On mount, if there are items with queued status, ensure isProcessing is true
-    // This runs AFTER QueueProcessor mounts and registers its effect
-    const state = queueState();
-    if (!state.isProcessing && state.items.some((item) => item.status === 'queued')) {
-      debug('[QueueProvider] Detected pending items on mount, auto-starting queue');
-      setQueueState((prev) => ({
-        ...prev,
-        isProcessing: true,
-      }));
-      flushQueue(); // Persist immediately so it survives next reload
-    }
+  // Event handlers for persistence
+  const handleFlush = () => {
+    debug('[QueueProvider] Flushing queue to localStorage on page exit');
+    flushQueue();
+  };
 
-    const handleFlush = () => {
-      debug('[QueueProvider] Flushing queue to localStorage on page exit');
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      debug('[QueueProvider] Flushing queue to localStorage on tab hide');
       flushQueue();
-    };
+    }
+  };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        debug('[QueueProvider] Flushing queue to localStorage on tab hide');
-        flushQueue();
-      }
-    };
-
+  // Add event listeners to flush queue state on page exit
+  onMount(() => {
     // beforeunload: Universal support, fires on page exit (refresh, close, navigate away)
     window.addEventListener('beforeunload', handleFlush);
 
@@ -83,11 +71,9 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
   onCleanup(() => {
     debug('[QueueProvider] Cleanup: flushing queue and removing listeners');
     flushQueue(); // Flush one last time on cleanup
-    window.removeEventListener('beforeunload', flushQueue);
-    window.removeEventListener('pagehide', flushQueue);
-    document.removeEventListener('visibilitychange', () => {
-      if (document.hidden) flushQueue();
-    });
+    window.removeEventListener('beforeunload', handleFlush);
+    window.removeEventListener('pagehide', handleFlush);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   // Add item to queue
@@ -103,8 +89,8 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     setQueueState((prev) => ({
       ...prev,
       items: [...prev.items, newItem],
-      // Always start queue when items are added - user wants to process them
-      isProcessing: true,
+      // Auto-start queue if autoProcess is enabled and not already processing
+      isProcessing: prev.autoProcess ? true : prev.isProcessing,
     }));
 
     debug('[Queue] Added item:', newItem);

@@ -8,6 +8,8 @@ import { PreferencesProvider } from './providers/PreferencesProvider';
 import { TooltipProvider } from './providers/TooltipProvider';
 import { QueueProvider } from './providers/QueueProvider';
 import { QueueProcessor } from './components/QueueProcessor';
+import { PublishingProvider } from './providers/PublishingProvider';
+import { PublishingProcessor } from './components/PublishingProcessor';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -126,8 +128,10 @@ const App: Component = () => {
             <UserProvider>
               <MiningProvider>
                 <QueueProvider>
-                  <QueueProcessor />
-                  <AppInit>
+                  <PublishingProvider>
+                    <QueueProcessor />
+                    <PublishingProcessor />
+                    <AppInit>
                     <Router root={Layout}>
                       <Route path="/" component={Home} />
                       <Route path="/feed" component={Feed} />
@@ -140,6 +144,7 @@ const App: Component = () => {
                       <Route path="/p/:identifier" component={ProfileDetail} />
                     </Router>
                   </AppInit>
+                  </PublishingProvider>
                 </QueueProvider>
               </MiningProvider>
             </UserProvider>

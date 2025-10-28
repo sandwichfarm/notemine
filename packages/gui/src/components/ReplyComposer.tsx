@@ -207,7 +207,7 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
 
   return (
     <div
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
       onClick={props.onClose}
     >
       <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>

@@ -356,6 +356,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
               <Note
                 event={scoredNote.event}
                 score={scoredNote.score}
+                reactions={reactionsCache.get(scoredNote.event.id) || []}
+                replies={repliesCache.get(scoredNote.event.id) || []}
                 showScore={props.showScores ?? true}
                 onVisible={handleNoteVisible}
               />

@@ -1,12 +1,11 @@
-import { Component, Show, createSignal, For, onMount, onCleanup } from 'solid-js';
+import { Component, Show, createSignal, For, onMount, onCleanup, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { A } from '@solidjs/router';
 import type { NostrEvent } from 'nostr-tools/core';
-import { getPowDifficulty, hasValidPow, formatPowDifficulty } from '../lib/pow';
+import { getPowDifficulty, hasValidPow, formatPowDifficulty, calculatePowScore } from '../lib/pow';
 import { nip19 } from 'nostr-tools';
 import { ReactionPicker } from './ReactionPicker';
 import { ReplyComposer } from './ReplyComposer';
-import { useNoteStats } from '../hooks/useNoteStats';
 import { ProfileName } from './ProfileName';
 import { ParsedContent } from './ParsedContent';
 import { usePreferences } from '../providers/PreferencesProvider';
@@ -16,8 +15,14 @@ interface NoteProps {
   event: NostrEvent;
   score?: number;
   showScore?: boolean;
+  reactions?: NostrEvent[];
+  replies?: NostrEvent[];
   onVisible?: (eventId: string) => void; // Callback when note becomes visible
 }
+
+// Global signal to track which note's tooltip is open (must be reactive)
+import { createSignal as createGlobalSignal } from 'solid-js';
+const [globalOpenTooltipId, setGlobalOpenTooltipId] = createGlobalSignal<string | null>(null);
 
 export const Note: Component<NoteProps> = (props) => {
   const [showReactionPicker, setShowReactionPicker] = createSignal(false);
@@ -28,11 +33,30 @@ export const Note: Component<NoteProps> = (props) => {
 
   // Ref for intersection observer
   let noteRef: HTMLDivElement | undefined;
+  let scoreSpanRef: HTMLSpanElement | undefined;
 
   const powDifficulty = () => getPowDifficulty(props.event);
   const hasPow = () => hasValidPow(props.event, 1);
   const formattedPow = () => formatPowDifficulty(powDifficulty());
-  const stats = useNoteStats(props.event);
+
+  // Calculate stats directly from props (single source of truth with Timeline)
+  const stats = () => {
+    const prefs = preferences();
+    return calculatePowScore(
+      props.event,
+      props.reactions || [],
+      props.replies || [],
+      {
+        reactionPowWeight: prefs.reactionPowWeight,
+        replyPowWeight: prefs.replyPowWeight,
+        profilePowWeight: prefs.profilePowWeight,
+        nonPowReactionWeight: prefs.nonPowReactionWeight,
+        nonPowReplyWeight: prefs.nonPowReplyWeight,
+        powInteractionThreshold: prefs.powInteractionThreshold,
+      }
+    );
+  };
+
   const contentClass = () =>
     [
       'text-text-primary break-words font-sans text-base leading-relaxed mb-4',
@@ -42,7 +66,14 @@ export const Note: Component<NoteProps> = (props) => {
       .join(' ');
 
   // Unique ID for this note's tooltip
-  const tooltipId = `note-${props.event.id}`;
+  const tooltipId = `tooltip-${props.event.id}`;
+
+  // Watch for global tooltip changes and close this one if another opens
+  createEffect(() => {
+    if (globalOpenTooltipId() !== tooltipId && showScoreTooltip()) {
+      setShowScoreTooltip(false);
+    }
+  });
 
   // Removed shortPubkey - now using ProfileName component
 
@@ -195,16 +226,28 @@ export const Note: Component<NoteProps> = (props) => {
           <Show when={props.showScore && props.score !== undefined}>
             <div class="relative">
               <span
+                ref={scoreSpanRef}
                 class="text-xs font-mono text-text-tertiary cursor-pointer hover:text-text-secondary transition-colors"
-                onClick={() => setShowScoreTooltip(!showScoreTooltip())}
+                onClick={() => {
+                  const currentlyOpen = showScoreTooltip();
+
+                  // Toggle this tooltip
+                  if (currentlyOpen) {
+                    setShowScoreTooltip(false);
+                    setGlobalOpenTooltipId(null);
+                  } else {
+                    setShowScoreTooltip(true);
+                    setGlobalOpenTooltipId(tooltipId);
+                  }
+                }}
               >
                 {props.score?.toFixed(1)}
               </span>
 
-              {/* Local tooltip positioned near score */}
+              {/* Tooltip positioned relative to score - stays pinned */}
               <Show when={showScoreTooltip()}>
                 <div
-                  class="absolute top-6 right-0 z-[100] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px]"
+                  class="absolute top-6 right-0 z-[9998] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px] max-w-[400px]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <pre class="text-xs font-mono text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
@@ -237,38 +280,37 @@ export const Note: Component<NoteProps> = (props) => {
       </Show>
 
       {/* Interaction Stats - Subtle, low contrast */}
-      <Show when={!stats().loading && (stats().reactionCount > 0 || stats().replyCount > 0)}>
+      <Show when={(props.reactions?.length || 0) > 0 || (props.replies?.length || 0) > 0}>
         <div class="mb-3 text-xs opacity-50 font-mono">
           <span class="text-text-tertiary">
-            <Show when={stats().positiveReactionsPow > 0}>
-              ↑{stats().positiveReactionsPow}
-              {' '}
+            <Show when={props.reactions && props.reactions.length > 0}>
+              {props.reactions!.length} reactions{' '}
             </Show>
-            <Show when={stats().negativeReactionsPow > 0}>
-              ↓{stats().negativeReactionsPow}
-              {' '}
+            💬{props.replies?.length || 0}{' '}
+            <Show when={stats().repliesPowTotal > 0}>
+              <span
+                class="text-text-tertiary/60 cursor-help"
+                title="Work: Total raw POW from replies before weighting is applied"
+              >
+                [W:{stats().repliesPowTotal.toFixed(1)}]
+              </span>
+              {' | '}
             </Show>
-            💬{stats().replyCount}{' '}
-            <span
-              class="text-text-tertiary/60 cursor-help"
-              title="Work: Total raw POW from replies before weighting is applied"
-            >
-              [W:{stats().repliesPowTotal}]
-            </span>
-            {' | '}
-            <span
-              class="text-text-secondary cursor-help"
-              title="Contributed Work: Total raw POW from reactions and replies combined"
-            >
-              CW: {stats().contributedWork}
-            </span>
-            {' '}
-            <span
-              class="text-text-secondary cursor-help"
-              title="Weighted Work: POW after applying reaction and reply weight multipliers from preferences"
-            >
-              WW: {stats().weightedContributedWork.toFixed(0)}
-            </span>
+            <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
+              <span
+                class="text-text-secondary cursor-help"
+                title="Contributed Work: Total raw POW from reactions and replies combined"
+              >
+                CW: {(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)}
+              </span>
+              {' '}
+              <span
+                class="text-text-secondary cursor-help"
+                title="Weighted Work: POW after applying reaction and reply weight multipliers from preferences"
+              >
+                WW: {(stats().weightedReactionsPow + stats().weightedRepliesPow).toFixed(1)}
+              </span>
+            </Show>
           </span>
         </div>
       </Show>

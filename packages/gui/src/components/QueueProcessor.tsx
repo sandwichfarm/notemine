@@ -2,8 +2,8 @@ import { Component, createEffect } from 'solid-js';
 import { useQueue } from '../providers/QueueProvider';
 import { useUser } from '../providers/UserProvider';
 import { useMining } from '../providers/MiningProvider';
-import { relayPool, getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
-import { finalizeEvent } from 'nostr-tools/pure';
+import { usePublishing } from '../providers/PublishingProvider';
+import { getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
 import type { NostrEvent } from 'nostr-tools/core';
 import { debug } from '../lib/debug';
 import { getPublishRelaysForInteraction } from '../lib/inbox-outbox';
@@ -15,7 +15,9 @@ import { getPublishRelaysForInteraction } from '../lib/inbox-outbox';
 export const QueueProcessor: Component = () => {
   const { queueState, updateItemStatus, updateItemMiningState, setActiveItem, getNextQueuedItem } = useQueue();
   const { user } = useUser();
-  const { startMining, resumeMining, stopMining, miningState, currentQueueItemId } = useMining();
+  const mining = useMining();
+  const { startMining, resumeMining, stopMining, miningState } = mining;
+  const { addPublishJob } = usePublishing();
 
   let processingLock = false;
 
@@ -109,53 +111,66 @@ export const QueueProcessor: Component = () => {
         return;
       }
 
-      debug('[QueueProcessor] Mining complete, signing and publishing...');
-
-      // Sign the event
-      let signedEvent: NostrEvent;
-      if (currentUser.isAnon && currentUser.secret) {
-        signedEvent = finalizeEvent(minedEvent as any, currentUser.secret);
-      } else if (currentUser.signer) {
-        signedEvent = await currentUser.signer.signEvent(minedEvent as any);
-      } else if (window.nostr) {
-        signedEvent = await window.nostr.signEvent(minedEvent);
-      } else {
-        throw new Error('Cannot sign event: no signing method available');
-      }
+      debug('[QueueProcessor] Mining complete, handing off to publishing queue...');
 
       // Determine which relays to publish to based on event type
+      // Use try-catch with fallbacks to ensure job ALWAYS reaches publishing queue
       let allPublishRelays: string[];
+      let relayDiscoveryError: string | undefined;
+
+      // Import defaults upfront for fallback use
+      const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
+      const { getWriteRelays } = await import('../lib/relay-settings');
 
       // Check if this is a reply or reaction (interacting with another user's content)
       const isInteraction = nextItem.type === 'reply' || nextItem.type === 'reaction';
       const targetPubkey = isInteraction ? nextItem.tags?.find(t => t[0] === 'p')?.[1] : null;
 
-      if (isInteraction && targetPubkey) {
-        // For interactions: publish to author's inbox + your outbox + notemine.io + NIP-66 PoW relays
-        const { fetchNip66PowRelays } = await import('../lib/nip66');
-        const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
-        const powRelays = await fetchNip66PowRelays();
+      try {
+        if (isInteraction && targetPubkey) {
+          // For interactions: publish to author's inbox + your outbox + notemine.io + NIP-66 PoW relays
+          try {
+            const { fetchNip66PowRelays } = await import('../lib/nip66');
+            const powRelays = await fetchNip66PowRelays();
 
-        debug('[QueueProcessor] Publishing interaction to inbox/outbox model:', {
-          targetPubkey,
-          type: nextItem.type,
-        });
+            debug('[QueueProcessor] Publishing interaction to inbox/outbox model:', {
+              targetPubkey,
+              type: nextItem.type,
+            });
 
-        allPublishRelays = await getPublishRelaysForInteraction(
-          targetPubkey,
-          currentUser.pubkey,
-          defaultRelay,
-          powRelays
-        );
-      } else {
-        // For regular notes: notemine.io + NIP-66 POW relays + user's outbox relays
-        const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
-        allPublishRelays = getPublishRelays(outboxRelays);
+            allPublishRelays = await getPublishRelaysForInteraction(
+              targetPubkey,
+              currentUser.pubkey,
+              defaultRelay,
+              powRelays
+            );
+          } catch (error) {
+            console.warn('[QueueProcessor] Interaction relay discovery failed, using fallback:', error);
+            relayDiscoveryError = `Relay discovery failed: ${String(error)}`;
+            // Fallback: use default relay + user's outbox relays
+            const outboxRelays = await getUserOutboxRelays(currentUser.pubkey).catch(() => []);
+            allPublishRelays = [defaultRelay, ...outboxRelays];
+          }
+        } else {
+          // For regular notes: notemine.io + NIP-66 POW relays + user's outbox relays
+          try {
+            const outboxRelays = await getUserOutboxRelays(currentUser.pubkey);
+            allPublishRelays = getPublishRelays(outboxRelays);
+          } catch (error) {
+            console.warn('[QueueProcessor] Regular note relay discovery failed, using fallback:', error);
+            relayDiscoveryError = `Relay discovery failed: ${String(error)}`;
+            // Fallback: use just default relay
+            allPublishRelays = [defaultRelay];
+          }
+        }
+      } catch (error) {
+        console.error('[QueueProcessor] Complete relay discovery failure, using minimal fallback:', error);
+        relayDiscoveryError = `Complete relay discovery failure: ${String(error)}`;
+        // Ultimate fallback: just the default relay
+        allPublishRelays = [defaultRelay];
       }
 
-      // Get write-enabled relays from settings
-      const { getWriteRelays } = await import('../lib/relay-settings');
-      const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
+      // Get write-enabled relays from settings (safe - reads localStorage)
       const writeEnabledRelays = getWriteRelays();
 
       // Filter to write-enabled relays, but ALWAYS include notemine.io (immutable)
@@ -163,16 +178,28 @@ export const QueueProcessor: Component = () => {
         return url === defaultRelay || writeEnabledRelays.includes(url);
       });
 
-      debug('[QueueProcessor] Publishing to write-enabled relays:', publishRelays);
+      // Ensure at least one relay (default relay) is always included
+      if (publishRelays.length === 0) {
+        debug('[QueueProcessor] No relays after filtering, forcing default relay');
+        publishRelays.push(defaultRelay);
+      }
 
-      const promises = publishRelays.map(async (relayUrl) => {
-        const relay = relayPool.relay(relayUrl);
-        return relay.publish(signedEvent);
+      debug('[QueueProcessor] Handing off to publishing queue with', publishRelays.length, 'relays', relayDiscoveryError ? `(with warning: ${relayDiscoveryError})` : '');
+
+      // Hand off to publishing queue instead of signing/publishing inline
+      addPublishJob({
+        eventTemplate: minedEvent as any,
+        relays: publishRelays,
+        meta: {
+          sourceQueueItemId: nextItem.id,
+          kind: nextItem.kind,
+          difficulty: nextItem.difficulty,
+          type: nextItem.type,
+          relayDiscoveryWarning: relayDiscoveryError,
+        },
       });
 
-      await Promise.allSettled(promises);
-
-      debug('[QueueProcessor] Event published successfully');
+      debug('[QueueProcessor] Mining job handed off to publishing queue');
 
       // Mark as completed
       updateItemStatus(nextItem.id, 'completed');
@@ -221,17 +248,17 @@ export const QueueProcessor: Component = () => {
       isProcessing: state.isProcessing,
       autoProcess: state.autoProcess,
       mining: miningState().mining,
-      currentQueueItemId: currentQueueItemId,
+      currentQueueItemId: mining.currentQueueItemId,
       activeItemId: state.activeItemId,
       queuedItems: state.items.filter(item => item.status === 'queued').length,
     });
 
     // Check if currently mining item was removed from queue or is no longer active
-    if (miningState().mining && currentQueueItemId) {
-      const currentItem = state.items.find(item => item.id === currentQueueItemId);
+    if (miningState().mining && mining.currentQueueItemId) {
+      const currentItem = state.items.find(item => item.id === mining.currentQueueItemId);
       // Stop mining if item was removed OR if it's no longer the active item OR status changed to terminal
       const isTerminalStatus = currentItem && ['completed', 'failed', 'skipped'].includes(currentItem.status);
-      if (!currentItem || state.activeItemId !== currentQueueItemId || isTerminalStatus) {
+      if (!currentItem || state.activeItemId !== mining.currentQueueItemId || isTerminalStatus) {
         debug('[QueueProcessor] Currently mining item was removed or stopped, stopping mining');
         stopMining();
         processingLock = false;

@@ -1,5 +1,5 @@
 import { NostrEvent } from 'nostr-tools';
-import { eventStore } from './applesauce';
+import { getUserInboxRelays, getUserOutboxRelays } from './applesauce';
 
 /**
  * NIP-65 Relay List Management and Relay Hint Utilities
@@ -36,55 +36,8 @@ export function parseRelayList(event: NostrEvent): RelayListEntry[] {
   return entries;
 }
 
-/**
- * Get inbox relays for a user (where they read from)
- */
-export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
-  // Check cache first
-  const cached = relayListCache.get(pubkey);
-  if (cached) {
-    return cached.filter(r => r.read).map(r => r.url);
-  }
-
-  // Fetch from event store
-  const relayListEvent = eventStore.getEventsByFilter({
-    kinds: [10002],
-    authors: [pubkey],
-  })?.[0];
-
-  if (relayListEvent) {
-    const entries = parseRelayList(relayListEvent);
-    relayListCache.set(pubkey, entries);
-    return entries.filter(r => r.read).map(r => r.url);
-  }
-
-  return [];
-}
-
-/**
- * Get outbox relays for a user (where they write to)
- */
-export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
-  // Check cache first
-  const cached = relayListCache.get(pubkey);
-  if (cached) {
-    return cached.filter(r => r.write).map(r => r.url);
-  }
-
-  // Fetch from event store
-  const relayListEvent = eventStore.getEventsByFilter({
-    kinds: [10002],
-    authors: [pubkey],
-  })?.[0];
-
-  if (relayListEvent) {
-    const entries = parseRelayList(relayListEvent);
-    relayListCache.set(pubkey, entries);
-    return entries.filter(r => r.write).map(r => r.url);
-  }
-
-  return [];
-}
+// Note: getUserInboxRelays and getUserOutboxRelays are now imported from './applesauce'
+// They use the correct EventStore API: eventStore.mailboxes(pubkey) with network fallback
 
 /**
  * Extract relay hint from an 'e' or 'p' tag
@@ -99,48 +52,53 @@ export function getRelayHintFromTag(tag: string[]): string | undefined {
 
 /**
  * Add relay hint to an 'e' tag
- * Returns: ['e', eventId, relayHint, marker]
+ * Returns: ['e', eventId, relayHint, marker] or ['e', eventId, marker] if no hint
  */
 export function addRelayHintToETag(
   eventId: string,
   relayHint: string | undefined,
   marker?: string
 ): string[] {
-  const tag = ['e', eventId, relayHint || '', marker || ''];
-  // Remove trailing empty strings
-  while (tag.length > 2 && tag[tag.length - 1] === '') {
-    tag.pop();
+  // Build tag without empty relay hint
+  if (relayHint) {
+    // Has relay hint: ['e', eventId, relayHint, marker?]
+    const tag = ['e', eventId, relayHint];
+    if (marker) tag.push(marker);
+    return tag;
+  } else if (marker) {
+    // No relay hint but has marker: ['e', eventId, marker]
+    return ['e', eventId, marker];
+  } else {
+    // No relay hint, no marker: ['e', eventId]
+    return ['e', eventId];
   }
-  return tag;
 }
 
 /**
  * Add relay hint to a 'p' tag
- * Returns: ['p', pubkey, relayHint]
+ * Returns: ['p', pubkey, relayHint] or ['p', pubkey] if no hint
  */
 export function addRelayHintToPTag(
   pubkey: string,
   relayHint: string | undefined
 ): string[] {
-  const tag = ['p', pubkey, relayHint || ''];
-  // Remove trailing empty strings
-  while (tag.length > 2 && tag[tag.length - 1] === '') {
-    tag.pop();
+  // Build tag without empty relay hint
+  if (relayHint) {
+    return ['p', pubkey, relayHint];
+  } else {
+    return ['p', pubkey];
   }
-  return tag;
 }
 
 /**
  * Get the relay URL where an event was first seen
  * This will be populated by the event store tracking
+ * Note: Currently returns undefined as relay hint tracking is not yet implemented
  */
-export function getEventRelayHint(eventId: string): string | undefined {
-  const event = eventStore.getEvent(eventId);
-  if (!event) return undefined;
-
-  // Check if event has relay metadata (will be added in Phase 6)
-  const metadata = (event as any)._relayHint as string | undefined;
-  return metadata;
+export function getEventRelayHint(_eventId: string): string | undefined {
+  // TODO: Implement relay hint tracking via eventStore.event(eventId) observable
+  // For now, return undefined as the feature is not critical for basic functionality
+  return undefined;
 }
 
 /**

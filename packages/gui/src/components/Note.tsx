@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, For } from 'solid-js';
+import { Component, Show, createSignal, For, onMount, onCleanup } from 'solid-js';
 import { A } from '@solidjs/router';
 import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty, hasValidPow, formatPowDifficulty } from '../lib/pow';
@@ -15,6 +15,7 @@ interface NoteProps {
   event: NostrEvent;
   score?: number;
   showScore?: boolean;
+  onVisible?: (eventId: string) => void; // Callback when note becomes visible
 }
 
 export const Note: Component<NoteProps> = (props) => {
@@ -23,6 +24,9 @@ export const Note: Component<NoteProps> = (props) => {
   const [showScoreTooltip, setShowScoreTooltip] = createSignal(false);
   const { preferences } = usePreferences();
   const { activeTooltip, setActiveTooltip, setTooltipContent, closeAllPanels } = useTooltip();
+
+  // Ref for intersection observer
+  let noteRef: HTMLDivElement | undefined;
 
   const powDifficulty = () => getPowDifficulty(props.event);
   const hasPow = () => hasValidPow(props.event, 1);
@@ -51,13 +55,45 @@ export const Note: Component<NoteProps> = (props) => {
       '',
       `Root POW: ${s.rootPow}`,
       '',
-      `Reactions POW: ${s.reactionsPowTotal} × ${(prefs.reactionPowWeight * 100).toFixed(0)}% = ${s.weightedReactionsPow.toFixed(1)}`,
-      `Replies POW: ${s.repliesPowTotal} × ${(prefs.replyPowWeight * 100).toFixed(0)}% = ${s.weightedRepliesPow.toFixed(1)}`,
-      `Profile POW: ${s.profilePow} × ${(prefs.profilePowWeight * 100).toFixed(0)}% = ${s.weightedProfilePow.toFixed(1)}`,
-      '',
-      `Total = ${s.rootPow} + ${s.weightedReactionsPow.toFixed(1)} + ${s.weightedRepliesPow.toFixed(1)} + ${s.weightedProfilePow.toFixed(1)}`,
-      `Total = ${s.totalScore.toFixed(1)}`
     ];
+
+    // Reactions with POW
+    if (s.reactionsPowCount > 0 || s.reactionsPowTotal !== 0) {
+      lines.push(`Reactions with POW (${s.reactionsPowCount}): ${s.reactionsPowTotal.toFixed(1)} × ${(prefs.reactionPowWeight * 100).toFixed(0)}% = ${s.weightedReactionsPow.toFixed(1)}`);
+    }
+
+    // Reactions without POW
+    if (s.nonPowReactionsCount > 0) {
+      lines.push(`Reactions without POW (${s.nonPowReactionsCount}): ${s.nonPowReactionsTotal.toFixed(1)} × ${(prefs.nonPowReactionWeight * 100).toFixed(0)}% = ${s.weightedNonPowReactions.toFixed(1)}`);
+    }
+
+    // Replies with POW
+    if (s.repliesPowCount > 0 || s.repliesPowTotal !== 0) {
+      lines.push(`Replies with POW (${s.repliesPowCount}): ${s.repliesPowTotal.toFixed(1)} × ${(prefs.replyPowWeight * 100).toFixed(0)}% = ${s.weightedRepliesPow.toFixed(1)}`);
+    }
+
+    // Replies without POW
+    if (s.nonPowRepliesCount > 0) {
+      lines.push(`Replies without POW (${s.nonPowRepliesCount}): ${s.nonPowRepliesTotal.toFixed(1)} × ${(prefs.nonPowReplyWeight * 100).toFixed(0)}% = ${s.weightedNonPowReplies.toFixed(1)}`);
+    }
+
+    // Profile POW
+    if (s.profilePow > 0) {
+      lines.push(`Profile POW: ${s.profilePow} × ${(prefs.profilePowWeight * 100).toFixed(0)}% = ${s.weightedProfilePow.toFixed(1)}`);
+    }
+
+    lines.push('');
+
+    // Total calculation
+    const parts = [s.rootPow.toString()];
+    if (s.weightedReactionsPow !== 0) parts.push(s.weightedReactionsPow.toFixed(1));
+    if (s.weightedNonPowReactions !== 0) parts.push(s.weightedNonPowReactions.toFixed(1));
+    if (s.weightedRepliesPow !== 0) parts.push(s.weightedRepliesPow.toFixed(1));
+    if (s.weightedNonPowReplies !== 0) parts.push(s.weightedNonPowReplies.toFixed(1));
+    if (s.weightedProfilePow !== 0) parts.push(s.weightedProfilePow.toFixed(1));
+
+    lines.push(`Total = ${parts.join(' + ')}`);
+    lines.push(`Total = ${s.totalScore.toFixed(1)}`);
 
     return lines.join('\n');
   };
@@ -104,8 +140,32 @@ export const Note: Component<NoteProps> = (props) => {
     return `/e/${nevent}`;
   };
 
+  // Set up intersection observer for lazy loading
+  onMount(() => {
+    if (noteRef && props.onVisible) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              props.onVisible?.(props.event.id);
+              observer.disconnect(); // Only trigger once
+            }
+          });
+        },
+        {
+          rootMargin: '200px', // Start loading 200px before entering viewport
+        }
+      );
+
+      observer.observe(noteRef);
+
+      onCleanup(() => observer.disconnect());
+    }
+  });
+
   return (
     <div
+      ref={noteRef}
       class="p-5 mb-4 rounded-lg dark:bg-white/5 transition-all"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
@@ -143,7 +203,7 @@ export const Note: Component<NoteProps> = (props) => {
               {/* Local tooltip positioned near score */}
               <Show when={showScoreTooltip()}>
                 <div
-                  class="absolute top-6 right-0 z-[9999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px]"
+                  class="absolute top-6 right-0 z-40 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <pre class="text-xs font-mono text-gray-900 dark:text-gray-100 whitespace-pre-wrap">

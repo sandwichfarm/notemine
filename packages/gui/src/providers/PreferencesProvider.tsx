@@ -19,9 +19,14 @@ export interface UserPreferences {
   minPowProfile: number;
 
   // POW weighting factors
-  reactionPowWeight: number; // How much reactions influence score (0.0 - 1.0)
-  replyPowWeight: number; // How much replies influence score (0.0 - 1.0)
+  reactionPowWeight: number; // How much reactions WITH POW influence score (0.0 - 1.0)
+  replyPowWeight: number; // How much replies WITH POW influence score (0.0 - 1.0)
   profilePowWeight: number; // How much profile POW influences score (0.0 - 1.0)
+
+  // Non-POW interaction weighting factors
+  nonPowReactionWeight: number; // How much reactions WITHOUT POW influence score (0.0 - 1.0)
+  nonPowReplyWeight: number; // How much replies WITHOUT POW influence score (0.0 - 1.0)
+  powInteractionThreshold: number; // Minimum POW for interaction to count as "with POW" (default 1)
 
   // Content length limits
   maxContentLengthRootNote: number;
@@ -66,9 +71,14 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   minPowProfile: 18,
 
   // POW weighting factors (non-linear influence)
-  reactionPowWeight: 0.5, // Reactions have 50% influence
-  replyPowWeight: 0.7, // Replies have 70% influence
+  reactionPowWeight: 0.5, // Reactions WITH POW have 50% influence
+  replyPowWeight: 0.7, // Replies WITH POW have 70% influence
   profilePowWeight: 0.3, // Profile POW has 30% influence
+
+  // Non-POW interaction weighting factors
+  nonPowReactionWeight: 0.1, // Reactions WITHOUT POW have 10% influence
+  nonPowReplyWeight: 0.1, // Replies WITHOUT POW have 10% influence
+  powInteractionThreshold: 1, // Minimum POW of 1 to count as "with POW"
 
   // Content length defaults
   maxContentLengthRootNote: 140,

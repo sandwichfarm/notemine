@@ -242,6 +242,63 @@ export const Preferences: Component = () => {
               How much author's mined pubkey influences note score (default: 30%)
             </p>
           </div>
+
+          {/* Non-POW Reaction Weight */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Non-POW Reaction Weight: {(preferences().nonPowReactionWeight * 100).toFixed(0)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={preferences().nonPowReactionWeight}
+              onInput={(e) => updatePreference('nonPowReactionWeight', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              How much reactions WITHOUT POW influence note score (default: 10%)
+            </p>
+          </div>
+
+          {/* Non-POW Reply Weight */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Non-POW Reply Weight: {(preferences().nonPowReplyWeight * 100).toFixed(0)}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={preferences().nonPowReplyWeight}
+              onInput={(e) => updatePreference('nonPowReplyWeight', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              How much replies WITHOUT POW influence note score (default: 10%)
+            </p>
+          </div>
+
+          {/* POW Interaction Threshold */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              POW Interaction Threshold: {preferences().powInteractionThreshold}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="1"
+              value={preferences().powInteractionThreshold}
+              onInput={(e) => updatePreference('powInteractionThreshold', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Minimum POW difficulty for an interaction to count as "with POW" (default: 1)
+            </p>
+          </div>
         </div>
       </section>
 

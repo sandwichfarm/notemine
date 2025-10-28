@@ -1,6 +1,6 @@
-import { Component, createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, getActiveRelays, relayPool, getUserFollows } from '../lib/applesauce';
+import { createTimelineStream, getActiveRelays, relayPool } from '../lib/applesauce';
 import { calculatePowScore, getPowDifficulty } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
@@ -9,8 +9,6 @@ import { debug } from '../lib/debug';
 interface TimelineProps {
   limit?: number;
   showScores?: boolean;
-  mode?: 'global' | 'wot';
-  userPubkey?: string;
 }
 
 interface ScoredNote {
@@ -21,49 +19,32 @@ interface ScoredNote {
 export const Timeline: Component<TimelineProps> = (props) => {
   const [notes, setNotes] = createSignal<ScoredNote[]>([]);
   const [loading, setLoading] = createSignal(true);
+  const [loadingMore, setLoadingMore] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [hasMore, setHasMore] = createSignal(true);
 
   let subscription: Subscription | null = null;
-  let eventCache = new Map<string, NostrEvent>();
-  let reactionsCache = new Map<string, NostrEvent[]>();
-  let repliesCache = new Map<string, NostrEvent[]>();
+  let loadMoreObserver: IntersectionObserver | null = null;
+  let sentinelRef: HTMLDivElement | undefined;
 
-  // Watch for mode or userPubkey changes and reload timeline
-  createEffect(() => {
-    // Track reactive dependencies
-    const mode = props.mode;
-    const userPubkey = props.userPubkey;
-    const maxEvents = props.limit ?? 50;
+  // Component-level caches and state
+  const eventCache = new Map<string, NostrEvent>();
+  const reactionsCache = new Map<string, NostrEvent[]>();
+  const repliesCache = new Map<string, NostrEvent[]>();
+  const trackedEventIds = new Set<string>(); // Track which events have reactions/replies loaded
+  let relaysCache: string[] = [];
+  let recalculateTimer: number | null = null; // Debounce timer
 
-    // Clean up previous subscription
-    subscription?.unsubscribe();
+  onMount(() => {
+    const INITIAL_LOAD = 10; // Start with just 10 notes
+    const LOAD_MORE_BATCH = 5; // Load 5 more at a time
+    const maxEvents = props.limit ?? 100;
+    let oldestTimestamp = Math.floor(Date.now() / 1000);
 
-    // Reset state
-    eventCache.clear();
-    reactionsCache.clear();
-    repliesCache.clear();
-    setNotes([]);
-    setLoading(true);
-    setError(null);
-
-    debug('[Timeline] Loading timeline, mode:', mode);
-
-    // Async function to load timeline
-    const loadTimeline = async () => {
-      // Get follows for WoT mode
-      let followedPubkeys: Set<string> | null = null;
-      if (mode === 'wot' && userPubkey) {
-        const follows = await getUserFollows(userPubkey);
-        followedPubkeys = new Set(follows);
-        console.log('[Timeline] WoT mode: filtering by', followedPubkeys.size, 'follows', Array.from(followedPubkeys).slice(0, 5));
-        debug('[Timeline] WoT mode: filtering by', followedPubkeys.size, 'follows');
-      } else {
-        console.log('[Timeline] Global mode, no filtering');
-      }
-
-      try {
-        const relays = getActiveRelays();
-        debug('[Timeline] Loading from relays:', relays);
+    try {
+      const relays = getActiveRelays();
+      relaysCache = relays; // Store for lazy loading
+      debug('[Timeline] Loading from relays:', relays);
 
       if (relays.length === 0) {
         setError('No relays connected');
@@ -71,25 +52,27 @@ export const Timeline: Component<TimelineProps> = (props) => {
         return;
       }
 
-      // Create timeline subscription for kind 1 notes
-      const timeline$ = createTimelineStream(relays, [{ kinds: [1], limit: maxEvents }], {
-        limit: maxEvents,
+      // Create initial timeline subscription for kind 1 (notes) and kind 30023 (long-form articles)
+      const timeline$ = createTimelineStream(relays, [{ kinds: [1, 30023], limit: INITIAL_LOAD }], {
+        limit: INITIAL_LOAD,
       });
 
       // Subscribe to timeline updates
       subscription = timeline$.subscribe({
         next: (event: NostrEvent) => {
-          // Filter by follows in WoT mode
-          if (followedPubkeys && !followedPubkeys.has(event.pubkey)) {
-            console.log('[Timeline] Filtering out event from non-followed user:', event.pubkey.slice(0, 8));
+          // Filter out replies - only show root notes (no 'e' tags)
+          const hasETag = event.tags.some((tag) => tag[0] === 'e');
+          if (hasETag) {
+            debug('[Timeline] Skipping reply:', event.id.slice(0, 8));
             return;
           }
 
-          if (followedPubkeys) {
-            console.log('[Timeline] Accepting event from followed user:', event.pubkey.slice(0, 8));
-          }
-
           eventCache.set(event.id, event);
+
+          // Track oldest timestamp for pagination
+          if (event.created_at < oldestTimestamp) {
+            oldestTimestamp = event.created_at;
+          }
 
           // Initialize reaction and reply arrays for this event
           if (!reactionsCache.has(event.id)) {
@@ -99,96 +82,182 @@ export const Timeline: Component<TimelineProps> = (props) => {
             repliesCache.set(event.id, []);
           }
 
-          // Fetch reactions for this event
-          const reactionsObs = relayPool.req(relays, { kinds: [7], '#e': [event.id], limit: 100 });
-          reactionsObs.subscribe({
-            next: (response) => {
-              if (response !== 'EOSE' && response.kind === 7) {
-                const reaction = response as NostrEvent;
-                const existing = reactionsCache.get(event.id) || [];
-                if (!existing.find(r => r.id === reaction.id)) {
-                  existing.push(reaction);
-                  reactionsCache.set(event.id, existing);
-                  recalculateScores();
-                }
-              }
-            },
-          });
-
-          // Fetch replies for this event
-          const repliesObs = relayPool.req(relays, { kinds: [1], '#e': [event.id], limit: 50 });
-          repliesObs.subscribe({
-            next: (response) => {
-              if (response !== 'EOSE' && response.kind === 1) {
-                const reply = response as NostrEvent;
-                const existing = repliesCache.get(event.id) || [];
-                if (!existing.find(r => r.id === reply.id)) {
-                  existing.push(reply);
-                  repliesCache.set(event.id, existing);
-                  recalculateScores();
-                }
-              }
-            },
-          });
-
           recalculateScores();
         },
         error: (err: unknown) => {
-          console.error('[Timeline] Error:', err);
-          setError(String(err));
-          setLoading(false);
+          // Silently ignore relay errors (like 401) - they're expected with some relays
+          debug('[Timeline] Relay error (ignoring):', err);
         },
         complete: () => {
           setLoading(false);
+          recalculateScoresImmediate(); // Final update when stream completes
         },
       });
 
-      function recalculateScores() {
-        const scoredNotes = Array.from(eventCache.values()).map((evt) => {
-          const reactions = reactionsCache.get(evt.id) || [];
-          const replies = repliesCache.get(evt.id) || [];
+      // Function to load more notes
+      function loadMore() {
+        if (loadingMore() || !hasMore()) return;
 
-          // Calculate score with reactions
-          const score = calculatePowScore(evt, reactions);
+        setLoadingMore(true);
+        debug('[Timeline] Loading more notes, since:', oldestTimestamp - 1);
 
-          // Add reply POW to total score
-          const repliesPow = replies.reduce((sum, r) => sum + getPowDifficulty(r), 0);
-          const totalScore = score.totalScore + repliesPow;
+        // Use relayPool.req directly for pagination with proper filters
+        const moreTimeline$ = relayPool.req(
+          relays,
+          { kinds: [1, 30023], limit: LOAD_MORE_BATCH, until: oldestTimestamp - 1 }
+        );
 
-          return { event: evt, score: totalScore };
+        let receivedCount = 0;
+        moreTimeline$.subscribe({
+          next: (response) => {
+            if (response === 'EOSE') {
+              setLoadingMore(false);
+              if (receivedCount < LOAD_MORE_BATCH || eventCache.size >= maxEvents) {
+                setHasMore(false);
+                debug('[Timeline] No more notes to load');
+              }
+              return;
+            }
+
+            const event = response as NostrEvent;
+
+            // Filter out replies - only show root notes
+            const hasETag = event.tags.some((tag) => tag[0] === 'e');
+            if (hasETag) return;
+
+            if (!eventCache.has(event.id)) {
+              eventCache.set(event.id, event);
+              receivedCount++;
+
+              if (event.created_at < oldestTimestamp) {
+                oldestTimestamp = event.created_at;
+              }
+
+              // Initialize caches
+              if (!reactionsCache.has(event.id)) {
+                reactionsCache.set(event.id, []);
+              }
+              if (!repliesCache.has(event.id)) {
+                repliesCache.set(event.id, []);
+              }
+
+              recalculateScores();
+            }
+          },
         });
+      }
 
-        scoredNotes.sort((a, b) => b.score - a.score);
 
-        const topNotes = scoredNotes.slice(0, maxEvents);
-        const topNoteIds = new Set(topNotes.map(n => n.event.id));
 
-        // Only keep top notes and their cached data
-        for (const [id] of eventCache) {
-          if (!topNoteIds.has(id)) {
-            eventCache.delete(id);
-            reactionsCache.delete(id);
-            repliesCache.delete(id);
-          }
+      // Set up intersection observer for infinite scroll
+      setTimeout(() => {
+        if (sentinelRef) {
+          loadMoreObserver = new IntersectionObserver(
+            (entries) => {
+              if (entries[0].isIntersecting && hasMore() && !loadingMore()) {
+                debug('[Timeline] Sentinel visible, loading more...');
+                loadMore();
+              }
+            },
+            { rootMargin: '200px' }
+          );
+          loadMoreObserver.observe(sentinelRef);
         }
-
-        setNotes(topNotes);
-        setLoading(false);
-      }
-      } catch (err) {
-        console.error('[Timeline] Setup error:', err);
-        setError(String(err));
-        setLoading(false);
-      }
-    };
-
-    // Call the async function
-    loadTimeline();
+      }, 100);
+    } catch (err) {
+      console.error('[Timeline] Setup error:', err);
+      setError(String(err));
+      setLoading(false);
+    }
   });
 
   onCleanup(() => {
     subscription?.unsubscribe();
+    loadMoreObserver?.disconnect();
+    if (recalculateTimer !== null) {
+      clearTimeout(recalculateTimer);
+    }
   });
+
+  // Lazy loading handler for reactions/replies (outside onMount so it can access caches)
+  const handleNoteVisible = (eventId: string) => {
+    if (trackedEventIds.has(eventId) || relaysCache.length === 0) return;
+    trackedEventIds.add(eventId);
+
+    debug('[Timeline] Note visible, fetching reactions/replies for', eventId.slice(0, 8));
+
+    // Fetch reactions
+    const reactionsObs = relayPool.req(relaysCache, { kinds: [7], '#e': [eventId], limit: 100 });
+    reactionsObs.subscribe({
+      next: (response) => {
+        if (response !== 'EOSE' && response.kind === 7) {
+          const reaction = response as NostrEvent;
+          const existing = reactionsCache.get(eventId) || [];
+          if (!existing.find(r => r.id === reaction.id)) {
+            existing.push(reaction);
+            reactionsCache.set(eventId, existing);
+            recalculateScores();
+          }
+        }
+      },
+      error: (err) => {
+        // Silently ignore relay errors
+        debug('[Timeline] Reaction fetch error (ignoring):', err);
+      },
+    });
+
+    // Fetch replies
+    const repliesObs = relayPool.req(relaysCache, { kinds: [1], '#e': [eventId], limit: 50 });
+    repliesObs.subscribe({
+      next: (response) => {
+        if (response !== 'EOSE' && response.kind === 1) {
+          const reply = response as NostrEvent;
+          const existing = repliesCache.get(eventId) || [];
+          if (!existing.find(r => r.id === reply.id)) {
+            existing.push(reply);
+            repliesCache.set(eventId, existing);
+            recalculateScores();
+          }
+        }
+      },
+      error: (err) => {
+        // Silently ignore relay errors
+        debug('[Timeline] Reply fetch error (ignoring):', err);
+      },
+    });
+  };
+
+  // Helper function to recalculate scores immediately (for when loading completes)
+  const recalculateScoresImmediate = () => {
+    const scoredNotes = Array.from(eventCache.values()).map((evt) => {
+      const reactions = reactionsCache.get(evt.id) || [];
+      const replies = repliesCache.get(evt.id) || [];
+
+      // Calculate score with reactions
+      const score = calculatePowScore(evt, reactions);
+
+      // Add reply POW to total score
+      const repliesPow = replies.reduce((sum, r) => sum + getPowDifficulty(r), 0);
+      const totalScore = score.totalScore + repliesPow;
+
+      return { event: evt, score: totalScore };
+    });
+
+    scoredNotes.sort((a, b) => b.score - a.score);
+    setNotes(scoredNotes);
+    setLoading(false);
+  };
+
+  // Debounced version - only recalculate after events stop arriving for 300ms
+  const recalculateScores = () => {
+    if (recalculateTimer !== null) {
+      clearTimeout(recalculateTimer);
+    }
+    recalculateTimer = window.setTimeout(() => {
+      recalculateScoresImmediate();
+      recalculateTimer = null;
+    }, 300); // Wait 300ms after last event before recalculating
+  };
 
   return (
     <div class="w-full max-w-2xl mx-auto space-y-4">
@@ -223,7 +292,6 @@ export const Timeline: Component<TimelineProps> = (props) => {
         <div class="space-y-3">
           <div class="text-sm text-text-secondary mb-2">
             {notes().length} notes • sorted by POW score
-            {props.mode === 'wot' && ' • from followed users'}
           </div>
           <For each={notes()}>
             {(scoredNote) => (
@@ -231,9 +299,28 @@ export const Timeline: Component<TimelineProps> = (props) => {
                 event={scoredNote.event}
                 score={scoredNote.score}
                 showScore={props.showScores ?? true}
+                onVisible={handleNoteVisible}
               />
             )}
           </For>
+
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} class="h-4" />
+
+          {/* Loading more indicator */}
+          <Show when={loadingMore()}>
+            <div class="card p-4 text-center">
+              <div class="inline-block animate-spin rounded-full h-6 w-6 border-4 border-accent border-t-transparent"></div>
+              <p class="mt-2 text-sm text-text-secondary">Loading more...</p>
+            </div>
+          </Show>
+
+          {/* End of feed indicator */}
+          <Show when={!hasMore() && !loadingMore()}>
+            <div class="card p-4 text-center">
+              <p class="text-sm text-text-tertiary">You've reached the end</p>
+            </div>
+          </Show>
         </div>
       </Show>
     </div>

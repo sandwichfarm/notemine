@@ -17,12 +17,22 @@ export interface NoteStats {
   contributedWork: number; // Raw total POW
   weightedContributedWork: number; // After applying weights
 
-  // Breakdown for tooltip
+  // Breakdown for tooltip (POW interactions)
   rootPow: number;
   weightedReactionsPow: number;
   weightedRepliesPow: number;
   profilePow: number;
   weightedProfilePow: number;
+
+  // Non-POW interaction breakdown
+  reactionsPowCount: number;
+  repliesPowCount: number;
+  nonPowReactionsCount: number;
+  nonPowRepliesCount: number;
+  nonPowReactionsTotal: number;
+  nonPowRepliesTotal: number;
+  weightedNonPowReactions: number;
+  weightedNonPowReplies: number;
 
   loading: boolean;
 }
@@ -51,6 +61,14 @@ export function useNoteStats(event: NostrEvent) {
     weightedRepliesPow: 0,
     profilePow: getPubkeyPowDifficulty(event.pubkey),
     weightedProfilePow: 0,
+    reactionsPowCount: 0,
+    repliesPowCount: 0,
+    nonPowReactionsCount: 0,
+    nonPowRepliesCount: 0,
+    nonPowReactionsTotal: 0,
+    nonPowRepliesTotal: 0,
+    weightedNonPowReactions: 0,
+    weightedNonPowReplies: 0,
     loading: true,
   });
 
@@ -132,13 +150,16 @@ export function useNoteStats(event: NostrEvent) {
         reactionPowWeight: prefs.reactionPowWeight,
         replyPowWeight: prefs.replyPowWeight,
         profilePowWeight: prefs.profilePowWeight,
+        nonPowReactionWeight: prefs.nonPowReactionWeight,
+        nonPowReplyWeight: prefs.nonPowReplyWeight,
+        powInteractionThreshold: prefs.powInteractionThreshold,
       });
 
       // Contributed work is raw sum of reactions + replies
       const contributedWork = reactionsPowTotal + repliesPowTotal;
 
       // Weighted contributed work is what actually affects the score
-      const weightedContributedWork = score.reactionsPow + score.repliesPow;
+      const weightedContributedWork = score.weightedReactionsPow + score.weightedRepliesPow;
 
       debug(`[useNoteStats] Stats for ${event.id.slice(0, 8)}: reactions=${reactions.length}, replies=${replies.length}`);
 
@@ -153,10 +174,18 @@ export function useNoteStats(event: NostrEvent) {
         contributedWork,
         weightedContributedWork,
         rootPow: score.rootPow,
-        weightedReactionsPow: score.reactionsPow,
-        weightedRepliesPow: score.repliesPow,
-        profilePow: getPubkeyPowDifficulty(event.pubkey),
-        weightedProfilePow: score.profilePow,
+        weightedReactionsPow: score.weightedReactionsPow,
+        weightedRepliesPow: score.weightedRepliesPow,
+        profilePow: score.profilePow,
+        weightedProfilePow: score.weightedProfilePow,
+        reactionsPowCount: score.reactionsPowCount,
+        repliesPowCount: score.repliesPowCount,
+        nonPowReactionsCount: score.nonPowReactionsCount,
+        nonPowRepliesCount: score.nonPowRepliesCount,
+        nonPowReactionsTotal: score.nonPowReactionsTotal,
+        nonPowRepliesTotal: score.nonPowRepliesTotal,
+        weightedNonPowReactions: score.weightedNonPowReactions,
+        weightedNonPowReplies: score.weightedNonPowReplies,
         loading: false,
       });
     }
@@ -178,6 +207,14 @@ export function useNoteStats(event: NostrEvent) {
           totalScore: rootPow + (profilePow * prefs.profilePowWeight),
           contributedWork: 0,
           weightedContributedWork: 0,
+          reactionsPowCount: 0,
+          repliesPowCount: 0,
+          nonPowReactionsCount: 0,
+          nonPowRepliesCount: 0,
+          nonPowReactionsTotal: 0,
+          nonPowRepliesTotal: 0,
+          weightedNonPowReactions: 0,
+          weightedNonPowReplies: 0,
           rootPow,
           weightedReactionsPow: 0,
           weightedRepliesPow: 0,

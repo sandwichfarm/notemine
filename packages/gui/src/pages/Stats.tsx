@@ -1,5 +1,6 @@
 import { Component } from 'solid-js';
 // import { CacheStats } from '../components/CacheStats';
+import { WoTStats } from '../components/WoTStats';
 
 const Stats: Component = () => {
   return (
@@ -14,6 +15,8 @@ const Stats: Component = () => {
       </div>
 
       {/* <CacheStats /> */}
+
+      <WoTStats />
     </div>
   );
 };

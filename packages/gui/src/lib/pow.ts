@@ -51,9 +51,20 @@ export function getTargetDifficulty(event: NostrEvent): number | null {
  */
 export interface PowScore {
   rootPow: number;
-  reactionsPow: number;
-  repliesPow: number;
+  reactionsPowTotal: number; // Raw total POW from reactions WITH POW
+  repliesPowTotal: number; // Raw total POW from replies WITH POW
+  nonPowReactionsTotal: number; // Raw total POW from reactions WITHOUT POW (usually 0)
+  nonPowRepliesTotal: number; // Raw total POW from replies WITHOUT POW (usually 0)
+  reactionsPowCount: number; // Count of reactions WITH POW
+  repliesPowCount: number; // Count of replies WITH POW
+  nonPowReactionsCount: number; // Count of reactions WITHOUT POW
+  nonPowRepliesCount: number; // Count of replies WITHOUT POW
+  weightedReactionsPow: number; // Weighted score from reactions WITH POW
+  weightedRepliesPow: number; // Weighted score from replies WITH POW
+  weightedNonPowReactions: number; // Weighted score from reactions WITHOUT POW
+  weightedNonPowReplies: number; // Weighted score from replies WITHOUT POW
   profilePow: number;
+  weightedProfilePow: number;
   totalScore: number;
   hasPow: boolean;
   isDelegated: boolean; // True if note has no native PoW but has PoW interactions
@@ -63,6 +74,9 @@ export interface PowScoreWeights {
   reactionPowWeight?: number;
   replyPowWeight?: number;
   profilePowWeight?: number;
+  nonPowReactionWeight?: number;
+  nonPowReplyWeight?: number;
+  powInteractionThreshold?: number;
 }
 
 export function calculatePowScore(
@@ -78,46 +92,91 @@ export function calculatePowScore(
   const reactionWeight = weights.reactionPowWeight ?? 0.5;
   const replyWeight = weights.replyPowWeight ?? 0.7;
   const profileWeight = weights.profilePowWeight ?? 0.3;
+  const nonPowReactionWeight = weights.nonPowReactionWeight ?? 0.1;
+  const nonPowReplyWeight = weights.nonPowReplyWeight ?? 0.1;
+  const threshold = weights.powInteractionThreshold ?? 1;
 
   // Calculate profile POW (leading zeros in pubkey)
   const profilePow = getPubkeyPowDifficulty(event.pubkey);
 
-  // Calculate reactions POW with non-linear weighting
-  let reactionsPow = 0;
+  // Separate reactions into POW and non-POW
+  let reactionsPowTotal = 0;
+  let nonPowReactionsTotal = 0;
+  let reactionsPowCount = 0;
+  let nonPowReactionsCount = 0;
+
   for (const reaction of reactions) {
     const reactionPowValue = getPowDifficulty(reaction);
     const content = reaction.content.trim();
 
+    // Determine sentiment multiplier
+    let sentiment = 0.5; // Neutral
     if (content === '+' || content === '👍' || content === '❤️') {
-      reactionsPow += reactionPowValue * 1.0;
+      sentiment = 1.0; // Positive
     } else if (content === '-' || content === '👎') {
-      reactionsPow += reactionPowValue * -1.0;
+      sentiment = -1.0; // Negative
+    }
+
+    if (reactionPowValue >= threshold) {
+      // Reaction has POW
+      reactionsPowTotal += reactionPowValue * sentiment;
+      reactionsPowCount++;
     } else {
-      reactionsPow += reactionPowValue * 0.5;
+      // Reaction has no POW
+      nonPowReactionsTotal += reactionPowValue * sentiment;
+      nonPowReactionsCount++;
     }
   }
 
-  // Calculate replies POW
-  let repliesPow = 0;
+  // Separate replies into POW and non-POW
+  let repliesPowTotal = 0;
+  let nonPowRepliesTotal = 0;
+  let repliesPowCount = 0;
+  let nonPowRepliesCount = 0;
+
   for (const reply of replies) {
-    repliesPow += getPowDifficulty(reply);
+    const replyPowValue = getPowDifficulty(reply);
+
+    if (replyPowValue >= threshold) {
+      // Reply has POW
+      repliesPowTotal += replyPowValue;
+      repliesPowCount++;
+    } else {
+      // Reply has no POW
+      nonPowRepliesTotal += replyPowValue;
+      nonPowRepliesCount++;
+    }
   }
 
-  // Apply non-linear weights
-  const weightedReactionsPow = reactionsPow * reactionWeight;
-  const weightedRepliesPow = repliesPow * replyWeight;
+  // Apply weights
+  const weightedReactionsPow = reactionsPowTotal * reactionWeight;
+  const weightedRepliesPow = repliesPowTotal * replyWeight;
+  const weightedNonPowReactions = nonPowReactionsTotal * nonPowReactionWeight;
+  const weightedNonPowReplies = nonPowRepliesTotal * nonPowReplyWeight;
   const weightedProfilePow = profilePow * profileWeight;
 
-  const totalScore = rootPow + weightedReactionsPow + weightedRepliesPow + weightedProfilePow;
+  const totalScore = rootPow + weightedReactionsPow + weightedRepliesPow +
+                     weightedNonPowReactions + weightedNonPowReplies + weightedProfilePow;
 
   // Determine if this is delegated PoW (no native PoW but has PoW interactions)
   const hasDelegatedPow = !hasPow && (weightedReactionsPow > 0 || weightedRepliesPow > 0);
 
   return {
     rootPow,
-    reactionsPow: weightedReactionsPow,
-    repliesPow: weightedRepliesPow,
-    profilePow: weightedProfilePow,
+    reactionsPowTotal,
+    repliesPowTotal,
+    nonPowReactionsTotal,
+    nonPowRepliesTotal,
+    reactionsPowCount,
+    repliesPowCount,
+    nonPowReactionsCount,
+    nonPowRepliesCount,
+    weightedReactionsPow,
+    weightedRepliesPow,
+    weightedNonPowReactions,
+    weightedNonPowReplies,
+    profilePow,
+    weightedProfilePow,
     totalScore,
     hasPow,
     isDelegated: hasDelegatedPow,

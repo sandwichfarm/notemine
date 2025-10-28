@@ -132,9 +132,9 @@ export const QueueProcessor: Component = () => {
 
       if (isInteraction && targetPubkey) {
         // For interactions: publish to author's inbox + your outbox + notemine.io + NIP-66 PoW relays
-        const { getNip66PowRelays } = await import('../lib/nip66');
+        const { fetchNip66PowRelays } = await import('../lib/nip66');
         const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
-        const powRelays = getNip66PowRelays();
+        const powRelays = await fetchNip66PowRelays();
 
         debug('[QueueProcessor] Publishing interaction to inbox/outbox model:', {
           targetPubkey,

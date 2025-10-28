@@ -1,5 +1,6 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { Timeline } from '../components/Timeline';
+import { WoTTimeline } from '../components/WoTTimeline';
 import { useUser } from '../providers/UserProvider';
 
 export type FeedMode = 'global' | 'wot';
@@ -30,31 +31,31 @@ const Feed: Component = () => {
         </p>
       </div>
 
-      {/* Feed Mode Toggle */}
-      <div class="flex justify-center gap-3">
-        <button
-          class={`px-6 py-3 rounded-lg font-semibold transition-all border-2 ${
-            feedMode() === 'global'
-              ? 'bg-accent text-white border-accent shadow-lg scale-105'
-              : 'bg-bg-primary text-text-secondary border-gray-600 hover:border-gray-400 hover:text-text-primary'
-          }`}
-          onClick={() => handleModeChange('global')}
-        >
-          Global PoW
-        </button>
-        <button
-          class={`px-6 py-3 rounded-lg font-semibold transition-all border-2 ${
-            feedMode() === 'wot'
-              ? 'bg-accent text-white border-accent shadow-lg scale-105'
-              : 'bg-bg-primary text-text-secondary border-gray-600 hover:border-gray-400 hover:text-text-primary'
-          } ${!isLoggedIn() ? 'opacity-50 cursor-not-allowed' : ''}`}
-          onClick={() => handleModeChange('wot')}
-          disabled={!isLoggedIn()}
-          title={!isLoggedIn() ? 'Login required for Web of Trust feed' : ''}
-        >
-          Web of Trust
-        </button>
-      </div>
+      {/* Feed Mode Toggle - Only show for authenticated users */}
+      <Show when={isLoggedIn() && !user()?.isAnon}>
+        <div class="flex justify-center gap-3">
+          <button
+            class={`px-6 py-3 rounded-lg font-semibold transition-all border-2 ${
+              feedMode() === 'global'
+                ? 'bg-accent text-white border-accent shadow-lg scale-105'
+                : 'bg-bg-primary text-text-secondary border-gray-600 hover:border-gray-400 hover:text-text-primary'
+            }`}
+            onClick={() => handleModeChange('global')}
+          >
+            Global PoW
+          </button>
+          <button
+            class={`px-6 py-3 rounded-lg font-semibold transition-all border-2 ${
+              feedMode() === 'wot'
+                ? 'bg-accent text-white border-accent shadow-lg scale-105'
+                : 'bg-bg-primary text-text-secondary border-gray-600 hover:border-gray-400 hover:text-text-primary'
+            }`}
+            onClick={() => handleModeChange('wot')}
+          >
+            Web of Trust
+          </button>
+        </div>
+      </Show>
 
       {/* Show login prompt if WoT mode selected but not logged in */}
       <Show when={feedMode() === 'wot' && !isLoggedIn()}>
@@ -69,12 +70,19 @@ const Feed: Component = () => {
       </Show>
 
       {/* Timeline */}
-      <Show when={feedMode() === 'global' || isLoggedIn()}>
+      <Show when={feedMode() === 'global'}>
         <Timeline
           limit={100}
           showScores={true}
-          mode={feedMode()}
-          userPubkey={user()?.pubkey}
+        />
+      </Show>
+
+      {/* WoT Timeline */}
+      <Show when={feedMode() === 'wot' && isLoggedIn() && user()?.pubkey}>
+        <WoTTimeline
+          userPubkey={user()!.pubkey}
+          limit={100}
+          showScores={true}
         />
       </Show>
     </div>

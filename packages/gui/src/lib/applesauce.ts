@@ -299,8 +299,26 @@ export async function getUserFollows(pubkey: string): Promise<string[]> {
       },
     });
 
-    // Timeout after 2 seconds, return empty array if no kind 3 event found
+    // If not found in store, fetch kind 3 from profile relays
+    const fetchTimeout = setTimeout(() => {
+      const filter = { kinds: [3], authors: [pubkey], limit: 1 };
+      const relay$ = relayPool.req(PROFILE_RELAYS, filter);
+
+      let found = false;
+      relay$.subscribe({
+        next: (response) => {
+          if (response !== 'EOSE' && response.kind === 3 && !found) {
+            found = true;
+            eventStore.add(response);
+            debug('[WoT] Fetched kind 3 from profile relays');
+          }
+        },
+      });
+    }, 500);
+
+    // Timeout after 2 seconds total, return empty array if no kind 3 event found
     setTimeout(() => {
+      clearTimeout(fetchTimeout);
       subscription?.unsubscribe();
       debug('[WoT] No follows found for', pubkey.slice(0, 8), 'using empty array');
       resolve([]);

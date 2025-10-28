@@ -302,8 +302,13 @@ export class Notemine {
     // Reset first real nonces flag for new session
     this._hasSeenRealNonces = false;
 
-    // Only clear these if not resuming
-    if (!this._resumeNonces) {
+    // Only clear these if not resuming with real data
+    // Clear when: no resume nonces OR (empty nonces AND no per-worker bests)
+    const hasResumeNonces = this._resumeNonces && this._resumeNonces.length > 0;
+    const hasWorkersPow = Object.keys(this.workersPow$.getValue() || {}).length > 0;
+    const isRealResume = hasResumeNonces || hasWorkersPow;
+
+    if (!isRealResume) {
       //@ts-ignore: pedantic
       this.workersPow$.next({});
       //@ts-ignore: pedantic
@@ -591,8 +596,11 @@ export class Notemine {
 
     // RunId gating: Ignore messages from old/different mining sessions
     // This prevents ghost updates after pause/cancel
-    if (runId && runId !== this._runId) {
-      console.log(`[Notemine] 🚫 GHOST UPDATE BLOCKED - Ignoring message from old session. Expected: ${this._runId}, Got: ${runId}`);
+    // Reject messages without runId (likely stale cached workers) OR with wrong runId
+    if (!runId || runId !== this._runId) {
+      if (this._debug || runId) {
+        console.log(`[Notemine] 🚫 GHOST UPDATE BLOCKED - Ignoring message from old session. Expected: ${this._runId}, Got: ${runId || 'missing'}`);
+      }
       return;
     }
 

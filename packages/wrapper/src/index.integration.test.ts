@@ -406,7 +406,7 @@ describe('Phase 8 - Integration Tests', () => {
       miner.cancel();
     });
 
-    it('should accept messages without runId (backward compatibility)', () => {
+    it('should reject messages without runId (prevents ghost updates)', () => {
       const miner = new Notemine({
         pubkey: 'test',
         content: 'test',
@@ -416,24 +416,24 @@ describe('Phase 8 - Integration Tests', () => {
 
       miner.mine();
 
-      // Send message without runId (Protocol v1)
+      // Send message without runId (stale/cached worker)
       (miner as any).handleWorkerMessage({
         data: {
           type: 'progress',
           workerId: 0,
-          // No runId field
+          // No runId field - should be rejected
           currentNonce: '67890',
           bestPowData: {
             bestPow: 12,
             nonce: '67890',
-            hash: 'legacyhash',
+            hash: 'stalehash',
           },
         },
       });
 
-      // Should be accepted for backward compatibility
+      // Should be rejected - highestPow should still be null or empty object (initial state)
       const bestPow = miner.highestPow$.getValue();
-      expect(bestPow?.bestPow).toBe(12);
+      expect(bestPow?.bestPow).toBeUndefined();
 
       miner.cancel();
     });

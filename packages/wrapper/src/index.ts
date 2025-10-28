@@ -35,6 +35,8 @@ export interface ProgressEvent {
   workerId: number;
   /** Current hash rate of the worker (in hashes per second) */
   hashRate?: number;
+  /** Current nonce being tried by the worker (Protocol v2) */
+  currentNonce?: string;
   /** Current best proof-of-work data */
   bestPowData?: BestPowData;
 }
@@ -99,6 +101,8 @@ export interface MiningState {
   workerNonces: string[];
   /** Best proof-of-work found so far */
   bestPow: BestPowData | null;
+  /** Per-worker best proof-of-work data */
+  workersPow?: Record<number, BestPowData>;
   /** Target difficulty */
   difficulty: number;
   /** Number of workers when state was saved */
@@ -129,6 +133,7 @@ export class Notemine {
   private _workerLastNonce = new Map<number, bigint>();
   private _workerLastTime = new Map<number, number>();
   private _runId: string | null = null; // Current session run ID for message gating
+  private _hasSeenRealNonces = false; // Track first transition from defaults to real nonces
   static _defaultTags: string[][] = [['miner', 'notemine']];
 
   /** Observable indicating whether mining is currently active */
@@ -150,6 +155,7 @@ export class Notemine {
   private errorSubject = new Subject<ErrorEvent>();
   private cancelledEventSubject = new Subject<CancelledEvent>();
   private successSubject = new Subject<SuccessEvent>();
+  private firstRealNoncesSubject = new Subject<void>();
 
   /** Observable for mining progress updates */
   public progress$ = this.progressSubject.asObservable();
@@ -159,6 +165,8 @@ export class Notemine {
   public cancelledEvent$ = this.cancelledEventSubject.asObservable();
   /** Observable for successful mining results */
   public success$ = this.successSubject.asObservable();
+  /** Observable that emits once when first real nonces are received (transition from defaults) */
+  public firstRealNonces$ = this.firstRealNoncesSubject.asObservable();
 
   /**
    * Creates a new Notemine miner instance
@@ -290,6 +298,9 @@ export class Notemine {
     this._workerMaxHashRates.clear();
     this._totalHashRate = 0;
     this._lastRefresh = 0;
+
+    // Reset first real nonces flag for new session
+    this._hasSeenRealNonces = false;
 
     // Only clear these if not resuming
     if (!this._resumeNonces) {
@@ -454,12 +465,20 @@ export class Notemine {
       },
       workerNonces: noncesToPersist,
       bestPow: this.highestPow$.getValue(),
+      workersPow: this.workersPow$.getValue(),
       difficulty: this.difficulty,
       numberOfWorkers: this.numberOfWorkers,
     };
     if (this._debug) {
+      const workersPow = this.workersPow$.getValue();
+      const workersPowCount = Object.keys(workersPow).length;
       try {
-        console.log(`[Notemine] getState workerNonces (hasReal: ${hasRealNonces})`, JSON.stringify(noncesToPersist));
+        console.log('[Notemine] getState:', {
+          hasRealNonces: hasRealNonces,
+          noncesCount: noncesToPersist.length,
+          workersPowCount: workersPowCount,
+          sampleNonces: noncesToPersist.slice(0, 3),
+        });
       } catch {
         console.log(`[Notemine] getState workerNonces (hasReal: ${hasRealNonces})`, noncesToPersist);
       }
@@ -476,6 +495,16 @@ export class Notemine {
       throw new Error('Cannot restore state while mining is active');
     }
 
+    if (this._debug) {
+      console.log('[Notemine] Restoring state:', {
+        nonces: state.workerNonces.length,
+        difficulty: state.difficulty,
+        hasWorkersPow: !!state.workersPow,
+        workersPowCount: state.workersPow ? Object.keys(state.workersPow).length : 0,
+        savedWorkers: state.numberOfWorkers,
+      });
+    }
+
     // Restore event data
     this.pubkey = state.event.pubkey;
     this.kind = state.event.kind;
@@ -487,9 +516,29 @@ export class Notemine {
     // Restore nonces
     this._resumeNonces = state.workerNonces;
 
-    // Restore best POW if available
-    if (state.bestPow) {
+    // Restore per-worker best POW data if available
+    if (state.workersPow) {
+      this.workersPow$.next(state.workersPow);
+
+      // Seed highestPow$ from the best among all workers
+      const workerPowValues = Object.values(state.workersPow);
+      if (workerPowValues.length > 0) {
+        const maxPow = workerPowValues.reduce((max, pow) =>
+          pow.bestPow > max.bestPow ? pow : max
+        );
+        this.highestPow$.next(maxPow);
+
+        if (this._debug) {
+          console.log('[Notemine] Restored per-worker POW, highest:', maxPow.bestPow);
+        }
+      }
+    } else if (state.bestPow) {
+      // Backward compatibility: use old bestPow if workersPow not available
       this.highestPow$.next(state.bestPow);
+
+      if (this._debug) {
+        console.log('[Notemine] Restored legacy bestPow:', state.bestPow.bestPow);
+      }
     }
 
     // Note: numberOfWorkers can be different from state.numberOfWorkers
@@ -573,6 +622,15 @@ export class Notemine {
       if (data?.currentNonce) {
         this._workerNonces.set(workerId, data.currentNonce);
 
+        // Phase 2: Detect first transition from default nonces to real nonces
+        if (!this._hasSeenRealNonces && data.currentNonce !== workerId.toString()) {
+          this._hasSeenRealNonces = true;
+          this.firstRealNoncesSubject.next();
+          if (this._debug) {
+            console.log('[Notemine] First real nonce detected - triggering immediate save');
+          }
+        }
+
         // Phase 6: Log per-worker currentNonce updates (rate limited to every 2s per worker)
         if (this._debug) {
           const now = Date.now();
@@ -610,7 +668,12 @@ export class Notemine {
 
       this.calculateHashRate(workerId, data.hashRate);
 
-      this.progressSubject.next({ workerId, hashRate: data.hashRate, bestPowData });
+      this.progressSubject.next({
+        workerId,
+        hashRate: data.hashRate,
+        currentNonce: data.currentNonce,
+        bestPowData,
+      });
     } else if (type === 'result') {
       ////console.log('Mining result received:', data.data);
       this.result$.next(data.data);

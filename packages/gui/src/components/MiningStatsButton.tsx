@@ -77,22 +77,25 @@ export const MiningPanel: Component = () => {
             </div>
 
             {/* Per-Worker Stats - Full Width */}
-            <Show when={state().workersBestPow.length > 0}>
+            <Show when={Object.keys(state().workersBestPow).length > 0}>
               <div>
                 <div class="text-xs text-text-secondary mb-3 opacity-60">
-                  Worker Overview ({state().workersBestPow.length} miners)
+                  Worker Overview ({Object.keys(state().workersBestPow).length} miners)
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  <For each={state().workersBestPow}>
-                    {(worker, index) => (
-                      <div class="text-xs font-mono text-text-primary bg-bg-primary/50 dark:bg-bg-secondary/50 p-2 rounded">
-                        <span class="text-text-secondary">Miner #{index()}:</span>{' '}
-                        <span class="text-accent">{((state().workersHashRates[index()] || 0) / 1000).toFixed(2)} KH/s</span>
-                        <div class="text-[10px] text-text-tertiary mt-1">
-                          PoW: {worker.bestPow || 0} | Nonce: {worker.nonce || 'N/A'}
+                  <For each={Object.entries(state().workersBestPow).sort(([a], [b]) => Number(a) - Number(b))}>
+                    {([workerId, worker]) => {
+                      const id = Number(workerId);
+                      return (
+                        <div class="text-xs font-mono text-text-primary bg-bg-primary/50 dark:bg-bg-secondary/50 p-2 rounded">
+                          <span class="text-text-secondary">Miner #{id}:</span>{' '}
+                          <span class="text-accent">{((state().workersHashRates[id] || 0) / 1000).toFixed(2)} KH/s</span>
+                          <div class="text-[10px] text-text-tertiary mt-1">
+                            PoW: {worker.bestPow || 0} | Current: {state().workersCurrentNonces[id] || 'N/A'}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    }}
                   </For>
                 </div>
               </div>

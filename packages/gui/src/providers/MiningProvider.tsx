@@ -14,8 +14,9 @@ export interface MiningState {
   mining: boolean;
   hashRate: number;
   overallBestPow: number | null;
-  workersBestPow: BestPowData[];
+  workersBestPow: Record<number, BestPowData>; // Per-worker best POW keyed by workerId
   workersHashRates: Record<number, number>; // Hash rate per worker in H/s
+  workersCurrentNonces: Record<number, string>; // Current nonce per worker keyed by workerId
   result: NostrEvent | null;
   error: string | null;
 }
@@ -66,8 +67,9 @@ export const MiningProvider: ParentComponent = (props) => {
     mining: false,
     hashRate: 0,
     overallBestPow: null,
-    workersBestPow: [],
+    workersBestPow: {},
     workersHashRates: {},
+    workersCurrentNonces: {},
     result: null,
     error: null,
   });
@@ -150,7 +152,7 @@ export const MiningProvider: ParentComponent = (props) => {
     const workersPowSub = notemine.workersPow$.subscribe((data: Record<number, BestPowData>) => {
       setMiningState((prev) => ({
         ...prev,
-        workersBestPow: Object.values(data),
+        workersBestPow: data, // Keep as Record keyed by workerId
       }));
     });
     subscriptions.push(workersPowSub);
@@ -164,9 +166,9 @@ export const MiningProvider: ParentComponent = (props) => {
     });
     subscriptions.push(bestPowSub);
 
-    // Subscribe to progress (for hash rate)
+    // Subscribe to progress (for hash rate and current nonce)
     const currentInstance = notemine;
-    const progressSub = currentInstance.progress$.subscribe(({ workerId, hashRate: workerHashRate }) => {
+    const progressSub = currentInstance.progress$.subscribe(({ workerId, hashRate: workerHashRate, currentNonce }) => {
       const totalHashRate = currentInstance.totalHashRate;
 
       setMiningState((prev) => ({
@@ -176,6 +178,10 @@ export const MiningProvider: ParentComponent = (props) => {
         workersHashRates: workerHashRate
           ? { ...prev.workersHashRates, [workerId]: workerHashRate }
           : prev.workersHashRates,
+        // Update per-worker current nonce
+        workersCurrentNonces: currentNonce
+          ? { ...prev.workersCurrentNonces, [workerId]: currentNonce }
+          : prev.workersCurrentNonces,
       }));
 
       // Phase 5: Save mining state for queue if callback provided (with throttling)
@@ -199,6 +205,19 @@ export const MiningProvider: ParentComponent = (props) => {
       }
     });
     subscriptions.push(progressSub);
+
+    // Subscribe to first real nonces event for immediate save
+    const firstRealNoncesSub = currentInstance.firstRealNonces$.subscribe(() => {
+      if (onMiningStateUpdate) {
+        const miningStateData = currentInstance.getState();
+        onMiningStateUpdate(miningStateData);
+        lastStateUpdateTime = Date.now(); // Update throttle timer
+        if (debugMode) {
+          debug('[MiningProvider] First real nonces - immediate save triggered');
+        }
+      }
+    });
+    subscriptions.push(firstRealNoncesSub);
 
     // Return promise that resolves when mining completes
     return new Promise((resolve, reject) => {

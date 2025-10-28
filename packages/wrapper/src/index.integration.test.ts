@@ -224,7 +224,13 @@ describe('Phase 8 - Integration Tests', () => {
       (miner1 as any)._workerNonces.set(0, '100000');
       (miner1 as any)._workerNonces.set(1, '200000');
 
-      // Set best POW
+      // Set per-worker POW data
+      miner1.workersPow$.next({
+        0: { bestPow: 18, nonce: '100000', hash: 'testhash' },
+        1: { bestPow: 16, nonce: '200000', hash: 'testhash2' },
+      });
+
+      // Set best POW (should match highest from workersPow)
       (miner1 as any).highestPow$.next({
         workerId: 0,
         bestPow: 18,

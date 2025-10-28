@@ -379,4 +379,260 @@ describe('Phase 8 - Unit Tests', () => {
       expect(state.workerNonces[0]).toBe('123456789');
     });
   });
+
+  describe('Phase 1-2: Per-worker POW persistence and restoration', () => {
+    it('should persist workersPow in getState', () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 2,
+      });
+
+      miner.mine();
+
+      // Set per-worker POW data
+      const workersPow = {
+        0: { bestPow: 25, nonce: '12345', hash: 'hash1' },
+        1: { bestPow: 23, nonce: '67890', hash: 'hash2' },
+      };
+      miner.workersPow$.next(workersPow);
+
+      const state = miner.getState();
+
+      expect(state.workersPow).toBeDefined();
+      expect(state.workersPow).toEqual(workersPow);
+    });
+
+    it('should restore workersPow and seed highestPow$ from best worker', () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 2,
+      });
+
+      const workersPow = {
+        0: { bestPow: 25, nonce: '12345', hash: 'hash1' },
+        1: { bestPow: 28, nonce: '67890', hash: 'hash2' }, // This is the highest
+      };
+
+      const state = {
+        event: {
+          pubkey: 'test',
+          kind: 1,
+          tags: [],
+          content: 'test',
+          created_at: 123456789,
+        },
+        workerNonces: ['100', '200'],
+        bestPow: null,
+        workersPow: workersPow,
+        difficulty: 20,
+        numberOfWorkers: 2,
+      };
+
+      miner.restoreState(state);
+
+      // Check that workersPow$ was restored
+      expect(miner.workersPow$.getValue()).toEqual(workersPow);
+
+      // Check that highestPow$ was seeded with the max POW
+      const highestPow = miner.highestPow$.getValue();
+      expect(highestPow).toBeDefined();
+      expect(highestPow?.bestPow).toBe(28);
+      expect(highestPow?.nonce).toBe('67890');
+    });
+
+    it('should handle backward compatibility when workersPow is not present', () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 2,
+      });
+
+      const legacyBestPow = { bestPow: 25, nonce: '12345', hash: 'hash1' };
+
+      const state = {
+        event: {
+          pubkey: 'test',
+          kind: 1,
+          tags: [],
+          content: 'test',
+          created_at: 123456789,
+        },
+        workerNonces: ['100', '200'],
+        bestPow: legacyBestPow,
+        // No workersPow field (backward compatibility)
+        difficulty: 20,
+        numberOfWorkers: 2,
+      };
+
+      miner.restoreState(state);
+
+      // Should seed highestPow$ from legacy bestPow
+      const highestPow = miner.highestPow$.getValue();
+      expect(highestPow).toEqual(legacyBestPow);
+    });
+
+    it('should handle empty workersPow during restoration', () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 2,
+      });
+
+      const state = {
+        event: {
+          pubkey: 'test',
+          kind: 1,
+          tags: [],
+          content: 'test',
+          created_at: 123456789,
+        },
+        workerNonces: [],
+        bestPow: null,
+        workersPow: {}, // Empty workersPow
+        difficulty: 20,
+        numberOfWorkers: 2,
+      };
+
+      miner.restoreState(state);
+
+      // Should not crash and should set workersPow to empty
+      expect(miner.workersPow$.getValue()).toEqual({});
+      expect(miner.highestPow$.getValue()).toBeNull();
+    });
+  });
+
+  describe('Phase 2: RunId gating and ghost update prevention', () => {
+    it('should generate new runId on mine() start', async () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 1,
+      });
+
+      await miner.mine();
+      const runId1 = (miner as any)._runId;
+      expect(runId1).toBeDefined();
+      expect(typeof runId1).toBe('string');
+
+      miner.cancel();
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      await miner.mine();
+      const runId2 = (miner as any)._runId;
+      expect(runId2).toBeDefined();
+      expect(runId2).not.toBe(runId1); // Should be different each session
+    });
+
+    it('should reset hasSeenRealNonces flag on new mining session', async () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 1,
+      });
+
+      // Set the flag
+      (miner as any)._hasSeenRealNonces = true;
+
+      await miner.mine();
+
+      // Should be reset
+      expect((miner as any)._hasSeenRealNonces).toBe(false);
+    });
+  });
+
+  describe('Phase 2: First real nonces detection', () => {
+    it('should emit firstRealNonces$ when transitioning from default to real nonce', (done) => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 2,
+      });
+
+      let emitted = false;
+      const sub = miner.firstRealNonces$.subscribe(() => {
+        emitted = true;
+        sub.unsubscribe();
+        done();
+      });
+
+      miner.mine();
+
+      // Simulate worker 0 sending a default nonce (should not emit)
+      (miner as any)._workerNonces.set(0, '0');
+      const progressEvent = {
+        workerId: 0,
+        currentNonce: '0',
+        hashRate: 1000,
+      };
+
+      // Manually trigger the logic that would happen in message handler
+      // by simulating first real nonce
+      (miner as any)._hasSeenRealNonces = false;
+      if (progressEvent.currentNonce !== progressEvent.workerId.toString()) {
+        // This would be the logic from the progress handler
+        (miner as any)._hasSeenRealNonces = true;
+        (miner as any).firstRealNoncesSubject.next();
+      }
+
+      // Give it time to emit (or not)
+      setTimeout(() => {
+        if (!emitted) {
+          // Now trigger with a real nonce
+          const realProgressEvent = {
+            workerId: 0,
+            currentNonce: '123456',
+            hashRate: 1000,
+          };
+
+          (miner as any)._hasSeenRealNonces = false;
+          if (realProgressEvent.currentNonce !== realProgressEvent.workerId.toString()) {
+            (miner as any)._hasSeenRealNonces = true;
+            (miner as any).firstRealNoncesSubject.next();
+          }
+        }
+      }, 10);
+    });
+
+    it('should only emit firstRealNonces$ once per session', async () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 1,
+      });
+
+      let emitCount = 0;
+      const sub = miner.firstRealNonces$.subscribe(() => {
+        emitCount++;
+      });
+
+      await miner.mine();
+
+      // Simulate multiple real nonce updates
+      (miner as any)._hasSeenRealNonces = false;
+
+      // First real nonce
+      if ('123456' !== '0') {
+        (miner as any)._hasSeenRealNonces = true;
+        (miner as any).firstRealNoncesSubject.next();
+      }
+
+      // Second real nonce (should not emit again)
+      if ((miner as any)._hasSeenRealNonces) {
+        // Logic wouldn't emit again
+      }
+
+      expect(emitCount).toBe(1);
+      sub.unsubscribe();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { Component, Show, createSignal } from 'solid-js';
+import { Component, Show, createSignal, For } from 'solid-js';
 import { A } from '@solidjs/router';
 import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty, hasValidPow, formatPowDifficulty } from '../lib/pow';
@@ -20,6 +20,7 @@ interface NoteProps {
 export const Note: Component<NoteProps> = (props) => {
   const [showReactionPicker, setShowReactionPicker] = createSignal(false);
   const [showReplyComposer, setShowReplyComposer] = createSignal(false);
+  const [showScoreTooltip, setShowScoreTooltip] = createSignal(false);
   const { preferences } = usePreferences();
   const { activeTooltip, setActiveTooltip, setTooltipContent, closeAllPanels } = useTooltip();
 
@@ -88,6 +89,13 @@ export const Note: Component<NoteProps> = (props) => {
     return `${seconds}s ago`;
   };
 
+  // Extract topic tags (#t tags)
+  const topics = () => {
+    return props.event.tags
+      .filter(tag => tag[0] === 't' && tag[1])
+      .map(tag => tag[1]);
+  };
+
   const noteLink = () => {
     const nevent = nip19.neventEncode({
       id: props.event.id,
@@ -124,12 +132,26 @@ export const Note: Component<NoteProps> = (props) => {
 
           {/* Score (if provided) */}
           <Show when={props.showScore && props.score !== undefined}>
-            <span
-              class="text-xs font-mono text-text-tertiary"
-              title={`Total Score: ${props.score?.toFixed(1)}`}
-            >
-              {props.score?.toFixed(1)}
-            </span>
+            <div class="relative">
+              <span
+                class="text-xs font-mono text-text-tertiary cursor-pointer hover:text-text-secondary transition-colors"
+                onClick={() => setShowScoreTooltip(!showScoreTooltip())}
+              >
+                {props.score?.toFixed(1)}
+              </span>
+
+              {/* Local tooltip positioned near score */}
+              <Show when={showScoreTooltip()}>
+                <div
+                  class="absolute top-6 right-0 z-[9999] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <pre class="text-xs font-mono text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                    {scoreBreakdown()}
+                  </pre>
+                </div>
+              </Show>
+            </div>
           </Show>
         </div>
       </div>
@@ -139,6 +161,19 @@ export const Note: Component<NoteProps> = (props) => {
         content={props.event.content}
         class={contentClass()}
       />
+
+      {/* Topics - Display #t tags */}
+      <Show when={topics().length > 0}>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <For each={topics()}>
+            {(topic) => (
+              <span class="text-xs px-2 py-1 rounded-md bg-accent/10 text-accent/80 hover:bg-accent/20 transition-colors">
+                #{topic}
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
 
       {/* Interaction Stats - Subtle, low contrast */}
       <Show when={!stats().loading && (stats().reactionCount > 0 || stats().replyCount > 0)}>

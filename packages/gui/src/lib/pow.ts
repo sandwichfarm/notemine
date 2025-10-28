@@ -56,6 +56,7 @@ export interface PowScore {
   profilePow: number;
   totalScore: number;
   hasPow: boolean;
+  isDelegated: boolean; // True if note has no native PoW but has PoW interactions
 }
 
 export interface PowScoreWeights {
@@ -109,6 +110,9 @@ export function calculatePowScore(
 
   const totalScore = rootPow + weightedReactionsPow + weightedRepliesPow + weightedProfilePow;
 
+  // Determine if this is delegated PoW (no native PoW but has PoW interactions)
+  const hasDelegatedPow = !hasPow && (weightedReactionsPow > 0 || weightedRepliesPow > 0);
+
   return {
     rootPow,
     reactionsPow: weightedReactionsPow,
@@ -116,6 +120,7 @@ export function calculatePowScore(
     profilePow: weightedProfilePow,
     totalScore,
     hasPow,
+    isDelegated: hasDelegatedPow,
   };
 }
 

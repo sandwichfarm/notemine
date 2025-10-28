@@ -1,6 +1,6 @@
-import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, getActiveRelays, relayPool } from '../lib/applesauce';
+import { createTimelineStream, getActiveRelays, relayPool, getUserFollows } from '../lib/applesauce';
 import { calculatePowScore, getPowDifficulty } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
@@ -9,6 +9,8 @@ import { debug } from '../lib/debug';
 interface TimelineProps {
   limit?: number;
   showScores?: boolean;
+  mode?: 'global' | 'wot';
+  userPubkey?: string;
 }
 
 interface ScoredNote {
@@ -22,16 +24,46 @@ export const Timeline: Component<TimelineProps> = (props) => {
   const [error, setError] = createSignal<string | null>(null);
 
   let subscription: Subscription | null = null;
+  let eventCache = new Map<string, NostrEvent>();
+  let reactionsCache = new Map<string, NostrEvent[]>();
+  let repliesCache = new Map<string, NostrEvent[]>();
 
-  onMount(() => {
-    const eventCache = new Map<string, NostrEvent>();
-    const reactionsCache = new Map<string, NostrEvent[]>();
-    const repliesCache = new Map<string, NostrEvent[]>();
+  // Watch for mode or userPubkey changes and reload timeline
+  createEffect(() => {
+    // Track reactive dependencies
+    const mode = props.mode;
+    const userPubkey = props.userPubkey;
     const maxEvents = props.limit ?? 50;
 
-    try {
-      const relays = getActiveRelays();
-      debug('[Timeline] Loading from relays:', relays);
+    // Clean up previous subscription
+    subscription?.unsubscribe();
+
+    // Reset state
+    eventCache.clear();
+    reactionsCache.clear();
+    repliesCache.clear();
+    setNotes([]);
+    setLoading(true);
+    setError(null);
+
+    debug('[Timeline] Loading timeline, mode:', mode);
+
+    // Async function to load timeline
+    const loadTimeline = async () => {
+      // Get follows for WoT mode
+      let followedPubkeys: Set<string> | null = null;
+      if (mode === 'wot' && userPubkey) {
+        const follows = await getUserFollows(userPubkey);
+        followedPubkeys = new Set(follows);
+        console.log('[Timeline] WoT mode: filtering by', followedPubkeys.size, 'follows', Array.from(followedPubkeys).slice(0, 5));
+        debug('[Timeline] WoT mode: filtering by', followedPubkeys.size, 'follows');
+      } else {
+        console.log('[Timeline] Global mode, no filtering');
+      }
+
+      try {
+        const relays = getActiveRelays();
+        debug('[Timeline] Loading from relays:', relays);
 
       if (relays.length === 0) {
         setError('No relays connected');
@@ -47,6 +79,16 @@ export const Timeline: Component<TimelineProps> = (props) => {
       // Subscribe to timeline updates
       subscription = timeline$.subscribe({
         next: (event: NostrEvent) => {
+          // Filter by follows in WoT mode
+          if (followedPubkeys && !followedPubkeys.has(event.pubkey)) {
+            console.log('[Timeline] Filtering out event from non-followed user:', event.pubkey.slice(0, 8));
+            return;
+          }
+
+          if (followedPubkeys) {
+            console.log('[Timeline] Accepting event from followed user:', event.pubkey.slice(0, 8));
+          }
+
           eventCache.set(event.id, event);
 
           // Initialize reaction and reply arrays for this event
@@ -133,11 +175,15 @@ export const Timeline: Component<TimelineProps> = (props) => {
         setNotes(topNotes);
         setLoading(false);
       }
-    } catch (err) {
-      console.error('[Timeline] Setup error:', err);
-      setError(String(err));
-      setLoading(false);
-    }
+      } catch (err) {
+        console.error('[Timeline] Setup error:', err);
+        setError(String(err));
+        setLoading(false);
+      }
+    };
+
+    // Call the async function
+    loadTimeline();
   });
 
   onCleanup(() => {
@@ -177,6 +223,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
         <div class="space-y-3">
           <div class="text-sm text-text-secondary mb-2">
             {notes().length} notes • sorted by POW score
+            {props.mode === 'wot' && ' • from followed users'}
           </div>
           <For each={notes()}>
             {(scoredNote) => (

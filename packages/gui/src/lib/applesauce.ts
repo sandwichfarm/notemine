@@ -137,17 +137,18 @@ export function disconnectFromRelays() {
 // NIP-65: Get user's outbox relays (where they write)
 export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
   return new Promise((resolve) => {
-    const subscription = eventStore.mailboxes(pubkey).subscribe({
+    let subscription: any = null;
+    subscription = eventStore.mailboxes(pubkey).subscribe({
       next: (mailboxes) => {
         if (mailboxes?.outboxes && mailboxes.outboxes.length > 0) {
           debug('[NIP-65] Found outbox relays:', mailboxes.outboxes);
           setUserOutboxRelaysSignal(mailboxes.outboxes);
           resolve(mailboxes.outboxes);
-          subscription.unsubscribe();
+          subscription?.unsubscribe();
         }
       },
       complete: () => {
-        subscription.unsubscribe();
+        subscription?.unsubscribe();
       },
     });
 
@@ -171,7 +172,7 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
     // Timeout after 3 seconds total, fallback to default relays
     setTimeout(() => {
       clearTimeout(fetchTimeout);
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
       debug('[NIP-65] No outbox relays found, using defaults');
       resolve(getActiveRelays());
     }, 3000);
@@ -181,17 +182,18 @@ export async function getUserOutboxRelays(pubkey: string): Promise<string[]> {
 // NIP-65: Get user's inbox relays (where they read)
 export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
   return new Promise((resolve) => {
-    const subscription = eventStore.mailboxes(pubkey).subscribe({
+    let subscription: any = null;
+    subscription = eventStore.mailboxes(pubkey).subscribe({
       next: (mailboxes) => {
         if (mailboxes?.inboxes && mailboxes.inboxes.length > 0) {
           debug('[NIP-65] Found inbox relays:', mailboxes.inboxes);
           setUserInboxRelaysSignal(mailboxes.inboxes);
           resolve(mailboxes.inboxes);
-          subscription.unsubscribe();
+          subscription?.unsubscribe();
         }
       },
       complete: () => {
-        subscription.unsubscribe();
+        subscription?.unsubscribe();
       },
     });
 
@@ -215,7 +217,7 @@ export async function getUserInboxRelays(pubkey: string): Promise<string[]> {
     // Timeout after 3 seconds total, fallback to default relays
     setTimeout(() => {
       clearTimeout(fetchTimeout);
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
       debug('[NIP-65] No inbox relays found, using defaults');
       resolve(getActiveRelays());
     }, 3000);
@@ -273,5 +275,35 @@ export function batchFetchMetadata(pubkeys: string[]): void {
     complete: () => {
       debug('[Metadata] Batch fetch complete');
     },
+  });
+}
+
+// Get user's follows from kind 3 event
+export async function getUserFollows(pubkey: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    let subscription: any = null;
+    subscription = eventStore.replaceable(3, pubkey).subscribe({
+      next: (event) => {
+        if (event) {
+          // Extract pubkeys from 'p' tags
+          const follows = event.tags
+            .filter(tag => tag[0] === 'p' && tag[1])
+            .map(tag => tag[1]);
+          debug('[WoT] Found', follows.length, 'follows for', pubkey.slice(0, 8));
+          subscription?.unsubscribe();
+          resolve(follows);
+        }
+      },
+      complete: () => {
+        subscription?.unsubscribe();
+      },
+    });
+
+    // Timeout after 2 seconds, return empty array if no kind 3 event found
+    setTimeout(() => {
+      subscription?.unsubscribe();
+      debug('[WoT] No follows found for', pubkey.slice(0, 8), 'using empty array');
+      resolve([]);
+    }, 2000);
   });
 }

@@ -11,6 +11,7 @@ import { QueueProcessor } from './components/QueueProcessor';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
 import Home from './pages/Home';
+import Feed from './pages/Feed';
 import About from './pages/About';
 import Stats from './pages/Stats';
 import Relays from './pages/Relays';
@@ -129,6 +130,7 @@ const App: Component = () => {
                   <AppInit>
                     <Router root={Layout}>
                       <Route path="/" component={Home} />
+                      <Route path="/feed" component={Feed} />
                       <Route path="/about" component={About} />
                       <Route path="/relays" component={Relays} />
                       <Route path="/stats" component={Stats} />

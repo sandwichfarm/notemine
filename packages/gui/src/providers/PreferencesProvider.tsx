@@ -1,6 +1,7 @@
 import { createContext, useContext, Component, JSX, Accessor, createEffect } from 'solid-js';
 import { createLocalStore } from '../lib/localStorage';
 import { setDebugEnabled } from '../lib/debug';
+import type { QueueOrderingStrategy } from '../lib/queue-ordering';
 
 /**
  * User preferences with all configurable magic numbers
@@ -55,6 +56,10 @@ export interface UserPreferences {
   minerUseAllCores: boolean;
   // When true, always start fresh and ignore saved mining state on resume
   disableResume: boolean;
+
+  // Queue ordering strategy
+  // Controls how new items are inserted and whether lower-difficulty items preempt higher ones
+  queueOrderingStrategy: QueueOrderingStrategy;
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -101,6 +106,9 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   minerNumberOfWorkers: Math.max(1, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4) - 1),
   minerUseAllCores: false,
   disableResume: false,
+
+  // Queue ordering default
+  queueOrderingStrategy: 'lowDifficultyFirst',
 };
 
 interface PreferencesContextType {

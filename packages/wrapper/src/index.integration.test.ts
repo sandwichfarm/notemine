@@ -1,5 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Notemine } from './index.js';
+
+// Mock the inline worker factory to suppress runtime errors/noise in tests
+import { vi } from 'vitest';
+vi.mock('../dist/mine.worker.js', () => {
+  class FakeWorker {
+    onmessage: ((e: any) => void) | null = null;
+    onerror: ((e: any) => void) | null = null;
+    postMessage = (msg: any) => {
+      if (msg && msg.type === 'mine') {
+        const { id, runId } = msg;
+        const ev = { data: { type: 'initialized', workerId: id, runId } };
+        setTimeout(() => this.onmessage && this.onmessage(ev as any), 0);
+      }
+      // swallow other messages (e.g., cancel)
+    };
+    terminate = () => {};
+  }
+  function MineWorkerFactory() {
+    return new (FakeWorker as any)();
+  }
+  return { default: MineWorkerFactory };
+});
 import type { MiningState } from './index.js';
 
 describe('Phase 8 - Integration Tests', () => {

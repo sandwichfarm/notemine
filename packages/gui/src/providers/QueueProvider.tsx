@@ -2,6 +2,8 @@ import { createContext, useContext, Component, JSX, onMount, onCleanup } from 's
 import type { QueueItem, QueueState } from '../types/queue';
 import { createLocalStore } from '../lib/localStorage';
 import { debug } from '../lib/debug';
+import { computeInsertionIndex, shouldPreempt } from '../lib/queue-ordering';
+import { usePreferences } from './PreferencesProvider';
 
 interface QueueContextType {
   queueState: () => QueueState;
@@ -31,6 +33,9 @@ const DEFAULT_QUEUE_STATE: QueueState = {
 };
 
 export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
+  // Get preferences for queue ordering strategy
+  const { preferences } = usePreferences();
+
   // Use lazy mode: keep state in-memory, only flush on page exit or critical operations
   const store = createLocalStore<QueueState>(
     'notemine:miningQueue',
@@ -86,14 +91,55 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       createdAt: Date.now(),
     };
 
+    const state = queueState();
+    const strategy = preferences().queueOrderingStrategy;
+
+    // Compute insertion index based on strategy
+    const insertionIndex = computeInsertionIndex(state.items, newItem, strategy);
+
+    // Check if we should preempt the active item
+    const activeItem = state.activeItemId
+      ? state.items.find((i) => i.id === state.activeItemId)
+      : null;
+    const willPreempt = shouldPreempt(activeItem, newItem, strategy);
+
+    // Insert at computed position
+    const newItems = [...state.items];
+    newItems.splice(insertionIndex, 0, newItem);
+
+    // Determine new active item ID
+    let newActiveItemId = state.activeItemId;
+    if (willPreempt && state.isProcessing) {
+      // Preempt: set active to the first queued item (which is now the new item)
+      const queuedItems = newItems.filter((i) => i.status === 'queued');
+      newActiveItemId = queuedItems.length > 0 ? queuedItems[0].id : null;
+
+      debug('[Queue] PREEMPTING:', {
+        strategy,
+        oldActive: activeItem?.id,
+        oldDifficulty: activeItem?.difficulty,
+        newActive: newActiveItemId,
+        newDifficulty: newItem.difficulty,
+      });
+    }
+
     setQueueState((prev) => ({
       ...prev,
-      items: [...prev.items, newItem],
+      items: newItems,
+      activeItemId: newActiveItemId,
       // Auto-start queue if autoProcess is enabled and not already processing
       isProcessing: prev.autoProcess ? true : prev.isProcessing,
     }));
 
-    debug('[Queue] Added item:', newItem);
+    debug('[Queue] Added item:', {
+      id: newItem.id,
+      difficulty: newItem.difficulty,
+      strategy,
+      insertionIndex,
+      willPreempt,
+      activeItemId: newActiveItemId,
+    });
+
     flushQueue(); // Persist immediately after queue modification
     return id;
   };

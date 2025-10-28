@@ -484,6 +484,91 @@ export const Preferences: Component = () => {
               Adjust mining threads. Default leaves one core free.
             </p>
           </div>
+
+          {/* Queue Ordering Strategy */}
+          <div class="card">
+            <h3 class="text-sm font-medium text-text-secondary mb-3">Queue Ordering Strategy</h3>
+
+            <div class="space-y-3">
+              {/* Low Difficulty First (default) */}
+              <label class="flex items-start space-x-3 cursor-pointer group">
+                <input
+                  type="radio"
+                  name="queueOrderingStrategy"
+                  value="lowDifficultyFirst"
+                  checked={preferences().queueOrderingStrategy === 'lowDifficultyFirst'}
+                  onChange={(e) => {
+                    if (e.currentTarget.checked) {
+                      updatePreference('queueOrderingStrategy', 'lowDifficultyFirst');
+                    }
+                  }}
+                  class="mt-1 w-4 h-4"
+                />
+                <div class="flex-1">
+                  <span class="block text-sm font-medium text-text-primary group-hover:text-accent transition-colors">
+                    ⚡ Low Difficulty First (default)
+                  </span>
+                  <p class="text-xs text-text-tertiary opacity-70 mt-1">
+                    New lower-difficulty jobs jump to the front and preempt the current one.
+                    <strong>Example:</strong> mining POW 38, a new POW 21 is added → POW 21 starts immediately.
+                  </p>
+                </div>
+              </label>
+
+              {/* FIFO */}
+              <label class="flex items-start space-x-3 cursor-pointer group">
+                <input
+                  type="radio"
+                  name="queueOrderingStrategy"
+                  value="fifo"
+                  checked={preferences().queueOrderingStrategy === 'fifo'}
+                  onChange={(e) => {
+                    if (e.currentTarget.checked) {
+                      updatePreference('queueOrderingStrategy', 'fifo');
+                    }
+                  }}
+                  class="mt-1 w-4 h-4"
+                />
+                <div class="flex-1">
+                  <span class="block text-sm font-medium text-text-primary group-hover:text-accent transition-colors">
+                    📋 FIFO (First In, First Out)
+                  </span>
+                  <p class="text-xs text-text-tertiary opacity-70 mt-1">
+                    New jobs go to the end of the queue. No automatic preemption. Simple queue behavior.
+                  </p>
+                </div>
+              </label>
+
+              {/* LIFO */}
+              <label class="flex items-start space-x-3 cursor-pointer group">
+                <input
+                  type="radio"
+                  name="queueOrderingStrategy"
+                  value="lifo"
+                  checked={preferences().queueOrderingStrategy === 'lifo'}
+                  onChange={(e) => {
+                    if (e.currentTarget.checked) {
+                      updatePreference('queueOrderingStrategy', 'lifo');
+                    }
+                  }}
+                  class="mt-1 w-4 h-4"
+                />
+                <div class="flex-1">
+                  <span class="block text-sm font-medium text-text-primary group-hover:text-accent transition-colors">
+                    📚 LIFO (Last In, First Out / Stack)
+                  </span>
+                  <p class="text-xs text-text-tertiary opacity-70 mt-1">
+                    New jobs go to the front of the queue (stack behavior). No automatic preemption.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <p class="text-xs text-text-tertiary opacity-50 mt-4 p-2 bg-bg-secondary rounded">
+              <strong>Note:</strong> Manual ordering always works and overrides these defaults. You can reorder items
+              anytime using the queue panel controls.
+            </p>
+          </div>
         </div>
       </section>
 

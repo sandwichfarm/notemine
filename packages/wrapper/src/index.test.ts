@@ -2,6 +2,25 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Notemine } from './index.js';
 import { Observable } from 'rxjs';
 
+// Small helper to DRY progress simulation with runId
+function sendProgress(
+  miner: any,
+  workerId: number,
+  currentNonce: string,
+  hashRate?: number
+) {
+  const runId = miner._runId;
+  miner.handleWorkerMessage({
+    data: {
+      type: 'progress',
+      workerId,
+      runId,
+      currentNonce,
+      hashRate,
+    },
+  });
+}
+
 describe('Notemine', () => {
   let miner: Notemine;
 
@@ -222,35 +241,9 @@ describe('Phase 8 - Unit Tests', () => {
       const runId = (miner as any)._runId;
 
       // Simulate hash rate updates from workers
-      (miner as any).handleWorkerMessage({
-        data: {
-          type: 'progress',
-          workerId: 0,
-          runId,
-          data: { currentNonce: '1000' },
-          hashRate: 1000,
-        },
-      });
-
-      (miner as any).handleWorkerMessage({
-        data: {
-          type: 'progress',
-          workerId: 1,
-          runId,
-          data: { currentNonce: '2000' },
-          hashRate: 1500,
-        },
-      });
-
-      (miner as any).handleWorkerMessage({
-        data: {
-          type: 'progress',
-          workerId: 2,
-          runId,
-          data: { currentNonce: '3000' },
-          hashRate: 2000,
-        },
-      });
+      sendProgress(miner as any, 0, '1000', 1000);
+      sendProgress(miner as any, 1, '2000', 1500);
+      sendProgress(miner as any, 2, '3000', 2000);
 
       // Total should be sum of all worker rates
       const totalHashRate = (miner as any)._totalHashRate;
@@ -271,15 +264,7 @@ describe('Phase 8 - Unit Tests', () => {
 
       // Send multiple updates for same worker
       for (let i = 0; i < 10; i++) {
-        (miner as any).handleWorkerMessage({
-          data: {
-            type: 'progress',
-            workerId: 0,
-            runId,
-            data: { currentNonce: `${i * 1000}` },
-            hashRate: 1000 + i * 100, // Gradually increasing rate
-          },
-        });
+        sendProgress(miner as any, 0, `${i * 1000}`, 1000 + i * 100);
       }
 
       const totalHashRate = (miner as any)._totalHashRate;
@@ -514,6 +499,29 @@ describe('Phase 8 - Unit Tests', () => {
   });
 
   describe('Phase 2: RunId gating and ghost update prevention', () => {
+    it('should ignore progress messages without runId', async () => {
+      const miner = new Notemine({
+        pubkey: 'test',
+        content: 'test',
+        difficulty: 20,
+        numberOfWorkers: 1,
+      });
+
+      await miner.mine();
+
+      // Send a progress message without runId; should be ignored
+      (miner as any).handleWorkerMessage({
+        data: {
+          type: 'progress',
+          workerId: 0,
+          currentNonce: '1234',
+          hashRate: 2000,
+        },
+      });
+
+      // Total hash rate should remain 0 (no accepted messages)
+      expect((miner as any).totalHashRate || (miner as any)._totalHashRate).toBe(0);
+    });
     it('should generate new runId on mine() start', async () => {
       const miner = new Notemine({
         pubkey: 'test',

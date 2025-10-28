@@ -3,13 +3,21 @@ import { useQueue } from '../providers/QueueProvider';
 import type { QueueItem } from '../types/queue';
 import { useMining } from '../providers/MiningProvider';
 import { ConfirmDialog } from './ConfirmDialog';
+import { usePreferences } from '../providers/PreferencesProvider';
+import type { QueueOrderingStrategy } from '../lib/queue-ordering';
 
 export const QueuePanel: Component = () => {
   const { queueState, reorderItem, removeFromQueue, clearCompleted, toggleAutoProcess, pauseQueue, startQueue, skipCurrent } = useQueue();
   const { miningState, pauseMining, stopMining } = useMining();
+  const { preferences, updatePreference } = usePreferences();
 
   // Confirmation dialog state
   const [itemToDelete, setItemToDelete] = createSignal<QueueItem | null>(null);
+
+  // Handle strategy change
+  const handleStrategyChange = (strategy: QueueOrderingStrategy) => {
+    updatePreference('queueOrderingStrategy', strategy);
+  };
 
   const handlePause = () => {
     pauseQueue(); // Pause queue processing
@@ -163,6 +171,18 @@ export const QueuePanel: Component = () => {
             >
               Auto {queueState().autoProcess ? '✓' : '✗'}
             </button>
+
+            {/* Queue Ordering Strategy Selector */}
+            <select
+              value={preferences().queueOrderingStrategy}
+              onChange={(e) => handleStrategyChange(e.currentTarget.value as QueueOrderingStrategy)}
+              class="text-xs px-3 py-1.5 bg-bg-tertiary text-text-primary rounded hover:bg-bg-tertiary/80 transition-colors cursor-pointer border border-bg-tertiary focus:border-accent focus:outline-none"
+              title="Queue ordering strategy"
+            >
+              <option value="lowDifficultyFirst">⚡ Low Diff (default)</option>
+              <option value="fifo">📋 FIFO</option>
+              <option value="lifo">📚 LIFO</option>
+            </select>
 
             {/* Pause/Resume - show when there are queued OR mining items */}
             <Show when={hasActiveOrQueuedItems()}>

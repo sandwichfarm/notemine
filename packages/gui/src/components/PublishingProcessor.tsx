@@ -1,4 +1,4 @@
-import { Component, createEffect } from 'solid-js';
+import { Component, createEffect, onCleanup } from 'solid-js';
 import { usePublishing } from '../providers/PublishingProvider';
 import { useUser } from '../providers/UserProvider';
 import { relayPool } from '../lib/applesauce';
@@ -324,6 +324,11 @@ export const PublishingProcessor: Component = () => {
         scheduleWakeup(state);
       }
     }
+  });
+
+  // Clean up wake-up timer on unmount
+  onCleanup(() => {
+    clearWakeupTimer();
   });
 
   return null; // Headless component

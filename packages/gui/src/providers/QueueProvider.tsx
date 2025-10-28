@@ -109,8 +109,9 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
 
     // Determine new active item ID
     let newActiveItemId = state.activeItemId;
-    if (willPreempt && state.isProcessing) {
+    if (willPreempt) {
       // Preempt: set active to the first queued item (which is now the new item)
+      // This works even when paused - on resume, the correct (lower-difficulty) job will be first
       const queuedItems = newItems.filter((i) => i.status === 'queued');
       newActiveItemId = queuedItems.length > 0 ? queuedItems[0].id : null;
 
@@ -120,6 +121,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
         oldDifficulty: activeItem?.difficulty,
         newActive: newActiveItemId,
         newDifficulty: newItem.difficulty,
+        isProcessing: state.isProcessing,
       });
     }
 

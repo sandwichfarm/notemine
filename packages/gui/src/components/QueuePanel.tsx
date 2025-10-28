@@ -5,6 +5,7 @@ import { useMining } from '../providers/MiningProvider';
 import { ConfirmDialog } from './ConfirmDialog';
 import { usePreferences } from '../providers/PreferencesProvider';
 import type { QueueOrderingStrategy } from '../lib/queue-ordering';
+import { debug } from '../lib/debug';
 
 export const QueuePanel: Component = () => {
   const { queueState, reorderItem, removeFromQueue, clearCompleted, toggleAutoProcess, pauseQueue, startQueue, skipCurrent } = useQueue();
@@ -16,6 +17,8 @@ export const QueuePanel: Component = () => {
 
   // Handle strategy change
   const handleStrategyChange = (strategy: QueueOrderingStrategy) => {
+    const oldStrategy = preferences().queueOrderingStrategy;
+    debug('[QueuePanel] Strategy change:', { from: oldStrategy, to: strategy });
     updatePreference('queueOrderingStrategy', strategy);
   };
 

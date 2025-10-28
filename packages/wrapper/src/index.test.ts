@@ -219,12 +219,14 @@ describe('Phase 8 - Unit Tests', () => {
 
       // Start mining to initialize
       miner.mine();
+      const runId = (miner as any)._runId;
 
       // Simulate hash rate updates from workers
       (miner as any).handleWorkerMessage({
         data: {
           type: 'progress',
           workerId: 0,
+          runId,
           data: { currentNonce: '1000' },
           hashRate: 1000,
         },
@@ -234,6 +236,7 @@ describe('Phase 8 - Unit Tests', () => {
         data: {
           type: 'progress',
           workerId: 1,
+          runId,
           data: { currentNonce: '2000' },
           hashRate: 1500,
         },
@@ -243,6 +246,7 @@ describe('Phase 8 - Unit Tests', () => {
         data: {
           type: 'progress',
           workerId: 2,
+          runId,
           data: { currentNonce: '3000' },
           hashRate: 2000,
         },
@@ -263,6 +267,7 @@ describe('Phase 8 - Unit Tests', () => {
       });
 
       miner.mine();
+      const runId = (miner as any)._runId;
 
       // Send multiple updates for same worker
       for (let i = 0; i < 10; i++) {
@@ -270,6 +275,7 @@ describe('Phase 8 - Unit Tests', () => {
           data: {
             type: 'progress',
             workerId: 0,
+            runId,
             data: { currentNonce: `${i * 1000}` },
             hashRate: 1000 + i * 100, // Gradually increasing rate
           },

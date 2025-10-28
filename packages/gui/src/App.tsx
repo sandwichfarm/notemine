@@ -21,8 +21,8 @@ import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
 import { Preferences } from './pages/Preferences';
 import { fetchNip66PowRelays } from './lib/nip66';
-import { setPowRelays, connectToRelays, getActiveRelays } from './lib/applesauce';
-// import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
+import { setPowRelays, connectToRelays, getActiveRelays, eventStore } from './lib/applesauce';
+import { initializeCache, loadCachedEvents, setupCachePersistence } from './lib/cache';
 import { debug } from './lib/debug';
 
 // App initialization component
@@ -31,26 +31,30 @@ const AppInit: ParentComponent = (props) => {
   const [relaysReady, setRelaysReady] = createSignal(false);
 
   onMount(async () => {
-    // FIXME: Cache disabled due to WASM threading conflict with COOP/COEP headers
-    // Turso WASM with threading requires COOP/COEP headers, but those break WebSocket relay connections
-    // Need to either: use non-threaded Turso, use different cache, or solve COOP/COEP + WebSocket issue
+    // NOTE: Cache implementation depends on COI being enabled
+    // COEP:credentialless allows both WASM threading AND WebSocket relay connections
+    // COI is controlled via VITE_ENABLE_COI environment variable
 
-    // Initialize local cache
-    // try {
-    //   await initializeCache();
-    //   debug('[App] Cache initialized');
+    // Initialize local cache (only if COI is enabled)
+    if (window.crossOriginIsolated) {
+      try {
+        await initializeCache();
+        console.log('[CACHE-IMPL] Cache initialized');
 
-    //   // Load cached events into event store
-    //   const cachedCount = await loadCachedEvents(eventStore);
-    //   debug(`[App] Loaded ${cachedCount} events from cache`);
+        // Load cached events into event store
+        const cachedCount = await loadCachedEvents(eventStore);
+        console.log(`[CACHE-IMPL] Loaded ${cachedCount} events from cache`);
 
-    //   // Set up automatic cache persistence
-    //   setupCachePersistence(eventStore);
-    // } catch (error) {
-    //   console.error('[App] Cache initialization failed:', error);
-    //   // Continue without cache
-    // }
-    debug('[App] Cache disabled - WASM threading conflict with relay WebSockets');
+        // Set up automatic cache persistence
+        setupCachePersistence(eventStore);
+        console.log('[CACHE-IMPL] Cache persistence enabled');
+      } catch (error) {
+        console.error('[CACHE-IMPL] Cache initialization failed:', error);
+        // Continue without cache
+      }
+    } else {
+      console.log('[CACHE-IMPL] Cache disabled - COI not available (enable with VITE_ENABLE_COI=1)');
+    }
 
     // Fetch NIP-66 POW relays BEFORE mounting children
     try {

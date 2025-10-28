@@ -3,6 +3,15 @@ import { render } from 'solid-js/web';
 import './index.css';
 import App from './App';
 
+// Cross-Origin Isolation diagnostic
+if (import.meta.env.DEV) {
+  console.log('[CACHE-IMPL] COI Status:', {
+    enabled: window.crossOriginIsolated,
+    sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+    config: import.meta.env.VITE_ENABLE_COI === '1' ? 'enabled' : 'disabled',
+  });
+}
+
 // Dev-only: opt-in cache busting via ?nocache=1 (does not touch queue)
 if (import.meta.env.DEV) {
   const params = new URLSearchParams(window.location.search);

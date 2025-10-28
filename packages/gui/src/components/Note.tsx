@@ -1,4 +1,5 @@
 import { Component, Show, createSignal, For, onMount, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { A } from '@solidjs/router';
 import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty, hasValidPow, formatPowDifficulty } from '../lib/pow';
@@ -203,7 +204,7 @@ export const Note: Component<NoteProps> = (props) => {
               {/* Local tooltip positioned near score */}
               <Show when={showScoreTooltip()}>
                 <div
-                  class="absolute top-6 right-0 z-40 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px]"
+                  class="absolute top-6 right-0 z-[100] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <pre class="text-xs font-mono text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
@@ -303,22 +304,26 @@ export const Note: Component<NoteProps> = (props) => {
         </button>
       </div>
 
-      {/* Reaction Picker Modal */}
-      <Show when={showReactionPicker()}>
-        <ReactionPicker
-          eventId={props.event.id}
-          eventAuthor={props.event.pubkey}
-          onClose={() => setShowReactionPicker(false)}
-        />
-      </Show>
+      {/* Reaction Picker Modal - Rendered at document root */}
+      <Portal>
+        <Show when={showReactionPicker()}>
+          <ReactionPicker
+            eventId={props.event.id}
+            eventAuthor={props.event.pubkey}
+            onClose={() => setShowReactionPicker(false)}
+          />
+        </Show>
+      </Portal>
 
-      {/* Reply Composer Modal */}
-      <Show when={showReplyComposer()}>
-        <ReplyComposer
-          parentEvent={props.event}
-          onClose={() => setShowReplyComposer(false)}
-        />
-      </Show>
+      {/* Reply Composer Modal - Rendered at document root */}
+      <Portal>
+        <Show when={showReplyComposer()}>
+          <ReplyComposer
+            parentEvent={props.event}
+            onClose={() => setShowReplyComposer(false)}
+          />
+        </Show>
+      </Portal>
     </div>
   );
 };

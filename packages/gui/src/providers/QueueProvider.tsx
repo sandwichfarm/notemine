@@ -41,19 +41,21 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
   const setQueueState = store.setValue;
   const flushQueue = store.flush;
 
-  // On mount, if there are items with queued status, ensure isProcessing is true
-  // This handles page reload scenarios
-  const state = queueState();
-  if (!state.isProcessing && state.items.some((item) => item.status === 'queued')) {
-    debug('[QueueProvider] Detected pending items on mount, auto-starting queue');
-    setQueueState((prev) => ({
-      ...prev,
-      isProcessing: true,
-    }));
-  }
-
   // Add event listeners to flush queue state on page exit
+  // Also handle auto-start after children mount
   onMount(() => {
+    // On mount, if there are items with queued status, ensure isProcessing is true
+    // This runs AFTER QueueProcessor mounts and registers its effect
+    const state = queueState();
+    if (!state.isProcessing && state.items.some((item) => item.status === 'queued')) {
+      debug('[QueueProvider] Detected pending items on mount, auto-starting queue');
+      setQueueState((prev) => ({
+        ...prev,
+        isProcessing: true,
+      }));
+      flushQueue(); // Persist immediately so it survives next reload
+    }
+
     const handleFlush = () => {
       debug('[QueueProvider] Flushing queue to localStorage on page exit');
       flushQueue();
@@ -101,8 +103,8 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
     setQueueState((prev) => ({
       ...prev,
       items: [...prev.items, newItem],
-      // Auto-start queue if autoProcess is enabled and not already processing
-      isProcessing: prev.autoProcess ? true : prev.isProcessing,
+      // Always start queue when items are added - user wants to process them
+      isProcessing: true,
     }));
 
     debug('[Queue] Added item:', newItem);
@@ -262,6 +264,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       isProcessing: true,
     }));
     debug('[Queue] Started processing');
+    flushQueue(); // Persist immediately
   };
 
   // Pause queue processing
@@ -271,6 +274,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       isProcessing: false,
     }));
     debug('[Queue] Paused processing');
+    flushQueue(); // Persist immediately
   };
 
   // Skip current item
@@ -288,6 +292,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
       ...prev,
       autoProcess: !prev.autoProcess,
     }));
+    flushQueue(); // Persist immediately
   };
 
   // Get next queued item

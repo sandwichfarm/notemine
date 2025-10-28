@@ -1,10 +1,11 @@
 import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { createTimelineStream, getActiveRelays, relayPool } from '../lib/applesauce';
-import { calculatePowScore, getPowDifficulty } from '../lib/pow';
+import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
 import { debug } from '../lib/debug';
+import { usePreferences } from '../providers/PreferencesProvider';
 
 interface TimelineProps {
   limit?: number;
@@ -17,6 +18,7 @@ interface ScoredNote {
 }
 
 export const Timeline: Component<TimelineProps> = (props) => {
+  const { preferences } = usePreferences();
   const [notes, setNotes] = createSignal<ScoredNote[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingMore, setLoadingMore] = createSignal(false);
@@ -229,18 +231,22 @@ export const Timeline: Component<TimelineProps> = (props) => {
 
   // Helper function to recalculate scores immediately (for when loading completes)
   const recalculateScoresImmediate = () => {
+    const prefs = preferences();
     const scoredNotes = Array.from(eventCache.values()).map((evt) => {
       const reactions = reactionsCache.get(evt.id) || [];
       const replies = repliesCache.get(evt.id) || [];
 
-      // Calculate score with reactions
-      const score = calculatePowScore(evt, reactions);
+      // Calculate score with reactions, replies, and user preferences
+      const score = calculatePowScore(evt, reactions, replies, {
+        reactionPowWeight: prefs.reactionPowWeight,
+        replyPowWeight: prefs.replyPowWeight,
+        profilePowWeight: prefs.profilePowWeight,
+        nonPowReactionWeight: prefs.nonPowReactionWeight,
+        nonPowReplyWeight: prefs.nonPowReplyWeight,
+        powInteractionThreshold: prefs.powInteractionThreshold,
+      });
 
-      // Add reply POW to total score
-      const repliesPow = replies.reduce((sum, r) => sum + getPowDifficulty(r), 0);
-      const totalScore = score.totalScore + repliesPow;
-
-      return { event: evt, score: totalScore };
+      return { event: evt, score: score.totalScore };
     });
 
     scoredNotes.sort((a, b) => b.score - a.score);

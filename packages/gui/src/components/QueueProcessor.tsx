@@ -27,8 +27,8 @@ export const QueueProcessor: Component = () => {
     }
 
     const state = queueState();
-    if (!state.isProcessing || !state.autoProcess) {
-      debug('[QueueProcessor] Queue not active or auto-process disabled');
+    if (!state.isProcessing) {
+      debug('[QueueProcessor] Queue not active (isProcessing: false)');
       return;
     }
 
@@ -178,15 +178,27 @@ export const QueueProcessor: Component = () => {
       updateItemStatus(nextItem.id, 'completed');
       setActiveItem(null);
 
-      // Process next item after a short delay
-      setTimeout(processNextItem, 500);
+      // Process next item after a short delay if autoProcess is enabled
+      const currentState = queueState();
+      if (currentState.autoProcess) {
+        debug('[QueueProcessor] Auto-process enabled, continuing to next item');
+        setTimeout(processNextItem, 500);
+      } else {
+        debug('[QueueProcessor] Auto-process disabled, stopping after this item');
+      }
     } catch (error) {
       console.error('[QueueProcessor] Error processing item:', error);
       updateItemStatus(nextItem.id, 'failed', String(error));
       setActiveItem(null);
 
-      // Continue with next item even if this one failed
-      setTimeout(processNextItem, 500);
+      // Continue with next item even if this one failed (respects autoProcess)
+      const currentState = queueState();
+      if (currentState.autoProcess) {
+        debug('[QueueProcessor] Auto-process enabled, continuing to next item after failure');
+        setTimeout(processNextItem, 500);
+      } else {
+        debug('[QueueProcessor] Auto-process disabled, stopping after failure');
+      }
     } finally {
       processingLock = false;
     }
@@ -223,9 +235,14 @@ export const QueueProcessor: Component = () => {
         debug('[QueueProcessor] Currently mining item was removed or stopped, stopping mining');
         stopMining();
         processingLock = false;
-        // After stopping, trigger processing of next item if queue is still active
-        if (state.isProcessing && state.autoProcess) {
-          setTimeout(processNextItem, 100);
+        // After stopping, trigger processing of next item if queue is still active and autoProcess enabled
+        if (state.isProcessing) {
+          if (state.autoProcess) {
+            debug('[QueueProcessor] Auto-process enabled, will process next item');
+            setTimeout(processNextItem, 100);
+          } else {
+            debug('[QueueProcessor] Auto-process disabled, not advancing to next item');
+          }
         }
         return;
       }
@@ -233,11 +250,11 @@ export const QueueProcessor: Component = () => {
 
     // Auto-start processing when:
     // 1. Queue is active (isProcessing=true)
-    // 2. Auto-process is enabled
-    // 3. There are queued items OR an active item to resume
-    // 4. No item is currently being mined by the hook
-    // 5. Not already locked
-    if (state.isProcessing && state.autoProcess && !miningState().mining && !processingLock) {
+    // 2. There are queued items OR an active item to resume
+    // 3. No item is currently being mined by the hook
+    // 4. Not already locked
+    // Note: autoProcess controls auto-advance AFTER completion, not initial start
+    if (state.isProcessing && !miningState().mining && !processingLock) {
       const hasQueuedItems = state.items.some((item) => item.status === 'queued');
       const hasActiveItem = state.activeItemId && state.items.some((item) => item.id === state.activeItemId && item.status === 'queued');
 

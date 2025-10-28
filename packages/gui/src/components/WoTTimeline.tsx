@@ -1,9 +1,10 @@
 import { Component, createSignal, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays } from '../lib/applesauce';
-import { calculatePowScore, getPowDifficulty } from '../lib/pow';
+import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
+import { usePreferences } from '../providers/PreferencesProvider';
 
 interface WoTTimelineProps {
   userPubkey: string;
@@ -17,6 +18,7 @@ interface ScoredNote {
 }
 
 export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
+  const { preferences } = usePreferences();
   const [notes, setNotes] = createSignal<ScoredNote[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingMore, setLoadingMore] = createSignal(false);
@@ -259,6 +261,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
   // Helper function to recalculate scores immediately
   const recalculateScoresImmediate = () => {
+    const prefs = preferences();
     const scoredNotes = Array.from(eventCache.values())
       .filter((evt) => {
         // Only include root notes (no 'e' tags)
@@ -269,14 +272,17 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
         const reactions = reactionsCache.get(evt.id) || [];
         const replies = repliesCache.get(evt.id) || [];
 
-        // Calculate score with reactions
-        const score = calculatePowScore(evt, reactions);
+        // Calculate score with reactions, replies, and user preferences
+        const score = calculatePowScore(evt, reactions, replies, {
+          reactionPowWeight: prefs.reactionPowWeight,
+          replyPowWeight: prefs.replyPowWeight,
+          profilePowWeight: prefs.profilePowWeight,
+          nonPowReactionWeight: prefs.nonPowReactionWeight,
+          nonPowReplyWeight: prefs.nonPowReplyWeight,
+          powInteractionThreshold: prefs.powInteractionThreshold,
+        });
 
-        // Add reply POW to total score
-        const repliesPow = replies.reduce((sum, r) => sum + getPowDifficulty(r), 0);
-        const totalScore = score.totalScore + repliesPow;
-
-        return { event: evt, score: totalScore };
+        return { event: evt, score: score.totalScore };
       });
 
     // Sort by total score (including delegated PoW)

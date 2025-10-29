@@ -39,7 +39,7 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.VPS_SSH_PORT || 22 }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 

@@ -15,8 +15,7 @@
     "build": "tsc -b",
     "clean": "rimraf dist",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "prepare": "npm run build"
+    "test:watch": "vitest"
   },
   "files": [
     "dist"

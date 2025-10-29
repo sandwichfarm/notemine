@@ -34,6 +34,7 @@ struct HashableEvent<'a>(
 );
 
 #[inline]
+#[allow(dead_code)]
 fn get_event_hash(event: &NostrEvent) -> Vec<u8> {
     let hashable_event = HashableEvent(
         0u32,
@@ -139,7 +140,7 @@ pub fn mine_event(
 
     // Adaptive cancel stride - start at 10k, reduce after cancel detected
     let mut cancel_stride: u64 = 10_000;
-    let mut cancel_backoff_until: f64 = 0.0; // Timestamp until which we use reduced cancel stride
+    let cancel_backoff_until: f64 = 0.0; // Timestamp until which we use reduced cancel stride
 
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
@@ -302,8 +303,6 @@ pub fn mine_event(
 
                 let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
                 if cancel.is_truthy() {
-                    // Set backoff period to improve responsiveness for rapid pause/resume
-                    cancel_backoff_until = current_time + 1000.0; // Next 1 second
                     console::log_1(&"Mining cancelled.".into());
                     return serde_wasm_bindgen::to_value(&serde_json::json!({
                         "error": "Mining cancelled."

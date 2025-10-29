@@ -9,7 +9,7 @@ on:
       - '.github/workflows/deploy-relay.yml'
     tags:
       - 'v*.*.*'
-  workflow_dispatch:
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   build-and-deploy:

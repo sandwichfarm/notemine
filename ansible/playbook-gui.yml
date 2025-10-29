@@ -37,6 +37,49 @@
         name: caddy
         state: present
 
+    - name: Check if ufw is installed
+      command: which ufw
+      register: ufw_check
+      failed_when: false
+      changed_when: false
+
+    - name: Open HTTP port (ufw)
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+      when: ufw_check.rc == 0
+
+    - name: Open HTTPS port (ufw)
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+      when: ufw_check.rc == 0
+
+    - name: Open HTTP port (iptables)
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_port: '80'
+        jump: ACCEPT
+        action: insert
+      when: ufw_check.rc != 0
+
+    - name: Open HTTPS port (iptables)
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_port: '443'
+        jump: ACCEPT
+        action: insert
+      when: ufw_check.rc != 0
+
+    - name: Save iptables rules
+      shell: iptables-save > /etc/iptables/rules.v4
+      when: ufw_check.rc != 0
+      failed_when: false
+
     - name: Create GUI deployment directory
       file:
         path: "{{ gui_deploy_path }}"

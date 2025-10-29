@@ -28,7 +28,17 @@ Install without building all packages
 pnpm install --ignore-scripts
 ```
 
-Use workspace commands: 
+Use workspace commands:
 ```
 pnpm --filter @notemine/wrapper ...
 ```
+
+## Deployment
+
+This repository includes automated deployment infrastructure for notemine.io:
+
+- **GUI**: SolidJS SPA deployed to `/var/www/notemine/`
+- **Relay**: Go-based Nostr relay with PoW validation
+- **Infrastructure**: Caddy reverse proxy with automatic HTTPS
+
+See [`ansible/SETUP.md`](./ansible/SETUP.md) for deployment setup guide and [`ansible/README.md`](./ansible/README.md) for detailed documentation.

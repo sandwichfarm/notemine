@@ -1,0 +1,654 @@
+import { createContext, useContext, ParentComponent, createSignal, onCleanup } from 'solid-js';
+import {
+  Notemine,
+  type BestPowData,
+  type SuccessEvent,
+  type WorkerPow,
+  type MiningState as WrapperMiningState,
+} from '@notemine/wrapper';
+import type { NostrEvent } from 'nostr-tools/core';
+import type { Subscription } from 'rxjs';
+import { usePreferences } from './PreferencesProvider';
+
+export interface MiningState {
+  mining: boolean;
+  hashRate: number;
+  overallBestPow: number | null;
+  workersBestPow: Record<number, BestPowData>; // Per-worker best POW keyed by workerId
+  workersHashRates: Record<number, number>; // Hash rate per worker in H/s
+  workersCurrentNonces: Record<number, string>; // Current nonce per worker keyed by workerId
+  result: NostrEvent | null;
+  error: string | null;
+}
+
+export interface MiningOptions {
+  content: string;
+  pubkey: string;
+  difficulty: number;
+  numberOfWorkers?: number;
+  tags?: string[][];
+  kind?: number; // Event kind (default: 1)
+}
+
+interface MiningContextType {
+  miningState: () => MiningState;
+  startMining: (
+    options: MiningOptions,
+    queueItemId?: string,
+    onStateUpdate?: (state: WrapperMiningState) => void
+  ) => Promise<NostrEvent | null>;
+  stopMining: () => void;
+  pauseMining: () => void;
+  resumeMining: (
+    queueItemOrNonces?: any,
+    onStateUpdate?: (state: WrapperMiningState) => void
+  ) => Promise<NostrEvent | null>;
+  getMiningState: () => WrapperMiningState | null;
+  restoreMiningState: (restoredState: WrapperMiningState) => void;
+  currentQueueItemId: string | null;
+}
+
+const MiningContext = createContext<MiningContextType>();
+
+export const MiningProvider: ParentComponent = (props) => {
+  const { preferences } = usePreferences();
+
+  let notemine: Notemine | null = null;
+  let subscriptions: Subscription[] = [];
+  let currentQueueItemId: string | null = null;
+  let onMiningStateUpdate: ((state: WrapperMiningState) => void) | null = null;
+  // Debug: track active workerIds seen in progress
+  const activeWorkerIds = new Set<number>();
+  // Phase 5: Throttle state updates to ~500ms to avoid excessive persistence writes
+  let lastStateUpdateTime = 0;
+  const STATE_UPDATE_THROTTLE_MS = 500;
+
+  const [miningState, setMiningState] = createSignal<MiningState>({
+    mining: false,
+    hashRate: 0,
+    overallBestPow: null,
+    workersBestPow: {},
+    workersHashRates: {},
+    workersCurrentNonces: {},
+    result: null,
+    error: null,
+  });
+
+  // Debug logger helper (non-reactive)
+  const debug = (...args: any[]) => {
+    // Read preferences value directly without creating reactive dependency
+    const debugMode = preferences().debugMode;
+    if (debugMode) {
+      console.log(...args);
+    }
+  };
+
+  const startMining = async (
+    options: MiningOptions,
+    queueItemId?: string,
+    onStateUpdate?: (state: WrapperMiningState) => void
+  ): Promise<NostrEvent | null> => {
+    // Clean up any existing subscriptions and instance first
+    debug('[MiningProvider] Starting mining, cleaning up old instance');
+    subscriptions.forEach((sub) => sub.unsubscribe());
+    subscriptions = [];
+    if (notemine) {
+      notemine.cancel();
+      notemine = null;
+    }
+    activeWorkerIds.clear();
+    lastStateUpdateTime = 0; // Phase 5: Reset throttle timer
+
+    // Cache debug mode to avoid repeated preferences() calls in hot path
+    const debugMode = preferences().debugMode;
+
+    currentQueueItemId = queueItemId || null;
+    onMiningStateUpdate = onStateUpdate || null;
+
+    // Reset state
+    setMiningState({
+      mining: true,
+      hashRate: 0,
+      overallBestPow: null,
+      workersBestPow: {},
+      workersHashRates: {},
+      workersCurrentNonces: {},
+      result: null,
+      error: null,
+    });
+
+    // Initialize notemine
+    const hw = navigator.hardwareConcurrency || 4;
+    const defaultWorkers = Math.max(1, hw - 1);
+    const prefWorkers = preferences().minerNumberOfWorkers;
+    const useAll = preferences().minerUseAllCores;
+    // Choose: explicit option > preference > default
+    let chosenWorkers = useAll ? hw : (options.numberOfWorkers ?? (prefWorkers && prefWorkers > 0 ? prefWorkers : defaultWorkers));
+    // Clamp to 1..hw
+    chosenWorkers = Math.max(1, Math.min(chosenWorkers, hw));
+    debug('[MiningProvider] startMining worker selection:', {
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      requested: options.numberOfWorkers,
+      preference: prefWorkers,
+      useAllCores: useAll,
+      chosen: chosenWorkers,
+    });
+    notemine = new Notemine({
+      content: options.content,
+      pubkey: options.pubkey,
+      difficulty: options.difficulty,
+      numberOfWorkers: chosenWorkers,
+      tags: options.tags || [],
+      kind: options.kind,
+      debug: preferences().debugMode,
+    });
+
+    // Subscribe to workers list (debug visibility)
+    const workersSub = notemine.workers$.subscribe((workers) => {
+      debug('[MiningProvider] workers$ count:', workers.length);
+    });
+    subscriptions.push(workersSub);
+
+    // Subscribe to workers' POW progress (merge without downgrade)
+    const workersPowSub = notemine.workersPow$.subscribe((data: Record<number, BestPowData>) => {
+      setMiningState((prev) => {
+        const merged: Record<number, BestPowData> = { ...prev.workersBestPow };
+        for (const [idStr, pow] of Object.entries(data || {})) {
+          const id = Number(idStr);
+          const existing = merged[id];
+          if (!existing || (pow && pow.bestPow >= existing.bestPow)) {
+            merged[id] = pow as BestPowData;
+          }
+        }
+        return { ...prev, workersBestPow: merged };
+      });
+    });
+    subscriptions.push(workersPowSub);
+
+    // Subscribe to overall best POW
+    const bestPowSub = notemine.highestPow$.subscribe((pow: WorkerPow | null) => {
+      setMiningState((prev) => ({
+        ...prev,
+        overallBestPow: pow?.bestPow ?? null,
+      }));
+    });
+    subscriptions.push(bestPowSub);
+
+    // Subscribe to progress (for hash rate and current nonce)
+    const currentInstance = notemine;
+    const progressSub = currentInstance.progress$.subscribe(({ workerId, hashRate: workerHashRate, currentNonce }) => {
+      const totalHashRate = currentInstance.totalHashRate;
+
+      setMiningState((prev) => ({
+        ...prev,
+        hashRate: totalHashRate,
+        // Update per-worker hash rate
+        workersHashRates: workerHashRate
+          ? { ...prev.workersHashRates, [workerId]: workerHashRate }
+          : prev.workersHashRates,
+        // Update per-worker current nonce
+        workersCurrentNonces: currentNonce
+          ? { ...prev.workersCurrentNonces, [workerId]: currentNonce }
+          : prev.workersCurrentNonces,
+      }));
+
+      // Phase 5: Save mining state for queue if callback provided (with throttling)
+      if (onMiningStateUpdate) {
+        const now = Date.now();
+        const timeSinceLastUpdate = now - lastStateUpdateTime;
+
+        // Throttle: only update every 500ms to avoid excessive writes
+        if (timeSinceLastUpdate >= STATE_UPDATE_THROTTLE_MS) {
+          const miningStateData = currentInstance.getState();
+          onMiningStateUpdate(miningStateData);
+          lastStateUpdateTime = now;
+
+          if (debugMode) {
+            debug('[MiningProvider] State update:', {
+              nonces: miningStateData.workerNonces.length,
+              hashRate: (totalHashRate / 1000).toFixed(2) + ' kH/s'
+            });
+          }
+        }
+      }
+    });
+    subscriptions.push(progressSub);
+
+    // Subscribe to first real nonces event for immediate save
+    const firstRealNoncesSub = currentInstance.firstRealNonces$.subscribe(() => {
+      if (onMiningStateUpdate) {
+        const miningStateData = currentInstance.getState();
+        onMiningStateUpdate(miningStateData);
+        lastStateUpdateTime = Date.now(); // Update throttle timer
+        if (debugMode) {
+          debug('[MiningProvider] First real nonces - immediate save triggered');
+        }
+      }
+    });
+    subscriptions.push(firstRealNoncesSub);
+
+    // Return promise that resolves when mining completes
+    return new Promise((resolve, reject) => {
+      // Subscribe to success
+      const successSub = notemine!.success$.subscribe(({ result }: SuccessEvent) => {
+        if (!result) {
+          return;
+        }
+
+        setMiningState((prev) => ({
+          ...prev,
+          mining: false,
+          result: result.event,
+        }));
+        resolve(result.event);
+      });
+      subscriptions.push(successSub);
+
+      // Subscribe to errors
+      const errorSub = notemine!.error$.subscribe(({ error }) => {
+        // Phase 6: Log errors with context (queue item id, event kind)
+        console.error('[MiningProvider] Error:', {
+          error: String(error),
+          queueItemId: currentQueueItemId,
+          kind: options.kind,
+          difficulty: options.difficulty,
+        });
+        setMiningState((prev) => ({
+          ...prev,
+          mining: false,
+          error: String(error),
+        }));
+        reject(error);
+      });
+      subscriptions.push(errorSub);
+
+      // Subscribe to cancelled events
+      const cancelledSub = notemine!.cancelled$.subscribe((cancelled) => {
+        if (cancelled) {
+          debug('[MiningProvider] Mining was cancelled, resolving promise with null');
+          setMiningState((prev) => ({
+            ...prev,
+            mining: false,
+          }));
+          resolve(null);
+        }
+      });
+      subscriptions.push(cancelledSub);
+
+      // Subscribe to paused events
+      const pausedSub = notemine!.paused$.subscribe((paused) => {
+        if (paused) {
+          debug('[MiningProvider] Mining was paused, resolving promise with null');
+          setMiningState((prev) => ({
+            ...prev,
+            mining: false,
+          }));
+          resolve(null);
+        }
+      });
+      subscriptions.push(pausedSub);
+
+      // Start mining
+      notemine!.mine().catch(reject);
+    });
+  };
+
+  const stopMining = () => {
+    if (notemine) {
+      notemine.cancel();
+      setMiningState((prev) => ({
+        ...prev,
+        mining: false,
+      }));
+    }
+    currentQueueItemId = null;
+    onMiningStateUpdate = null;
+    lastStateUpdateTime = 0; // Phase 5: Reset throttle timer
+  };
+
+  const pauseMining = () => {
+    if (notemine) {
+      notemine.pause();
+      setMiningState((prev) => ({
+        ...prev,
+        mining: false,
+      }));
+    }
+  };
+
+  const resumeMining = async (
+    queueItemOrNonces?: any,
+    onStateUpdate?: (state: WrapperMiningState) => void
+  ): Promise<NostrEvent | null> => {
+    // Handle both old signature (workerNonces array) and new signature (queue item)
+    const isQueueItem = queueItemOrNonces && typeof queueItemOrNonces === 'object' && 'miningState' in queueItemOrNonces;
+
+    if (isQueueItem) {
+      // New resume flow with queue item
+      const queueItem = queueItemOrNonces;
+
+      // If resume is disabled, start a fresh mining session using the queue item params
+      if (preferences().disableResume) {
+        debug('[MiningProvider] Disable Resume enabled — starting fresh instead of resume');
+        return startMining(
+          {
+            content: queueItem.content,
+            pubkey: queueItem.pubkey,
+            difficulty: queueItem.difficulty,
+            numberOfWorkers: preferences().minerUseAllCores
+              ? (navigator.hardwareConcurrency || 4)
+              : preferences().minerNumberOfWorkers,
+            tags: queueItem.tags || [],
+            kind: queueItem.kind,
+          },
+          queueItem.id,
+          onStateUpdate
+        );
+      }
+
+      // Clean up any existing subscriptions and instance first
+      debug('[MiningProvider] Resuming mining, cleaning up old instance');
+      subscriptions.forEach((sub) => sub.unsubscribe());
+      subscriptions = [];
+      if (notemine) {
+        notemine.cancel();
+        notemine = null;
+      }
+      activeWorkerIds.clear();
+      lastStateUpdateTime = 0; // Phase 5: Reset throttle timer
+
+      // Cache debug mode to avoid repeated preferences() calls in hot path
+      const debugMode = preferences().debugMode;
+
+      currentQueueItemId = queueItem.id || null;
+      onMiningStateUpdate = onStateUpdate || null;
+
+      debug('[MiningProvider] Resuming with queue item:', queueItem.id);
+
+      // Initialize notemine with the original parameters
+      const hw = navigator.hardwareConcurrency || 4;
+      const defaultWorkers = Math.max(1, hw - 1);
+      const prefWorkers = preferences().minerNumberOfWorkers;
+      const useAll = preferences().minerUseAllCores;
+      const resumeUseSaved = preferences().resumeUseSavedWorkers;
+      const savedWorkers = queueItem.miningState?.numberOfWorkers;
+
+      // Phase 7: Default to saved worker count on resume (clamped), unless user overrides
+      let chosenWorkers: number;
+      if (resumeUseSaved && savedWorkers && savedWorkers > 0) {
+        // Use saved worker count, clamped to hardware limits
+        chosenWorkers = Math.max(1, Math.min(savedWorkers, hw));
+        debug('[MiningProvider] Using saved worker count:', savedWorkers, 'clamped to:', chosenWorkers);
+      } else {
+        // Fall back to preference-based selection
+        chosenWorkers = useAll ? hw : (prefWorkers && prefWorkers > 0 ? prefWorkers : defaultWorkers);
+        chosenWorkers = Math.max(1, Math.min(chosenWorkers, hw));
+        debug('[MiningProvider] Using preference-based worker count:', chosenWorkers);
+      }
+
+      // Phase 7: Enhanced diagnostics
+      const workerNoncesLength = queueItem.miningState?.workerNonces?.length || 0;
+      const minNonce = workerNoncesLength > 0
+        ? Math.min(...queueItem.miningState!.workerNonces!.map((n: string) => parseInt(n, 10)))
+        : 0;
+      const maxNonce = workerNoncesLength > 0
+        ? Math.max(...queueItem.miningState!.workerNonces!.map((n: string) => parseInt(n, 10)))
+        : 0;
+      const willRemap = savedWorkers && savedWorkers !== chosenWorkers;
+
+      debug('[MiningProvider] Resume worker selection:', {
+        hardwareConcurrency: hw,
+        savedWorkers,
+        preferenceWorkers: prefWorkers,
+        useAllCores: useAll,
+        resumeUseSaved,
+        chosenWorkers,
+        workerNoncesLength,
+        minNonce: workerNoncesLength > 0 ? minNonce : 'N/A',
+        maxNonce: workerNoncesLength > 0 ? maxNonce : 'N/A',
+        willRemap,
+      });
+      notemine = new Notemine({
+        content: queueItem.content,
+        pubkey: queueItem.pubkey,
+        difficulty: queueItem.difficulty,
+        numberOfWorkers: chosenWorkers,
+        tags: queueItem.tags || [],
+        kind: queueItem.kind,
+        debug: preferences().debugMode,
+      });
+
+      // Restore the saved state
+      notemine.restoreState(queueItem.miningState);
+
+      // Phase 9: Seed UI with saved per-worker bests immediately to avoid visible downgrade
+      if (queueItem.miningState && (queueItem.miningState as any).workersPow) {
+        const savedMap = (queueItem.miningState as any).workersPow as Record<number, BestPowData>;
+        if (savedMap && Object.keys(savedMap).length > 0) {
+          setMiningState((prev) => ({
+            ...prev,
+            workersBestPow: savedMap,
+          }));
+        }
+      }
+
+      // Subscribe to observables (same as startMining)
+      // Note: subscriptions already cleared at function start (line 344-345)
+
+      // Subscribe to workers list (debug visibility)
+      const workersSub = notemine.workers$.subscribe((workers) => {
+        debug('[MiningProvider] workers$ count:', workers.length);
+      });
+      subscriptions.push(workersSub);
+
+      // Subscribe to workers' POW progress (merge without downgrade)
+      const workersPowSub = notemine.workersPow$.subscribe((data: Record<number, BestPowData>) => {
+        setMiningState((prev) => {
+          const merged: Record<number, BestPowData> = { ...prev.workersBestPow };
+          for (const [idStr, pow] of Object.entries(data || {})) {
+            const id = Number(idStr);
+            const existing = merged[id];
+            if (!existing || (pow && pow.bestPow >= existing.bestPow)) {
+              merged[id] = pow as BestPowData;
+            }
+          }
+          return { ...prev, workersBestPow: merged };
+        });
+      });
+      subscriptions.push(workersPowSub);
+
+      // Subscribe to overall best POW
+      const bestPowSub = notemine.highestPow$.subscribe((pow: WorkerPow | null) => {
+        setMiningState((prev) => ({
+          ...prev,
+          overallBestPow: pow?.bestPow ?? null,
+        }));
+      });
+      subscriptions.push(bestPowSub);
+
+      // Subscribe to progress (for hash rate and current nonce)
+      const currentInstance = notemine;
+      const progressSub = currentInstance.progress$.subscribe(({ workerId, hashRate: workerHashRate, currentNonce }) => {
+        const totalHashRate = currentInstance.totalHashRate;
+
+        setMiningState((prev) => ({
+          ...prev,
+          hashRate: totalHashRate,
+          // Update per-worker hash rate
+          workersHashRates: workerHashRate
+            ? { ...prev.workersHashRates, [workerId]: workerHashRate }
+            : prev.workersHashRates,
+          // Update per-worker current nonce
+          workersCurrentNonces: currentNonce
+            ? { ...prev.workersCurrentNonces, [workerId]: currentNonce }
+            : prev.workersCurrentNonces,
+        }));
+
+        // Phase 5: Save mining state for queue if callback provided (with throttling)
+        if (onMiningStateUpdate) {
+          const now = Date.now();
+          const timeSinceLastUpdate = now - lastStateUpdateTime;
+
+          // Throttle: only update every 500ms to avoid excessive writes
+          if (timeSinceLastUpdate >= STATE_UPDATE_THROTTLE_MS) {
+            const miningStateData = currentInstance.getState();
+            onMiningStateUpdate(miningStateData);
+            lastStateUpdateTime = now;
+
+            if (debugMode) {
+              debug('[MiningProvider] State update (resume):', {
+                nonces: miningStateData.workerNonces.length,
+                hashRate: (totalHashRate / 1000).toFixed(2) + ' kH/s'
+              });
+            }
+          }
+        }
+      });
+      subscriptions.push(progressSub);
+
+      // Subscribe to first real nonces event for immediate save
+      const firstRealNoncesSub = currentInstance.firstRealNonces$.subscribe(() => {
+        if (onMiningStateUpdate) {
+          const miningStateData = currentInstance.getState();
+          onMiningStateUpdate(miningStateData);
+          lastStateUpdateTime = Date.now(); // Update throttle timer
+          if (debugMode) {
+            debug('[MiningProvider] First real nonces - immediate save triggered (resume)');
+          }
+        }
+      });
+      subscriptions.push(firstRealNoncesSub);
+
+      // Set mining state
+      setMiningState((prev) => ({
+        ...prev,
+        mining: true,
+      }));
+
+      // Return promise that resolves when mining completes
+      return new Promise((resolve, reject) => {
+        // Subscribe to success
+        const successSub = notemine!.success$.subscribe(({ result }: SuccessEvent) => {
+          if (!result) {
+            return;
+          }
+
+          setMiningState((prev) => ({
+            ...prev,
+            mining: false,
+            result: result.event,
+          }));
+          resolve(result.event);
+        });
+        subscriptions.push(successSub);
+
+        // Subscribe to errors
+        const errorSub = notemine!.error$.subscribe(({ error }) => {
+          // Phase 6: Log errors with context (queue item id, event kind)
+          console.error('[MiningProvider] Error (resume):', {
+            error: String(error),
+            queueItemId: currentQueueItemId,
+            kind: queueItem.kind,
+            difficulty: queueItem.difficulty,
+          });
+          setMiningState((prev) => ({
+            ...prev,
+            mining: false,
+            error: String(error),
+          }));
+          reject(error);
+        });
+        subscriptions.push(errorSub);
+
+        // Subscribe to cancelled events
+        const cancelledSub = notemine!.cancelled$.subscribe((cancelled) => {
+          if (cancelled) {
+            debug('[MiningProvider] Mining was cancelled during resume, resolving promise with null');
+            setMiningState((prev) => ({
+              ...prev,
+              mining: false,
+            }));
+            resolve(null);
+          }
+        });
+        subscriptions.push(cancelledSub);
+
+        // Subscribe to paused events
+        const pausedSub = notemine!.paused$.subscribe((paused) => {
+          if (paused) {
+            debug('[MiningProvider] Mining was paused during resume, resolving promise with null');
+            setMiningState((prev) => ({
+              ...prev,
+              mining: false,
+            }));
+            resolve(null);
+          }
+        });
+        subscriptions.push(pausedSub);
+
+        // Resume mining
+        debug('[MiningProvider] resume() with nonces count:', Array.isArray(queueItem.miningState.workerNonces) ? queueItem.miningState.workerNonces.length : 0);
+        notemine!.resume(queueItem.miningState.workerNonces).catch(reject);
+      });
+    } else {
+      // Old signature: just resume with nonces (simple pause/resume within same session)
+      const workerNonces = queueItemOrNonces as string[] | undefined;
+      if (notemine) {
+        await notemine.resume(workerNonces);
+        setMiningState((prev) => ({
+          ...prev,
+          mining: true,
+        }));
+      }
+      return null;
+    }
+  };
+
+  const getMiningState = (): WrapperMiningState | null => {
+    return notemine ? notemine.getState() : null;
+  };
+
+  const restoreMiningState = (restoredState: WrapperMiningState) => {
+    if (notemine) {
+      notemine.restoreState(restoredState);
+    }
+  };
+
+  const cleanup = () => {
+    subscriptions.forEach((sub) => sub.unsubscribe());
+    subscriptions = [];
+    if (notemine && miningState().mining) {
+      notemine.cancel();
+    }
+    notemine = null;
+  };
+
+  onCleanup(cleanup);
+
+  const value: MiningContextType = {
+    miningState,
+    startMining,
+    stopMining,
+    pauseMining,
+    resumeMining,
+    getMiningState,
+    restoreMiningState,
+    get currentQueueItemId() {
+      return currentQueueItemId;
+    },
+  };
+
+  return (
+    <MiningContext.Provider value={value}>
+      {props.children}
+    </MiningContext.Provider>
+  );
+};
+
+export const useMining = () => {
+  const context = useContext(MiningContext);
+  if (!context) {
+    throw new Error('useMining must be used within MiningProvider');
+  }
+  return context;
+};

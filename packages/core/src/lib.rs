@@ -131,8 +131,16 @@ pub fn mine_event(
     let mut nonce: u64 = start_nonce;
     let mut total_hashes: u64 = 0;
 
-    let report_interval = 333_000;
+    // Adaptive progress stride - start with a reasonable default, will adjust
+    let mut report_stride: u64 = 250_000;
+    let target_report_interval_ms: f64 = 250.0; // Target ~250ms between progress reports
     let mut last_report_time = start_time;
+    let mut hashes_since_last_report: u64 = 0; // Track ACTUAL hashes done
+
+    // Adaptive cancel stride - start at 10k, reduce after cancel detected
+    let mut cancel_stride: u64 = 10_000;
+    let mut cancel_backoff_until: f64 = 0.0; // Timestamp until which we use reduced cancel stride
+
     let should_cancel = should_cancel.dyn_into::<Function>().ok();
 
     let mut best_pow: u32 = 0;
@@ -141,36 +149,97 @@ pub fn mine_event(
     #[allow(unused_assignments)]
     let mut best_hash_bytes: Vec<u8> = Vec::new();
 
-    loop {
-        if let Some(index) = nonce_index {
-            if let Some(tag) = event.tags.get_mut(index) {
-                if tag.len() >= 3 {
-                    tag[1] = nonce.to_string();
-                    tag[2] = difficulty.to_string();
-                }
+    // Emit initial progress with currentNonce so wrapper can capture resume state immediately
+    let initial_progress = serde_json::json!({
+        "currentNonce": start_nonce.to_string(),
+    });
+    let _ = report_progress.call2(
+        &JsValue::NULL,
+        &JsValue::from_f64(0.0),
+        &serde_wasm_bindgen::to_value(&initial_progress).unwrap(),
+    );
+
+    // Pre-serialization optimization: serialize event once with fixed-width nonce placeholder
+    const NONCE_WIDTH: usize = 20; // Support nonces up to 10^20
+    const NONCE_PLACEHOLDER: &str = "00000000000000000000"; // 20 zeros
+
+    // Set nonce tag to fixed-width placeholder
+    if let Some(index) = nonce_index {
+        if let Some(tag) = event.tags.get_mut(index) {
+            if tag.len() >= 3 {
+                tag[1] = NONCE_PLACEHOLDER.to_string();
+                tag[2] = difficulty.to_string();
             }
         }
+    }
 
-        let hash_bytes = get_event_hash(&event);
-        if hash_bytes.is_empty() {
-            console::log_1(&"Failed to compute event hash.".into());
+    // Serialize the canonical event array once
+    let hashable_event = HashableEvent(
+        0u32,
+        &event.pubkey,
+        event.created_at.unwrap(),
+        event.kind,
+        &event.tags,
+        &event.content,
+    );
+
+    let mut serialized_template = match serde_json::to_vec(&hashable_event) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            console::log_1(&format!("Failed to serialize event template: {}", err).into());
             return serde_wasm_bindgen::to_value(&serde_json::json!({
-                "error": "Failed to compute event hash."
+                "error": format!("Failed to serialize event template: {}", err)
             }))
             .unwrap_or(JsValue::NULL);
         }
+    };
 
-        let pow = get_pow(&hash_bytes);
+    // Find the offset of the nonce placeholder in the serialized JSON
+    let placeholder_bytes = NONCE_PLACEHOLDER.as_bytes();
+    let nonce_offset = serialized_template.windows(placeholder_bytes.len())
+        .position(|window| window == placeholder_bytes);
+
+    let nonce_offset = match nonce_offset {
+        Some(offset) => offset,
+        None => {
+            console::log_1(&"Failed to find nonce placeholder in serialized template".into());
+            return serde_wasm_bindgen::to_value(&serde_json::json!({
+                "error": "Failed to find nonce placeholder in serialized template"
+            }))
+            .unwrap_or(JsValue::NULL);
+        }
+    };
+
+    // Pre-fill nonce region with zeros ONCE (outside loop)
+    for i in 0..NONCE_WIDTH {
+        serialized_template[nonce_offset + i] = b'0';
+    }
+
+    loop {
+        // Write nonce digits directly to buffer (no String allocation)
+        let mut temp_nonce = nonce;
+        for i in (0..NONCE_WIDTH).rev() {
+            serialized_template[nonce_offset + i] = b'0' + (temp_nonce % 10) as u8;
+            temp_nonce /= 10;
+        }
+
+        // Hash the template (reuse same buffer)
+        let hash_result = Sha256::digest(&serialized_template);
+        let hash_bytes = hash_result.as_slice();
+
+        let pow = get_pow(hash_bytes);
 
         if pow > best_pow {
             best_pow = pow;
             best_nonce = nonce;
-            best_hash_bytes = hash_bytes.clone();
+            best_hash_bytes = hash_bytes.to_vec(); // Only allocate when we find a better pow
 
+            // Include currentNonce so the JS wrapper can persist accurate resume state
             let best_pow_data = serde_json::json!({
                 "best_pow": best_pow,
                 "nonce": best_nonce.to_string(),
                 "hash": hex::encode(&best_hash_bytes),
+                "currentNonce": nonce.to_string(),
             });
 
             report_progress
@@ -189,6 +258,17 @@ pub fn mine_event(
 
         if pow >= difficulty {
             let event_hash = hex::encode(&hash_bytes);
+
+            // Reconstruct the event with the final nonce
+            if let Some(index) = nonce_index {
+                if let Some(tag) = event.tags.get_mut(index) {
+                    if tag.len() >= 3 {
+                        tag[1] = nonce.to_string();
+                        tag[2] = difficulty.to_string();
+                    }
+                }
+            }
+
             event.id = Some(event_hash.clone());
             let end_time = js_sys::Date::now();
             let total_time = (end_time - start_time) / 1000.0;
@@ -206,11 +286,24 @@ pub fn mine_event(
 
         nonce = nonce.wrapping_add(nonce_step);
         total_hashes += 1;
+        hashes_since_last_report += 1;
 
+        // Adaptive cancel checking
         if let Some(ref should_cancel) = should_cancel {
-            if total_hashes % 10_000 == 0 {
+            if total_hashes % cancel_stride == 0 {
+                let current_time = js_sys::Date::now();
+
+                // Use reduced stride during backoff period for faster response
+                if current_time < cancel_backoff_until {
+                    cancel_stride = 1_000; // Reduced stride for next second
+                } else {
+                    cancel_stride = 10_000; // Normal stride
+                }
+
                 let cancel = should_cancel.call0(&JsValue::NULL).unwrap_or(JsValue::FALSE);
                 if cancel.is_truthy() {
+                    // Set backoff period to improve responsiveness for rapid pause/resume
+                    cancel_backoff_until = current_time + 1000.0; // Next 1 second
                     console::log_1(&"Mining cancelled.".into());
                     return serde_wasm_bindgen::to_value(&serde_json::json!({
                         "error": "Mining cancelled."
@@ -220,19 +313,44 @@ pub fn mine_event(
             }
         }
 
-        if total_hashes % report_interval == 0 {
+        if total_hashes % report_stride == 0 {
             let current_time = js_sys::Date::now();
-            let elapsed_time = (current_time - last_report_time) / 1000.0;
-            if elapsed_time > 0.0 {
-                let hash_rate = (report_interval as f64) / elapsed_time;
+            let elapsed_time_ms = current_time - last_report_time;
+            let elapsed_time_s = elapsed_time_ms / 1000.0;
+
+            if elapsed_time_s > 0.0 {
+                // Calculate REAL hash rate from actual hashes done
+                let hash_rate = (hashes_since_last_report as f64) / elapsed_time_s;
+
+                // Send currentNonce on periodic progress so resume has up-to-date nonces
+                let prog = serde_json::json!({
+                    "currentNonce": nonce.to_string(),
+                });
                 report_progress
-                    .call2(&JsValue::NULL, &hash_rate.into(), &JsValue::NULL)
+                    .call2(
+                        &JsValue::NULL,
+                        &hash_rate.into(),
+                        &serde_wasm_bindgen::to_value(&prog).unwrap(),
+                    )
                     .unwrap_or_else(|err| {
                         console::log_1(
                             &format!("Error calling progress callback: {:?}", err).into(),
                         );
                         JsValue::NULL
                     });
+
+                // Adaptive stride: adjust to maintain ~250ms cadence based on REAL performance
+                if elapsed_time_ms > 0.0 && elapsed_time_ms < 500.0 { // Only adjust if timing is reasonable
+                    // Calculate how many hashes we should do to hit target_report_interval_ms
+                    let target_hashes = (hash_rate * (target_report_interval_ms / 1000.0)) as u64;
+                    // Smooth adjustment: move 30% towards target to avoid oscillation
+                    report_stride = (report_stride as f64 * 0.7 + target_hashes as f64 * 0.3) as u64;
+                    // Clamp to reasonable range
+                    report_stride = report_stride.max(10_000).min(1_000_000);
+                }
+
+                // Reset counter for next interval
+                hashes_since_last_report = 0;
                 last_report_time = current_time;
             }
         }

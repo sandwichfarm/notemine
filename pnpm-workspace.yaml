@@ -1,7 +1,3 @@
 packages:
-    - "packages/core"
-    - "packages/wrapper"
-    # - "docs"
-    - "demos/vanilla-js-demo"
-    - "demos/svelte-demo"
-    - "gui"
+    - "packages/*"
+    - "demos/*"

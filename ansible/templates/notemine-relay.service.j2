@@ -1,0 +1,47 @@
+[Unit]
+Description=Notemine Nostr Relay
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ relay_user }}
+Group={{ relay_group }}
+WorkingDirectory={{ relay_deploy_path }}
+ExecStart={{ relay_deploy_path }}/notemine-relay
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=notemine-relay
+
+# Environment variables
+Environment="PORT={{ relay_port }}"
+Environment="DB_PATH={{ relay_data_path }}/relay.lmdb"
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ relay_data_path }}
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectKernelLogs=true
+
+# Resource limits
+LimitNOFILE=65536
+TasksMax=4096
+
+[Install]
+WantedBy=multi-user.target

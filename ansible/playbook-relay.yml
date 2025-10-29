@@ -1,0 +1,64 @@
+---
+- name: Deploy notemine relay
+  hosts: notemine_vps
+  become: yes
+  vars:
+    relay_binary_path: "{{ relay_binary_path }}"
+
+  tasks:
+    - name: Create relay system user
+      user:
+        name: "{{ relay_user }}"
+        system: yes
+        shell: /usr/sbin/nologin
+        home: "{{ relay_deploy_path }}"
+        create_home: no
+
+    - name: Create relay deployment directory
+      file:
+        path: "{{ relay_deploy_path }}"
+        state: directory
+        owner: "{{ relay_user }}"
+        group: "{{ relay_group }}"
+        mode: '0755'
+
+    - name: Create relay data directory
+      file:
+        path: "{{ relay_data_path }}"
+        state: directory
+        owner: "{{ relay_user }}"
+        group: "{{ relay_group }}"
+        mode: '0755'
+
+    - name: Copy relay binary
+      copy:
+        src: "{{ relay_binary_path }}"
+        dest: "{{ relay_deploy_path }}/notemine-relay"
+        owner: "{{ relay_user }}"
+        group: "{{ relay_group }}"
+        mode: '0755'
+
+    - name: Deploy systemd service file
+      template:
+        src: templates/notemine-relay.service.j2
+        dest: /etc/systemd/system/notemine-relay.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart relay
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable relay service
+      systemd:
+        name: notemine-relay
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Restart relay
+      systemd:
+        name: notemine-relay
+        state: restarted

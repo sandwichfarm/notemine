@@ -51,6 +51,8 @@
         dest: "{{ gui_deploy_path }}/"
         delete: yes
         recursive: yes
+        rsync_opts:
+          - "--rsh=ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
       delegate_to: localhost
 
     - name: Set ownership of GUI files

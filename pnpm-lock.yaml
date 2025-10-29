@@ -203,23 +203,23 @@ importers:
         specifier: ^8.17.1
         version: 8.17.1
       applesauce-core:
-        specifier: file:/home/sandwich/Develop/applesauce/packages/core
-        version: file:../applesauce/packages/core(typescript@5.9.3)
+        specifier: ^4.1.0
+        version: 4.1.0(typescript@5.9.3)
       applesauce-factory:
-        specifier: file:/home/sandwich/Develop/applesauce/packages/factory
-        version: file:../applesauce/packages/factory(typescript@5.9.3)
+        specifier: ^4.0.0
+        version: 4.0.0(typescript@5.9.3)
       applesauce-loaders:
-        specifier: file:/home/sandwich/Develop/applesauce/packages/loaders
-        version: file:../applesauce/packages/loaders(typescript@5.9.3)
+        specifier: ^4.0.0
+        version: 4.0.0(typescript@5.9.3)
       applesauce-relay:
-        specifier: file:/home/sandwich/Develop/applesauce/packages/relay
-        version: file:../applesauce/packages/relay(typescript@5.9.3)
+        specifier: ^4.1.0
+        version: 4.1.0(typescript@5.9.3)
       applesauce-signers:
-        specifier: file:/home/sandwich/Develop/applesauce/packages/signers
-        version: file:../applesauce/packages/signers(typescript@5.9.3)
+        specifier: ^4.1.0
+        version: 4.1.0(typescript@5.9.3)
       applesauce-solidjs:
-        specifier: file:/home/sandwich/Develop/applesauce/packages/solidjs
-        version: file:../applesauce/packages/solidjs(typescript@5.9.3)
+        specifier: ^4.0.0
+        version: 4.0.0(typescript@5.9.3)
       applesauce-sqlite:
         specifier: ^4.1.0
         version: 4.1.0(typescript@5.9.3)
@@ -1814,26 +1814,20 @@ packages:
   applesauce-core@4.1.0:
     resolution: {integrity: sha512-vFOHfqWW4DJfvPkMYLYNiy2ozO2IF+ZNwetGqaLuPjgE1Iwu4trZmG3GJUH+lO1Oq1N4e/OQ/EcotJoEBEiW7Q==}
 
-  applesauce-core@file:../applesauce/packages/core:
-    resolution: {directory: ../applesauce/packages/core, type: directory}
+  applesauce-factory@4.0.0:
+    resolution: {integrity: sha512-Sqsg+bC7CkRXMxXLkO6YGoKxy/Aqtia9YenasS5qjPOQFmyFMwKRxaHCu6vX6KdpNSABusw0b9Tnn4gTh6CxLw==}
 
-  applesauce-factory@file:../applesauce/packages/factory:
-    resolution: {directory: ../applesauce/packages/factory, type: directory}
-
-  applesauce-loaders@file:../applesauce/packages/loaders:
-    resolution: {directory: ../applesauce/packages/loaders, type: directory}
+  applesauce-loaders@4.0.0:
+    resolution: {integrity: sha512-yNlpzCeUlkpq1jehyHPre0C3ey9anMDTpPysqdV9Rca+U2QnAWduzQ+Eo8FVS1X9jZRD6s/gkLSnCnW1+kX7uQ==}
 
   applesauce-relay@4.1.0:
     resolution: {integrity: sha512-1+uxScZ8QKmkhHWcPSRHR40L5VPGXwmXHlKvqp9OT1dsXeq7F/vxiX5QsFDH4030AxJzMZmyQY5xblskm3XELQ==}
 
-  applesauce-relay@file:../applesauce/packages/relay:
-    resolution: {directory: ../applesauce/packages/relay, type: directory}
+  applesauce-signers@4.1.0:
+    resolution: {integrity: sha512-S+nTkAt1CAGhalwI7warLTINsxxjBpS3NqbViz6LVy1ZrzEqaNirlalX+rbCjxjRrvIGhYV+rszkxDFhCYbPkg==}
 
-  applesauce-signers@file:../applesauce/packages/signers:
-    resolution: {directory: ../applesauce/packages/signers, type: directory}
-
-  applesauce-solidjs@file:../applesauce/packages/solidjs:
-    resolution: {directory: ../applesauce/packages/solidjs, type: directory}
+  applesauce-solidjs@4.0.0:
+    resolution: {integrity: sha512-harwt41MFfZ3+JNd70Hb7BNcITRyL8c8LhzWXys0kzdlcvj6/0cwpJ7Rmfy2qLiNUl6QldWuORt2sREImrpLkQ==}
 
   applesauce-sqlite@4.1.0:
     resolution: {integrity: sha512-GzRLowUHoQ8WbbmCYDGKLv+0WRU2WlOch4z5yoKIx3w0GO6MwgQFiCiUTh6RONegrUxsOBCL5Z7YI8Q9WdaBuA==}
@@ -6856,22 +6850,7 @@ snapshots:
       - supports-color
       - typescript
 
-  applesauce-core@file:../applesauce/packages/core(typescript@5.9.3):
-    dependencies:
-      '@noble/hashes': 1.7.1
-      '@scure/base': 1.2.4
-      debug: 4.4.3
-      fast-deep-equal: 3.1.3
-      hash-sum: 2.0.0
-      light-bolt11-decoder: 3.2.0
-      nanoid: 5.1.6
-      nostr-tools: 2.17.0(typescript@5.9.3)
-      rxjs: 7.8.1
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-
-  applesauce-factory@file:../applesauce/packages/factory(typescript@5.9.3):
+  applesauce-factory@4.0.0(typescript@5.9.3):
     dependencies:
       applesauce-content: 4.0.0(typescript@5.9.3)
       applesauce-core: 4.1.0(typescript@5.9.3)
@@ -6881,7 +6860,7 @@ snapshots:
       - supports-color
       - typescript
 
-  applesauce-loaders@file:../applesauce/packages/loaders(typescript@5.9.3):
+  applesauce-loaders@4.0.0(typescript@5.9.3):
     dependencies:
       applesauce-core: 4.1.0(typescript@5.9.3)
       nanoid: 5.1.6
@@ -6902,18 +6881,7 @@ snapshots:
       - supports-color
       - typescript
 
-  applesauce-relay@file:../applesauce/packages/relay(typescript@5.9.3):
-    dependencies:
-      '@noble/hashes': 1.7.1
-      applesauce-core: 4.1.0(typescript@5.9.3)
-      nanoid: 5.1.6
-      nostr-tools: 2.17.0(typescript@5.9.3)
-      rxjs: 7.8.1
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-
-  applesauce-signers@file:../applesauce/packages/signers(typescript@5.9.3):
+  applesauce-signers@4.1.0(typescript@5.9.3):
     dependencies:
       '@noble/hashes': 1.7.1
       '@noble/secp256k1': 1.7.2
@@ -6927,7 +6895,7 @@ snapshots:
       - supports-color
       - typescript
 
-  applesauce-solidjs@file:../applesauce/packages/solidjs(typescript@5.9.3):
+  applesauce-solidjs@4.0.0(typescript@5.9.3):
     dependencies:
       applesauce-core: 4.1.0(typescript@5.9.3)
       solid-js: 1.9.9

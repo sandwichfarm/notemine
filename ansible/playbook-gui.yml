@@ -46,16 +46,12 @@
         mode: '0755'
 
     - name: Sync GUI files
-      synchronize:
-        src: "{{ gui_dist_path }}/"
-        dest: "{{ gui_deploy_path }}/"
-        delete: yes
-        recursive: yes
-        private_key: "~/.ssh/id_rsa"
-        use_ssh_args: yes
+      command: >
+        rsync -avz --delete
+        -e "ssh -i $HOME/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        {{ gui_dist_path }}/
+        {{ ansible_user }}@{{ ansible_host }}:{{ gui_deploy_path }}/
       delegate_to: localhost
-      environment:
-        ANSIBLE_SSH_ARGS: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
     - name: Set ownership of GUI files
       file:

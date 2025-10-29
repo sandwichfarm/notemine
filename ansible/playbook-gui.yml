@@ -46,11 +46,11 @@
         mode: '0755'
 
     - name: Sync GUI files
-      command: >
-        rsync -avz --delete
-        -e "ssh -i $HOME/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        {{ gui_dist_path }}/
-        {{ ansible_user }}@{{ ansible_host }}:{{ gui_deploy_path }}/
+      shell: |
+        rsync -avz --delete \
+          -e "ssh -i {{ lookup('env', 'HOME') }}/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+          {{ gui_dist_path }}/ \
+          {{ ansible_user }}@{{ ansible_host }}:{{ gui_deploy_path }}/
       delegate_to: localhost
 
     - name: Set ownership of GUI files

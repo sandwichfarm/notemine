@@ -123,6 +123,9 @@ let flushDurations: number[] = []; // Rolling window for avg calculation
 const MAX_FLUSH_HISTORY = 10;
 // Guard to avoid nested transactions between batch flush and add-hook writes
 let isBatchFlushInProgress = false;
+// Disable direct writes from add-hook in production to avoid nested transactions.
+// Batch persistence via persistEventsToCache is sufficient and safer.
+const ENABLE_ADD_HOOK_PERSIST = false;
 
 // De-duplication for recent event IDs to avoid double-writes (persist helper + add hook)
 const RECENT_ID_MAX = 10000;
@@ -355,8 +358,14 @@ export function setupCachePersistence(mainEventStore: any): void {
       }
 
       const result = originalAdd(event, fromCache);
-      // Avoid nested transactions when batch flush is in progress
-      if (!fromCache && cacheDatabase && !cacheMetrics.persistenceDisabled && !isBatchFlushInProgress) {
+      // Avoid nested transactions: prefer batch persistence only
+      if (
+        ENABLE_ADD_HOOK_PERSIST &&
+        !fromCache &&
+        cacheDatabase &&
+        !cacheMetrics.persistenceDisabled &&
+        !isBatchFlushInProgress
+      ) {
         // Skip if recently seen (already persisted via batch path)
         if (event?.id && isRecentId(event.id)) {
           return result;

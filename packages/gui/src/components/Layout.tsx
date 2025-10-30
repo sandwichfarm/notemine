@@ -264,6 +264,15 @@ const Layout: Component<{ children?: any }> = (props) => {
               ⚙️
             </A>
 
+            {/* Diagnostics Button */}
+            <A
+              href="/diagnostics"
+              class="btn text-xs px-3 py-2"
+              title="Diagnostics"
+            >
+              🧪
+            </A>
+
             {/* Theme Toggle (far right) */}
             <button
               onClick={toggleTheme}

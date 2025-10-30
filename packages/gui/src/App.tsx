@@ -17,6 +17,7 @@ import Feed from './pages/Feed';
 import About from './pages/About';
 import Stats from './pages/Stats';
 import Relays from './pages/Relays';
+import Diagnostics from './pages/Diagnostics';
 import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
 import { Preferences } from './pages/Preferences';
@@ -211,6 +212,7 @@ const App: Component = () => {
                       <Route path="/feed" component={Feed} />
                       <Route path="/about" component={About} />
                       <Route path="/relays" component={Relays} />
+                      <Route path="/diagnostics" component={Diagnostics} />
                       <Route path="/stats" component={Stats} />
                       <Route path="/preferences" component={Preferences} />
                       <Route path="/n/:id" component={NoteDetail} />

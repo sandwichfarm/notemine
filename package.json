@@ -11,7 +11,10 @@
     "@changesets/cli": "2.27.9"
   },
   "scripts": {
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "changeset": "changeset",
+    "version:packages": "changeset version && pnpm -r install --lockfile-only && pnpm -r build",
+    "release": "pnpm -r build && changeset publish"
   },
   "devDependencies": {
     "changeset": "^0.2.6",

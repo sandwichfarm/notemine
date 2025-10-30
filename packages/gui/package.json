@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "concurrently \"pnpm dev\" \"cd ../../relay && go run cmd/relay/main.go\"",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node ./scripts/precompress.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

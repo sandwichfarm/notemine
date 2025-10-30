@@ -240,7 +240,7 @@ export function setupCachePersistence(mainEventStore: any): void {
           if (event?.id && isRecentId(event.id)) {
             continue; // already handled recently
           }
-          await cacheDatabase.add(event);
+          await cacheEventStore!.add(event);
           totalWritten++;
           if (event?.id) rememberEventId(event.id);
         } catch (error) {

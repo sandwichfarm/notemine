@@ -1,12 +1,7 @@
 name: release + publish
 on:
+  # Keep manual trigger only to avoid double publishing; Changesets handles automatic releases
   workflow_dispatch:
-  push:
-    branches:
-      - 'master'
-    paths:
-      - 'packages/**'
-      - '.github/workflows/publish-packages.yml'
 
 jobs:
   build:

@@ -1,6 +1,4 @@
 import initWasm, { mine_event } from '@notemine/core';
-//@ts-ignore: esbuild wasm loader
-import wasm from '@notemine/core/wasm';
 
 import type { BestPowData } from './index.js';
 
@@ -74,7 +72,7 @@ self.onmessage = async function (e: MessageEvent) {
 
       try {
         ////console.log('Initializing WASM...');
-        await initWasm(wasm);
+        await initWasm();
         ////console.log('WASM Initialized successfully.');
 
         let startNonce = BigInt(workerId);

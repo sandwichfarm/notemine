@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import solid from 'vite-plugin-solid';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
@@ -27,7 +29,11 @@ export default defineConfig(({ mode }) => {
     : {};
 
   return {
-    plugins: [solid()],
+    plugins: [
+      wasm(),
+      topLevelAwait(),
+      solid(),
+    ],
     server: {
       host: '0.0.0.0', // Expose to network
       port: 3000,

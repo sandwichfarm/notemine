@@ -2,6 +2,7 @@ import { createContext, useContext, Component, JSX, Accessor, createEffect } fro
 import { createLocalStore } from '../lib/localStorage';
 import { setDebugEnabled } from '../lib/debug';
 import type { QueueOrderingStrategy } from '../lib/queue-ordering';
+import { setDeblurCacheSize } from '../lib/image-deblur-cache';
 
 /**
  * User preferences with all configurable magic numbers
@@ -39,6 +40,8 @@ export interface UserPreferences {
 
   // UI settings
   threadedRepliesCollapseDepth: number;
+  autoDeblurImages: boolean; // Auto-deblur all images without user interaction
+  deblurCacheSize: number; // Max number of deblurred image hashes to remember (1-5000)
 
   // Debug settings
   debugMode: boolean;
@@ -97,6 +100,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
   // UI defaults
   threadedRepliesCollapseDepth: 2,
+  autoDeblurImages: false,
+  deblurCacheSize: 500,
 
   // Debug defaults
   debugMode: false,
@@ -206,6 +211,11 @@ export const PreferencesProvider: Component<{ children: JSX.Element }> = (props)
   // Sync debug mode to global debug utility
   createEffect(() => {
     setDebugEnabled(preferences().debugMode);
+  });
+
+  // Sync deblur cache size when preference changes
+  createEffect(() => {
+    setDeblurCacheSize(preferences().deblurCacheSize);
   });
 
   return (

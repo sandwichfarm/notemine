@@ -1,17 +1,27 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { usePreferences } from '../providers/PreferencesProvider';
+import { clearDeblurCache, getDeblurCacheStats } from '../lib/image-deblur-cache';
 
 type TabId = 'pow' | 'content' | 'mining' | 'advanced';
 
 export const Preferences: Component = () => {
   const { preferences, updatePreference, resetPreferences } = usePreferences();
   const [showResetConfirm, setShowResetConfirm] = createSignal(false);
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<TabId>('pow');
   const maxWorkers = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+
+  // Get current cache stats for display
+  const getCacheStats = () => getDeblurCacheStats();
 
   const handleReset = () => {
     resetPreferences();
     setShowResetConfirm(false);
+  };
+
+  const handleClearCache = () => {
+    clearDeblurCache();
+    setShowClearCacheConfirm(false);
   };
 
   const tabs: Array<{ id: TabId; label: string }> = [
@@ -605,6 +615,91 @@ export const Preferences: Component = () => {
               <p class="text-xs text-text-tertiary mt-1 opacity-50">
                 Collapse reply threads after this depth (default: 2)
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Image Settings */}
+        <section class="mb-8">
+          <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Image Settings</h2>
+
+          <div class="space-y-4">
+            {/* Auto-deblur Toggle */}
+            <div class="card">
+              <label class="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={preferences().autoDeblurImages}
+                  onChange={(e) => updatePreference('autoDeblurImages', e.currentTarget.checked)}
+                  class="w-5 h-5"
+                />
+                <div>
+                  <span class="block text-sm font-medium text-text-secondary">
+                    Auto-deblur All Images
+                  </span>
+                  <p class="text-xs text-text-tertiary opacity-50">
+                    Automatically show all embedded images without blur. When disabled, images you've manually deblurred are remembered.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Deblur Cache Size */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Deblur Cache Size: {preferences().deblurCacheSize} images
+              </label>
+              <input
+                type="range"
+                min="100"
+                max="5000"
+                step="100"
+                value={preferences().deblurCacheSize}
+                onInput={(e) => updatePreference('deblurCacheSize', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Maximum number of deblurred images to remember (default: 500)
+              </p>
+            </div>
+
+            {/* Clear Cache Button */}
+            <div class="card">
+              <h3 class="text-sm font-medium text-text-secondary mb-2">Deblur Cache</h3>
+              <p class="text-xs text-text-tertiary mb-3 opacity-70">
+                Currently caching {getCacheStats().count} of {getCacheStats().maxSize} deblurred images
+              </p>
+
+              <Show
+                when={showClearCacheConfirm()}
+                fallback={
+                  <button
+                    onClick={() => setShowClearCacheConfirm(true)}
+                    class="btn text-orange-500 hover:text-orange-600 border-orange-500 hover:border-orange-600"
+                    disabled={getCacheStats().count === 0}
+                  >
+                    Clear Deblur Cache
+                  </button>
+                }
+              >
+                <div class="space-y-2">
+                  <p class="text-sm text-orange-500">Clear all remembered deblur states?</p>
+                  <div class="flex gap-2">
+                    <button
+                      onClick={handleClearCache}
+                      class="btn bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
+                    >
+                      Yes, Clear
+                    </button>
+                    <button
+                      onClick={() => setShowClearCacheConfirm(false)}
+                      class="btn"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </Show>
             </div>
           </div>
         </section>

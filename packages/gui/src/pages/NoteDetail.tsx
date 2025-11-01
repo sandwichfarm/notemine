@@ -1,4 +1,5 @@
-import { Component, createSignal, onMount, Show } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, Show, createMemo } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { useParams, useNavigate } from '@solidjs/router';
 import { nip19, type NostrEvent } from 'nostr-tools';
 import { relayPool, getActiveRelays, eventStore } from '../lib/applesauce';
@@ -7,7 +8,8 @@ import { ReactionBreakdown } from '../components/ReactionBreakdown';
 import { ThreadedReplies } from '../components/ThreadedReplies';
 import { ProfileName } from '../components/ProfileName';
 import { ParsedContent } from '../components/ParsedContent';
-import { debug } from '../lib/debug';
+import { ReactionPicker } from '../components/ReactionPicker';
+import { ReplyComposer } from '../components/ReplyComposer';
 
 // Minimum POW threshold for replies/reactions
 const MIN_POW_THRESHOLD = 16;
@@ -22,6 +24,36 @@ const NoteDetail: Component = () => {
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [showLowPow, setShowLowPow] = createSignal(false);
+
+  // Interaction state - for reaction picker and reply composer modals
+  const [showReactionPicker, setShowReactionPicker] = createSignal(false);
+  const [showRootReplyComposer, setShowRootReplyComposer] = createSignal(true); // Default visible below root post
+
+  let storeSubscription: any = null;
+  let relaySubscription: any = null;
+  let fetchTimeout: any = null;
+  let safetyTimeout: any = null;
+
+  const cleanup = () => {
+    if (storeSubscription) {
+      storeSubscription.unsubscribe();
+      storeSubscription = null;
+    }
+    if (relaySubscription) {
+      relaySubscription.unsubscribe();
+      relaySubscription = null;
+    }
+    if (fetchTimeout) {
+      clearTimeout(fetchTimeout);
+      fetchTimeout = null;
+    }
+    if (safetyTimeout) {
+      clearTimeout(safetyTimeout);
+      safetyTimeout = null;
+    }
+  };
+
+  onCleanup(cleanup);
 
   onMount(async () => {
     try {
@@ -73,57 +105,83 @@ const NoteDetail: Component = () => {
         eventId = identifier;
       }
 
-      debug('[NoteDetail] Fetching event:', eventId);
+      console.log('[NoteDetail] Fetching event:', eventId, 'from relays:', relays);
 
-      // Check event store synchronously first
+      // SAFETY TIMEOUT: Ensure loading state always clears within 10 seconds
+      safetyTimeout = setTimeout(() => {
+        if (loading()) {
+          console.error('[NoteDetail] ⚠️ SAFETY TIMEOUT fired - forcing loading to stop');
+          setLoading(false);
+          if (!note()) {
+            setError('Failed to load note - timeout after 10 seconds');
+          }
+        }
+      }, 10000);
+
+      // Subscribe to event store with timeout fallback pattern (like useProfile)
       let foundInStore = false;
-      const storeSubscription = eventStore.event(eventId).subscribe({
+
+      storeSubscription = eventStore.event(eventId).subscribe({
         next: (evt) => {
+          console.log('[NoteDetail] Store subscription next() called, evt:', evt ? evt.id : 'null', 'foundInStore:', foundInStore);
           if (evt && !foundInStore) {
             foundInStore = true;
-            debug('[NoteDetail] Found event in store:', evt.id);
+            console.log('[NoteDetail] ✓ Found event in store:', evt.id);
             setNote(evt);
             setLoading(false);
             loadRepliesAndReactions(evt, relays);
-            storeSubscription.unsubscribe();
+            cleanup(); // Clean up all subscriptions
           }
+        },
+        complete: () => {
+          console.log('[NoteDetail] Store subscription completed, foundInStore:', foundInStore);
+        },
+        error: (err) => {
+          console.error('[NoteDetail] Store subscription error:', err);
         },
       });
 
-      // If not found in store after 100ms, fetch from relays
-      setTimeout(() => {
-        if (!foundInStore) {
-          debug('[NoteDetail] Not found in store, fetching from relays...');
-          storeSubscription.unsubscribe();
-
-          // Fetch from relays
-          const relay$ = relayPool.req(relays, { ids: [eventId] });
-          relay$.subscribe({
-            next: (response) => {
-              debug('[NoteDetail] Relay response:', response);
-              if (response !== 'EOSE' && response.id === eventId) {
-                const evt = response as NostrEvent;
-                debug('[NoteDetail] Found event from relay');
-                setNote(evt);
-                setLoading(false);
-                loadRepliesAndReactions(evt, relays);
-              }
-            },
-            error: (err) => {
-              console.error('[NoteDetail] Relay error:', err);
-              setError('Failed to fetch note');
-              setLoading(false);
-            },
-            complete: () => {
-              debug('[NoteDetail] Relay subscription complete');
-              if (!note()) {
-                setError('Note not found');
-              }
-              setLoading(false);
-            },
-          });
+      // If not found in store after 200ms, fetch from relays (like useProfile pattern)
+      fetchTimeout = setTimeout(() => {
+        console.log('[NoteDetail] Timeout fired (200ms), foundInStore:', foundInStore);
+        if (foundInStore) {
+          console.log('[NoteDetail] Already found in store, skipping relay fetch');
+          return; // Already found in store
         }
-      }, 100);
+
+        console.log('[NoteDetail] Not found in store, fetching from relays:', relays);
+
+        // Fetch from relays
+        const relay$ = relayPool.req(relays, { ids: [eventId] });
+        relaySubscription = relay$.subscribe({
+          next: (response) => {
+            console.log('[NoteDetail] Relay response:', response);
+            if (response !== 'EOSE' && response.id === eventId) {
+              const evt = response as NostrEvent;
+              console.log('[NoteDetail] ✓ Found event from relay:', evt.id);
+              setNote(evt);
+              setLoading(false);
+              loadRepliesAndReactions(evt, relays);
+              eventStore.add(evt); // Add to store for caching
+            } else if (response === 'EOSE') {
+              console.log('[NoteDetail] Received EOSE from relay');
+            }
+          },
+          error: (err) => {
+            console.error('[NoteDetail] Relay error:', err);
+            setError('Failed to fetch note');
+            setLoading(false);
+          },
+          complete: () => {
+            console.log('[NoteDetail] Relay subscription complete, note:', note() ? 'found' : 'NOT FOUND');
+            if (!note()) {
+              console.error('[NoteDetail] ✗ Note not found after relay fetch');
+              setError('Note not found');
+              setLoading(false);
+            }
+          },
+        });
+      }, 200);
     } catch (err) {
       console.error('[NoteDetail] Error:', err);
       setError(String(err));
@@ -132,7 +190,7 @@ const NoteDetail: Component = () => {
   });
 
   const loadRepliesAndReactions = (event: NostrEvent, relays: string[]) => {
-    debug('[NoteDetail] Loading replies and reactions for:', event.id);
+    console.log('[NoteDetail] Loading replies and reactions for:', event.id, 'from relays:', relays);
 
     // Load reactions (kind 7)
     const reactionsObs = relayPool.req(relays, {
@@ -160,39 +218,69 @@ const NoteDetail: Component = () => {
         }
       },
       complete: () => {
-        debug('[NoteDetail] Loaded', allReactions.length, 'reactions');
+        console.log('[NoteDetail] ✓ Loaded', allReactions.length, 'reactions');
       },
     });
 
-    // Load replies (kind 1)
-    const repliesObs = relayPool.req(relays, {
-      kinds: [1],
-      '#e': [event.id],
-      limit: 500
-    });
-
+    // Load ALL replies in the thread (direct replies + nested replies)
     const allReplies: NostrEvent[] = [];
-    repliesObs.subscribe({
-      next: (response) => {
-        if (response !== 'EOSE' && response.kind === 1) {
-          const reply = response as NostrEvent;
-          if (!allReplies.find(r => r.id === reply.id)) {
-            allReplies.push(reply);
+    const seenIds = new Set<string>();
+    const replyIds = new Set<string>([event.id]); // Start with root note
 
-            // Only cache replies that meet POW threshold
+    function fetchRepliesRecursive() {
+      const currentIds = Array.from(replyIds);
+
+      // Fetch replies to all known IDs
+      const repliesObs = relayPool.req(relays, {
+        kinds: [1],
+        '#e': currentIds,
+        limit: 500
+      });
+
+      let newRepliesFound = 0;
+
+      repliesObs.subscribe({
+        next: (response) => {
+          if (response !== 'EOSE' && response.kind === 1) {
+            const reply = response as NostrEvent;
             const pow = getPowDifficulty(reply);
-            if (pow >= MIN_POW_THRESHOLD) {
-              eventStore.add(reply);
-            }
 
-            updateReplies();
+            if (!seenIds.has(reply.id)) {
+              seenIds.add(reply.id);
+              allReplies.push(reply);
+              replyIds.add(reply.id); // Track for next recursive fetch
+              newRepliesFound++;
+
+              console.log('[NoteDetail] Received reply:', reply.id.slice(0, 8), 'POW:', pow);
+
+              // Only cache replies that meet POW threshold
+              if (pow >= MIN_POW_THRESHOLD) {
+                eventStore.add(reply);
+              }
+
+              updateReplies();
+            }
           }
-        }
-      },
-      complete: () => {
-        debug('[NoteDetail] Loaded', allReplies.length, 'replies');
-      },
-    });
+        },
+        complete: () => {
+          console.log('[NoteDetail] Fetch round complete. New replies:', newRepliesFound, 'Total:', allReplies.length);
+
+          // If we found new replies, fetch their replies too (recursive)
+          if (newRepliesFound > 0) {
+            console.log('[NoteDetail] Fetching nested replies...');
+            fetchRepliesRecursive();
+          } else {
+            console.log('[NoteDetail] ✓ Loaded all replies in thread:', allReplies.length);
+            const highPowCount = allReplies.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD).length;
+            const lowPowCount = allReplies.length - highPowCount;
+            console.log('[NoteDetail] Reply breakdown: high-POW:', highPowCount, 'low-POW:', lowPowCount);
+          }
+        },
+      });
+    }
+
+    // Start recursive fetch
+    fetchRepliesRecursive();
 
     function updateReactions() {
       setReactions([...allReactions]);
@@ -200,20 +288,30 @@ const NoteDetail: Component = () => {
 
     function updateReplies() {
       setReplies([...allReplies]);
+      console.log('[NoteDetail] Updated replies state, total:', allReplies.length);
     }
   };
 
-  const filteredReactions = () => {
+  const filteredReactions = createMemo(() => {
     const all = reactions();
     if (showLowPow()) return all;
     return all.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD);
-  };
+  });
 
-  const filteredReplies = () => {
+  const filteredReplies = createMemo(() => {
     const all = replies();
-    if (showLowPow()) return all;
-    return all.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD);
-  };
+    const shouldShowLowPow = showLowPow();
+    console.log('[NoteDetail] filteredReplies() called - showLowPow:', shouldShowLowPow, 'total replies:', all.length);
+
+    if (shouldShowLowPow) {
+      console.log('[NoteDetail] Showing ALL replies (low-POW enabled):', all.length);
+      return all;
+    }
+
+    const filtered = all.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD);
+    console.log('[NoteDetail] Showing high-POW replies only:', filtered.length, 'of', all.length);
+    return filtered;
+  });
 
   // Removed shortPubkey - now using ProfileName component
 
@@ -273,6 +371,43 @@ const NoteDetail: Component = () => {
             class="text-text-primary break-words text-lg mb-6"
           />
 
+          {/* INTERACTION BAR - React, reply, share buttons matching feed functionality */}
+          <div class="flex gap-4 text-xs mb-4 pb-4 border-b border-border opacity-60 hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => setShowRootReplyComposer(!showRootReplyComposer())}
+              class="text-text-tertiary hover:text-accent transition-colors"
+              classList={{ 'text-accent': showRootReplyComposer() }}
+            >
+              💬 reply
+            </button>
+            <button
+              onClick={() => setShowReactionPicker(true)}
+              class="text-text-tertiary hover:text-accent transition-colors"
+            >
+              react
+            </button>
+            <button
+              onClick={() => {
+                const noteId = nip19.noteEncode(note()!.id);
+                navigator.clipboard.writeText(`https://notemine.io/n/${noteId}`);
+              }}
+              class="text-text-tertiary hover:text-accent transition-colors"
+            >
+              share
+            </button>
+          </div>
+
+          {/* ROOT REPLY COMPOSER - Default visible below root post */}
+          <Show when={showRootReplyComposer()}>
+            <div class="mb-6">
+              <ReplyComposer
+                parentEvent={note()!}
+                onClose={() => setShowRootReplyComposer(false)}
+                inline={true}
+              />
+            </div>
+          </Show>
+
           {/* REACTIONS - Horizontal bar between content and replies */}
           <Show when={filteredReactions().length > 0}>
             <div class="mb-6 pb-6 border-b border-border">
@@ -319,6 +454,17 @@ const NoteDetail: Component = () => {
           </Show>
         </div>
       </Show>
+
+      {/* Reaction Picker Modal - Rendered at document root */}
+      <Portal>
+        <Show when={showReactionPicker()}>
+          <ReactionPicker
+            eventId={note()!.id}
+            eventAuthor={note()!.pubkey}
+            onClose={() => setShowReactionPicker(false)}
+          />
+        </Show>
+      </Portal>
     </div>
   );
 };

@@ -1,11 +1,11 @@
 import { Component, createEffect, onCleanup } from 'solid-js';
 import { usePublishing } from '../providers/PublishingProvider';
 import { useUser } from '../providers/UserProvider';
-import { relayPool } from '../lib/applesauce';
+import { relayPool, eventStore } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/core';
 import { debug } from '../lib/debug';
-import type { PublishError } from '../types/publishing';
+import { type PublishError } from '../types/publishing';
 
 /**
  * PublishingProcessor handles background processing of publish jobs.
@@ -182,6 +182,10 @@ export const PublishingProcessor: Component = () => {
           const signedEvent = await signEvent(nextJob.eventTemplate, signerType);
           debug('[PublishingProcessor] Signing successful');
           setSignedEvent(nextJob.id, signedEvent);
+
+          // IMMEDIATE UI UPDATE: Add signed event to eventStore so it shows up in UI immediately
+          eventStore.add(signedEvent);
+          debug('[PublishingProcessor] Added signed event to eventStore for immediate UI update');
         } catch (error: any) {
           const publishError: PublishError = {
             phase: 'sign',

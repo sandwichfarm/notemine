@@ -1,6 +1,6 @@
 import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, getActiveRelays, relayPool } from '../lib/applesauce';
+import { createTimelineStream, getActiveRelays, relayPool, eventStore } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
@@ -71,6 +71,10 @@ export const Timeline: Component<TimelineProps> = (props) => {
 
           eventCache.set(event.id, event);
 
+          // CRITICAL FIX: Add event to eventStore so NoteDetail can find it
+          // This is what InfiniteTimeline does correctly
+          eventStore.add(event);
+
           // Track oldest timestamp for pagination
           if (event.created_at < oldestTimestamp) {
             oldestTimestamp = event.created_at;
@@ -130,6 +134,9 @@ export const Timeline: Component<TimelineProps> = (props) => {
             if (!eventCache.has(event.id)) {
               eventCache.set(event.id, event);
               receivedCount++;
+
+              // CRITICAL FIX: Add event to eventStore (same as main subscription)
+              eventStore.add(event);
 
               if (event.created_at < oldestTimestamp) {
                 oldestTimestamp = event.created_at;

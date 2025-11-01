@@ -13,6 +13,7 @@ interface ReplyComposerProps {
   parentEvent: NostrEvent;
   onClose: () => void;
   onSuccess?: () => void;
+  inline?: boolean; // If true, renders inline instead of as a modal overlay
 }
 
 export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
@@ -205,13 +206,11 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
     }
   };
 
-  return (
-    <div
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
-      onClick={props.onClose}
-    >
-      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+  // Composer content (shared between modal and inline modes)
+  const ComposerContent = () => (
+    <>
+      {/* Header - only show in modal mode */}
+      <Show when={!props.inline}>
         <div class="border-b border-border p-4">
           <div class="flex items-center justify-between">
             <h3 class="text-lg font-bold">Reply with POW</h3>
@@ -222,83 +221,97 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
             </button>
           </div>
         </div>
+      </Show>
 
-        {/* Parent note preview */}
+      {/* Parent note preview - compact in inline mode */}
+      <Show when={!props.inline}>
         <div class="p-4 bg-bg-secondary dark:bg-bg-tertiary border-b border-border">
           <div class="text-xs text-text-secondary mb-1">Replying to:</div>
           <div class="text-sm text-text-primary line-clamp-3">{props.parentEvent.content}</div>
         </div>
+      </Show>
 
-        {/* Reply form */}
-        <form onSubmit={handleSubmit} class="p-4 space-y-4">
-          {/* Textarea */}
-          <div class="relative">
-            <textarea
-              ref={textareaRef}
-              class="w-full p-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] border-0 rounded-lg focus:outline-none focus:ring-0 resize-none font-sans placeholder:opacity-40"
-              placeholder={`Write your reply... (${maxContentLength()} chars max, POW required, use @ to mention users)`}
-              rows={6}
+      {/* Reply form */}
+      <form onSubmit={handleSubmit} class={props.inline ? "space-y-3" : "p-4 space-y-4"}>
+        {/* Textarea */}
+        <div class="relative">
+          <textarea
+            ref={textareaRef}
+            class="w-full p-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] border-0 rounded-lg focus:outline-none focus:ring-0 resize-none font-sans placeholder:opacity-40"
+            placeholder={props.inline ? "Write your reply..." : `Write your reply... (${maxContentLength()} chars max, POW required, use @ to mention users)`}
+            rows={props.inline ? 3 : 6}
               value={content()}
               onInput={handleContentChange}
               maxLength={maxContentLength()}
-              autofocus
-            />
+            autofocus
+          />
 
-            {/* Mention Autocomplete */}
-            <Show when={showMentionAutocomplete()}>
-              <MentionAutocomplete
-                top={mentionPosition().top}
-                left={mentionPosition().left}
-                query={mentionQuery()}
-                onSelect={handleMentionSelect}
-                onClose={() => setShowMentionAutocomplete(false)}
-              />
-            </Show>
-            <div
-              class="text-sm mt-1"
-              classList={{
-                'text-text-secondary': remainingChars() >= 20,
-                'text-yellow-500': remainingChars() < 20 && remainingChars() >= 0,
-                'text-red-500': remainingChars() < 0,
-              }}
+          {/* Mention Autocomplete */}
+          <Show when={showMentionAutocomplete()}>
+            <MentionAutocomplete
+              top={mentionPosition().top}
+              left={mentionPosition().left}
+              query={mentionQuery()}
+              onSelect={handleMentionSelect}
+              onClose={() => setShowMentionAutocomplete(false)}
+            />
+          </Show>
+          <div
+            class="text-xs mt-1"
+            classList={{
+              'text-text-secondary': remainingChars() >= 20,
+              'text-yellow-500': remainingChars() < 20 && remainingChars() >= 0,
+              'text-red-500': remainingChars() < 0,
+            }}
+          >
+            {remainingChars()} characters remaining
+          </div>
+        </div>
+
+        {/* Difficulty slider - compact in inline mode */}
+        <div>
+          <label class={props.inline ? "block text-xs font-medium text-text-secondary opacity-60 mb-1" : "block text-sm font-medium text-text-secondary opacity-60 mb-2"}>
+            POW Difficulty: {difficulty()}
+          </label>
+          <input
+            type="range"
+            min="16"
+            max="42"
+            step="1"
+            value={difficulty()}
+            onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
+            class="w-full"
+          />
+        </div>
+
+        {/* Success message */}
+        <Show when={queueSuccess()}>
+          <div class="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 text-green-700 dark:text-green-400 rounded-lg text-sm">
+            ✅ Reply added to mining queue!
+          </div>
+        </Show>
+
+        {/* Buttons - compact in inline mode */}
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            disabled={!canSubmit()}
+            class={props.inline ? "flex-1 px-3 py-1.5 bg-accent text-white rounded text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed" : "flex-1 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"}
+          >
+            Add to Queue
+          </button>
+
+          <Show when={props.inline}>
+            <button
+              type="button"
+              onClick={props.onClose}
+              class="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
             >
-              {remainingChars()} characters remaining
-            </div>
-          </div>
-
-          {/* Difficulty slider */}
-          <div>
-            <label class="block text-sm font-medium text-text-secondary opacity-60 mb-2">
-              POW Difficulty: {difficulty()}
-            </label>
-            <input
-              type="range"
-              min="16"
-              max="42"
-              step="1"
-              value={difficulty()}
-              onInput={(e) => handleDifficultyChange(Number(e.currentTarget.value))}
-              class="w-full"
-            />
-          </div>
-
-          {/* Success message */}
-          <Show when={queueSuccess()}>
-            <div class="p-3 bg-green-100 dark:bg-green-900/20 border border-green-500 text-green-700 dark:text-green-400 rounded-lg text-sm">
-              ✅ Reply added to mining queue!
-            </div>
+              Cancel
+            </button>
           </Show>
 
-          {/* Buttons */}
-          <div class="flex gap-2">
-            <button
-              type="submit"
-              disabled={!canSubmit()}
-              class="flex-1 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Add to Queue
-            </button>
-
+          <Show when={!props.inline}>
             <button
               type="button"
               onClick={props.onClose}
@@ -306,8 +319,24 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
             >
               Close
             </button>
-          </div>
-        </form>
+          </Show>
+        </div>
+      </form>
+    </>
+  );
+
+  // Return either modal or inline version
+  return props.inline ? (
+    <div class="p-3 bg-bg-secondary dark:bg-bg-tertiary rounded-lg border border-border">
+      <ComposerContent />
+    </div>
+  ) : (
+    <div
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+      onClick={props.onClose}
+    >
+      <div class="card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <ComposerContent />
       </div>
     </div>
   );

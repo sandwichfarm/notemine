@@ -2,6 +2,7 @@ import { Component, For, Show, createSignal, createMemo } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty } from '../lib/pow';
 import { ProfileName } from './ProfileName';
+import { ReplyComposer } from './ReplyComposer';
 
 interface ThreadedRepliesProps {
   replies: NostrEvent[];
@@ -19,6 +20,8 @@ const ThreadedReply: Component<{
   depth: number;
 }> = (props) => {
   const [collapsed, setCollapsed] = createSignal(props.depth >= 2);
+  // State for inline reply composer
+  const [showReplyComposer, setShowReplyComposer] = createSignal(false);
 
   // Removed shortPubkey - now using ProfileName component
 
@@ -70,6 +73,26 @@ const ThreadedReply: Component<{
           {props.node.event.content}
         </div>
 
+        {/* Reply Action Button */}
+        <button
+          onClick={() => setShowReplyComposer(!showReplyComposer())}
+          class="text-xs text-text-tertiary hover:text-accent transition-colors mb-2"
+          classList={{ 'text-accent': showReplyComposer() }}
+        >
+          💬 reply
+        </button>
+
+        {/* Inline Reply Composer - appears below when replying */}
+        <Show when={showReplyComposer()}>
+          <div class="mb-3 mt-2">
+            <ReplyComposer
+              parentEvent={props.node.event}
+              onClose={() => setShowReplyComposer(false)}
+              inline={true}
+            />
+          </div>
+        </Show>
+
         {/* Child Replies */}
         <Show when={props.node.children.length > 0}>
           <div class="mt-2 space-y-2">
@@ -94,7 +117,12 @@ const ThreadedReply: Component<{
 };
 
 export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
+  // Track which flat-list reply has composer open (for fallback view)
+  const [flatListReplyingTo, setFlatListReplyingTo] = createSignal<string | null>(null);
+
   const replyTree = createMemo(() => {
+    console.log('[ThreadedReplies] Building tree with', props.replies.length, 'replies for root:', props.rootEventId);
+
     // Build a map of event ID to event
     const eventMap = new Map<string, NostrEvent>();
     for (const reply of props.replies) {
@@ -106,23 +134,63 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
 
     for (const reply of props.replies) {
       // Find the parent event ID from 'e' tags
-      // The last 'e' tag is typically the direct parent (NIP-10)
+      // According to NIP-10, we should look for marked tags first, then fall back to positional
       const eTags = reply.tags.filter(t => t[0] === 'e');
-      let parentId = props.rootEventId;
+      let parentId: string | null = null;
 
       if (eTags.length > 0) {
-        // Get the last 'e' tag as the direct parent
-        const lastETag = eTags[eTags.length - 1];
-        if (lastETag[1]) {
-          parentId = lastETag[1];
+        // First, look for a marked "reply" tag
+        const replyTag = eTags.find(t => t[3] === 'reply');
+        if (replyTag && replyTag[1]) {
+          parentId = replyTag[1];
+        } else if (eTags.length === 1) {
+          // Single e-tag: Check if it's in our reply set (nested reply) or if it's the root
+          const eTagId = eTags[0][1];
+          if (eventMap.has(eTagId)) {
+            // It's replying to another reply in this thread
+            parentId = eTagId;
+          } else {
+            // It's replying to the root note (not in our reply set)
+            parentId = props.rootEventId;
+          }
+        } else {
+          // Multiple e-tags: Find the reply tag (last e-tag that's not root or mention)
+          const replyTags = eTags.filter(t => !t[3] || t[3] === 'reply');
+          if (replyTags.length > 0) {
+            const lastReplyTag = replyTags[replyTags.length - 1];
+            parentId = lastReplyTag[1];
+          } else {
+            // Fallback: last e-tag is parent
+            const lastETag = eTags[eTags.length - 1];
+            parentId = lastETag[1];
+          }
         }
       }
+
+      // If still no parent found, default to root
+      if (!parentId) {
+        parentId = props.rootEventId;
+      }
+
+      // CRITICAL: If the parent is not in our reply set AND not the root note,
+      // treat it as a root-level reply (the parent was filtered out or not fetched)
+      if (parentId !== props.rootEventId && !eventMap.has(parentId)) {
+        console.log('[ThreadedReplies] Reply', reply.id.slice(0, 8), 'parent', parentId.slice(0, 8), 'not in reply set, treating as root-level');
+        parentId = props.rootEventId;
+      }
+
+      console.log('[ThreadedReplies] Reply', reply.id.slice(0, 8), 'e-tags:', eTags.map(t => `${t[1].slice(0, 8)}(${t[3] || 'unmarked'})`).join(', '), 'parent:', parentId.slice(0, 8), 'root:', props.rootEventId.slice(0, 8));
 
       if (!childrenMap.has(parentId)) {
         childrenMap.set(parentId, []);
       }
       childrenMap.get(parentId)!.push(reply);
     }
+
+    // Get root-level replies (direct replies to the main note)
+    const rootReplies = childrenMap.get(props.rootEventId) || [];
+    console.log('[ThreadedReplies] Root-level replies:', rootReplies.length, 'for root:', props.rootEventId.slice(0, 8));
+    console.log('[ThreadedReplies] All parent IDs in map:', Array.from(childrenMap.keys()).map(k => k.slice(0, 8)));
 
     // Build the tree recursively
     function buildNode(event: NostrEvent, depth: number): ReplyNode {
@@ -141,10 +209,7 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
       };
     }
 
-    // Get root-level replies (direct replies to the main note)
-    const rootReplies = childrenMap.get(props.rootEventId) || [];
-
-    return rootReplies
+    const tree = rootReplies
       .map(reply => buildNode(reply, 0))
       .sort((a, b) => {
         // Sort by POW (descending), then by timestamp (ascending)
@@ -152,13 +217,68 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
         if (powDiff !== 0) return powDiff;
         return a.event.created_at - b.event.created_at;
       });
+
+    console.log('[ThreadedReplies] Final tree nodes:', tree.length);
+    return tree;
   });
 
   return (
     <div class="space-y-3">
-      <For each={replyTree()}>
-        {(node) => <ThreadedReply node={node} depth={0} />}
-      </For>
+      <Show when={replyTree().length > 0} fallback={
+        <div class="space-y-3">
+          <div class="text-sm text-yellow-600 dark:text-yellow-400 mb-2">
+            Debug: Showing {props.replies.length} replies as flat list (tree building found 0 root nodes)
+          </div>
+          <For each={props.replies}>
+            {(reply) => (
+              <div class="border-l-2 border-border/30 pl-3 py-2">
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <ProfileName pubkey={reply.pubkey} asLink={true} class="font-mono text-xs text-text-secondary" />
+                    <div class="text-xs text-text-tertiary">
+                      {new Date(reply.created_at * 1000).toLocaleString()}
+                    </div>
+                    <Show when={getPowDifficulty(reply) > 0}>
+                      <span class="text-xs font-mono text-accent">
+                        ⛏️ {getPowDifficulty(reply)}
+                      </span>
+                    </Show>
+                  </div>
+                </div>
+                <div class="text-sm text-text-primary whitespace-pre-wrap break-words mb-2">
+                  {reply.content}
+                </div>
+
+                {/* Reply button for flat list view */}
+                <button
+                  onClick={() => setFlatListReplyingTo(
+                    flatListReplyingTo() === reply.id ? null : reply.id
+                  )}
+                  class="text-xs text-text-tertiary hover:text-accent transition-colors"
+                  classList={{ 'text-accent': flatListReplyingTo() === reply.id }}
+                >
+                  💬 reply
+                </button>
+
+                {/* Inline reply composer for flat list */}
+                <Show when={flatListReplyingTo() === reply.id}>
+                  <div class="mt-2">
+                    <ReplyComposer
+                      parentEvent={reply}
+                      onClose={() => setFlatListReplyingTo(null)}
+                      inline={true}
+                    />
+                  </div>
+                </Show>
+              </div>
+            )}
+          </For>
+        </div>
+      }>
+        <For each={replyTree()}>
+          {(node) => <ThreadedReply node={node} depth={0} />}
+        </For>
+      </Show>
     </div>
   );
 };

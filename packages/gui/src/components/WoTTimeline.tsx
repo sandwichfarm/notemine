@@ -1,6 +1,6 @@
 import { Component, createSignal, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays } from '../lib/applesauce';
+import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays, eventStore } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
@@ -144,6 +144,9 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
                   // Add to cache
                   eventCache.set(event.id, event);
+
+                  // CRITICAL FIX: Add event to eventStore so NoteDetail can find it
+                  eventStore.add(event);
 
                   // Initialize reaction/reply caches (but don't fetch yet - will be lazy loaded)
                   if (!reactionsCache.has(event.id)) {

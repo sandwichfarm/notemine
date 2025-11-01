@@ -119,29 +119,75 @@ export function getAllRelayHintsFromEvent(event: NostrEvent): string[] {
 
 /**
  * Build comprehensive relay list for publishing an interaction
- * Includes: author's inbox + your outbox + notemine.io + NIP-66 PoW relays
+ * Includes: relay hints from event tags + author's inbox + your outbox + notemine.io + NIP-66 PoW relays
  */
 export async function getPublishRelaysForInteraction(
   authorPubkey: string,
   yourPubkey: string,
   defaultRelay: string,
-  powRelays: string[]
+  powRelays: string[],
+  eventTags?: string[][]
 ): Promise<string[]> {
   const relays = new Set<string>();
+  const relaySources: Record<string, string[]> = {
+    immutable: [],
+    pow: [],
+    hints: [],
+    inbox: [],
+    outbox: [],
+  };
 
-  // Always include default relay (notemine.io)
+  // Always include default relay (notemine.io) - the immutable relay
   relays.add(defaultRelay);
+  relaySources.immutable.push(defaultRelay);
 
   // Add NIP-66 PoW relays
-  powRelays.forEach(url => relays.add(url));
+  powRelays.forEach(url => {
+    if (!relays.has(url)) {
+      relays.add(url);
+      relaySources.pow.push(url);
+    }
+  });
+
+  // Add relay hints from event tags (from 'e' and 'p' tags)
+  if (eventTags) {
+    eventTags.forEach(tag => {
+      const hint = getRelayHintFromTag(tag);
+      if (hint && !relays.has(hint)) {
+        relays.add(hint);
+        relaySources.hints.push(hint);
+      }
+    });
+  }
 
   // Add author's inbox relays
   const authorInbox = await getUserInboxRelays(authorPubkey);
-  authorInbox.forEach(url => relays.add(url));
+  authorInbox.forEach(url => {
+    if (!relays.has(url)) {
+      relays.add(url);
+      relaySources.inbox.push(url);
+    }
+  });
 
   // Add your outbox relays
   const yourOutbox = await getUserOutboxRelays(yourPubkey);
-  yourOutbox.forEach(url => relays.add(url));
+  yourOutbox.forEach(url => {
+    if (!relays.has(url)) {
+      relays.add(url);
+      relaySources.outbox.push(url);
+    }
+  });
+
+  // Log relay breakdown for debugging
+  console.log('[inbox-outbox] Relay discovery breakdown:', {
+    total: relays.size,
+    immutable: relaySources.immutable.length,
+    pow: relaySources.pow.length,
+    hints: relaySources.hints.length,
+    inbox: relaySources.inbox.length,
+    outbox: relaySources.outbox.length,
+    sources: relaySources,
+  });
 
   return Array.from(relays);
 }

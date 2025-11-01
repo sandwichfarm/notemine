@@ -128,7 +128,7 @@ export const QueueProcessor: Component = () => {
 
       try {
         if (isInteraction && targetPubkey) {
-          // For interactions: publish to author's inbox + your outbox + notemine.io + NIP-66 PoW relays
+          // For interactions: publish to relay hints + author's inbox + your outbox + notemine.io + NIP-66 PoW relays
           try {
             const { fetchNip66PowRelays } = await import('../lib/nip66');
             const powRelays = await fetchNip66PowRelays();
@@ -136,13 +136,15 @@ export const QueueProcessor: Component = () => {
             debug('[QueueProcessor] Publishing interaction to inbox/outbox model:', {
               targetPubkey,
               type: nextItem.type,
+              eventTags: nextItem.tags,
             });
 
             allPublishRelays = await getPublishRelaysForInteraction(
               targetPubkey,
               currentUser.pubkey,
               defaultRelay,
-              powRelays
+              powRelays,
+              nextItem.tags // Pass event tags to extract relay hints
             );
           } catch (error) {
             console.warn('[QueueProcessor] Interaction relay discovery failed, using fallback:', error);

@@ -129,7 +129,7 @@ const NoteDetail: Component = () => {
             console.log('[NoteDetail] ✓ Found event in store:', evt.id);
             setNote(evt);
             setLoading(false);
-            loadRepliesAndReactions(evt, relays);
+            void loadRepliesAndReactions(evt, relays); // Fire-and-forget async relay discovery
             cleanup(); // Clean up all subscriptions
           }
         },
@@ -161,7 +161,7 @@ const NoteDetail: Component = () => {
               console.log('[NoteDetail] ✓ Found event from relay:', evt.id);
               setNote(evt);
               setLoading(false);
-              loadRepliesAndReactions(evt, relays);
+              void loadRepliesAndReactions(evt, relays); // Fire-and-forget async relay discovery
               eventStore.add(evt); // Add to store for caching
             } else if (response === 'EOSE') {
               console.log('[NoteDetail] Received EOSE from relay');
@@ -189,8 +189,63 @@ const NoteDetail: Component = () => {
     }
   });
 
-  const loadRepliesAndReactions = (event: NostrEvent, relays: string[]) => {
-    console.log('[NoteDetail] Loading replies and reactions for:', event.id, 'from relays:', relays);
+  const loadRepliesAndReactions = async (event: NostrEvent, baseRelays: string[]) => {
+    // Build comprehensive relay list for fetching interactions
+    let relays = [...baseRelays];
+
+    try {
+      // 1. Add relay hints from parent event tags
+      const { getAllRelayHintsFromEvent } = await import('../lib/inbox-outbox');
+      const relayHints = getAllRelayHintsFromEvent(event);
+      relays = [...relays, ...relayHints];
+
+      // 2. Add NIP-66 PoW relays (where replies/reactions were published)
+      const { fetchNip66PowRelays } = await import('../lib/nip66');
+      const powRelays = await fetchNip66PowRelays().catch(() => {
+        console.warn('[NoteDetail] Failed to fetch NIP-66 PoW relays, continuing without them');
+        return [];
+      });
+      relays = [...relays, ...powRelays];
+
+      // 3. Add author's inbox relays (where users published their replies to this author)
+      const { getUserInboxRelays } = await import('../lib/applesauce');
+      const authorInbox = await getUserInboxRelays(event.pubkey).catch(() => {
+        console.warn('[NoteDetail] Failed to get author inbox relays, continuing without them');
+        return [];
+      });
+      relays = [...relays, ...authorInbox];
+
+      // 4. Add current user's outbox relays (where they published their replies)
+      const { useUser } = await import('../providers/UserProvider');
+      const { user } = useUser();
+      const currentUser = user();
+      let myOutbox: string[] = [];
+      if (currentUser) {
+        const { getUserOutboxRelays } = await import('../lib/applesauce');
+        myOutbox = await getUserOutboxRelays(currentUser.pubkey).catch(() => {
+          console.warn('[NoteDetail] Failed to get user outbox relays, continuing without them');
+          return [];
+        });
+        relays = [...relays, ...myOutbox];
+      }
+
+      // Deduplicate relays
+      relays = Array.from(new Set(relays));
+
+      console.log('[NoteDetail] Loading replies and reactions for:', event.id);
+      console.log('[NoteDetail] Relay sources:', {
+        base: baseRelays.length,
+        hints: relayHints.length,
+        pow: powRelays.length,
+        authorInbox: authorInbox.length,
+        userOutbox: myOutbox.length,
+        total: relays.length,
+      });
+      console.log('[NoteDetail] Querying relays:', relays);
+    } catch (err) {
+      console.error('[NoteDetail] Error building relay list, using base relays only:', err);
+      relays = [...baseRelays];
+    }
 
     // Load reactions (kind 7)
     const reactionsObs = relayPool.req(relays, {
@@ -207,11 +262,8 @@ const NoteDetail: Component = () => {
           if (!allReactions.find(r => r.id === reaction.id)) {
             allReactions.push(reaction);
 
-            // Only cache reactions that meet POW threshold
-            const pow = getPowDifficulty(reaction);
-            if (pow >= MIN_POW_THRESHOLD) {
-              eventStore.add(reaction);
-            }
+            // Add ALL reactions to event store (filtering happens at UI layer)
+            eventStore.add(reaction);
 
             updateReactions();
           }
@@ -253,10 +305,8 @@ const NoteDetail: Component = () => {
 
               console.log('[NoteDetail] Received reply:', reply.id.slice(0, 8), 'POW:', pow);
 
-              // Only cache replies that meet POW threshold
-              if (pow >= MIN_POW_THRESHOLD) {
-                eventStore.add(reply);
-              }
+              // Add ALL replies to event store (filtering happens at UI layer)
+              eventStore.add(reply);
 
               updateReplies();
             }

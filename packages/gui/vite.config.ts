@@ -28,6 +28,22 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [solid()],
+    test: {
+      environment: 'happy-dom',
+      globals: true,
+      setupFiles: ['./src/tests/setup.ts'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html'],
+        exclude: [
+          'node_modules/',
+          'src/tests/',
+          '**/*.d.ts',
+          '**/*.config.*',
+          '**/mockData/**',
+        ],
+      },
+    },
     server: {
       host: '0.0.0.0', // Expose to network
       port: 3000,

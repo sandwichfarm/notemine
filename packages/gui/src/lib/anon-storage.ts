@@ -27,7 +27,7 @@ export function saveAnonKey(secret: Uint8Array): void {
 export function loadAnonKey(): Uint8Array | null {
   try {
     const hex = localStorage.getItem(STORAGE_KEY);
-    if (!hex) return null;
+    if (!hex || hex.length === 0) return null;
 
     // Convert hex string back to Uint8Array
     const bytes = new Uint8Array(hex.length / 2);
@@ -46,7 +46,8 @@ export function loadAnonKey(): Uint8Array | null {
  * @returns true if key exists in storage
  */
 export function hasPersistedAnonKey(): boolean {
-  return localStorage.getItem(STORAGE_KEY) !== null;
+  const value = localStorage.getItem(STORAGE_KEY);
+  return value !== null && value.length > 0;
 }
 
 /**

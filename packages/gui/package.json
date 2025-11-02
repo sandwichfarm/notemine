@@ -8,7 +8,11 @@
     "dev": "vite",
     "dev:full": "concurrently \"pnpm dev\" \"cd ../../relay && go run cmd/relay/main.go\"",
     "build": "tsc && vite build && node ./scripts/precompress.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@contextvm/sdk": "^0.1.37",
@@ -56,12 +60,17 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitest/ui": "^4.0.6",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.1",
+    "happy-dom": "15.7.4",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.9.3",
     "vite": "^7.1.7",
-    "vite-plugin-solid": "^2.10.2"
+    "vite-plugin-solid": "^2.10.2",
+    "vitest": "^4.0.6"
   }
 }

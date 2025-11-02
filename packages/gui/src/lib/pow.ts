@@ -15,8 +15,12 @@ export function getPowDifficulty(event: NostrEvent): number {
       continue;
     }
 
-    // Count leading zeros in the nibble
-    count += Math.clz32(nibble) - 28; // clz32 returns leading zeros in 32-bit, we want 4-bit
+    // Count leading zeros in the non-zero nibble
+    // Use a lookup table for accuracy
+    if (nibble >= 8) count += 0; // 1xxx
+    else if (nibble >= 4) count += 1; // 01xx
+    else if (nibble >= 2) count += 2; // 001x
+    else count += 3; // 0001
     break;
   }
 
@@ -85,8 +89,8 @@ export function calculatePowScore(
   replies: NostrEvent[] = [],
   weights: PowScoreWeights = {}
 ): PowScore {
-  const rootPow = getPowDifficulty(event);
   const hasPow = hasValidPow(event, 1);
+  const rootPow = hasPow ? getPowDifficulty(event) : 0;
 
   // Get weights with defaults
   const reactionWeight = weights.reactionPowWeight ?? 0.5;
@@ -106,24 +110,24 @@ export function calculatePowScore(
   let nonPowReactionsCount = 0;
 
   for (const reaction of reactions) {
-    const reactionPowValue = getPowDifficulty(reaction);
+    const reactionHasValidPow = hasValidPow(reaction, threshold);
+    const reactionPowValue = reactionHasValidPow ? getPowDifficulty(reaction) : 0;
     const content = reaction.content.trim();
 
     // Determine sentiment multiplier
-    let sentiment = 0.5; // Neutral
-    if (content === '+' || content === '👍' || content === '❤️') {
-      sentiment = 1.0; // Positive
-    } else if (content === '-' || content === '👎') {
+    // Default to positive for all reactions except explicit negative ones
+    let sentiment = 1.0; // Positive (default)
+    if (content === '-' || content === '👎') {
       sentiment = -1.0; // Negative
     }
 
-    if (reactionPowValue >= threshold) {
+    if (reactionHasValidPow) {
       // Reaction has POW
       reactionsPowTotal += reactionPowValue * sentiment;
       reactionsPowCount++;
     } else {
-      // Reaction has no POW
-      nonPowReactionsTotal += reactionPowValue * sentiment;
+      // Reaction has no POW - count it with sentiment weight
+      nonPowReactionsTotal += sentiment;
       nonPowReactionsCount++;
     }
   }
@@ -135,15 +139,16 @@ export function calculatePowScore(
   let nonPowRepliesCount = 0;
 
   for (const reply of replies) {
-    const replyPowValue = getPowDifficulty(reply);
+    const replyHasValidPow = hasValidPow(reply, threshold);
+    const replyPowValue = replyHasValidPow ? getPowDifficulty(reply) : 0;
 
-    if (replyPowValue >= threshold) {
+    if (replyHasValidPow) {
       // Reply has POW
       repliesPowTotal += replyPowValue;
       repliesPowCount++;
     } else {
-      // Reply has no POW
-      nonPowRepliesTotal += replyPowValue;
+      // Reply has no POW - count it as 1
+      nonPowRepliesTotal += 1;
       nonPowRepliesCount++;
     }
   }

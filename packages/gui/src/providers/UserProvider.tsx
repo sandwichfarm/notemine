@@ -10,6 +10,16 @@ import { relayPool } from '../lib/applesauce';
 import { Observable } from 'rxjs';
 import { debug } from '../lib/debug';
 import { saveAnonKey, loadAnonKey, clearAnonKey } from '../lib/anon-storage';
+import {
+  saveSession,
+  loadSession,
+  clearSession,
+  isSessionStale,
+  migrateOldNostrConnectSession,
+  type ExtensionSession,
+  type NostrConnectSession as UnifiedNostrConnectSession,
+  type BunkerSession,
+} from '../lib/session-storage';
 
 export type AuthMethod = 'anon' | 'extension' | 'privatekey' | 'bunker' | 'nostrconnect';
 
@@ -27,11 +37,12 @@ export interface User {
 interface UserContextType {
   user: () => User | null;
   authAnon: (secret?: Uint8Array, persist?: boolean) => void;
-  authExtension: () => Promise<void>;
+  authExtension: (saveToSession?: boolean) => Promise<void>;
   authPrivateKey: (keyInput: string) => Promise<void>;
-  authBunker: (bunkerUri: string) => Promise<void>;
+  authBunker: (bunkerUri: string, saveToSession?: boolean) => Promise<void>;
   authNostrConnect: (signer: ISigner, pubkey: string) => Promise<void>;
   restoreNostrConnectSession: () => Promise<void>;
+  restoreSession: () => Promise<{ success: boolean; method?: string; error?: string }>;
   fetchUserData: (pubkey: string) => Promise<void>;
   logout: () => void;
   setAnonPersistence: (persist: boolean, onConfirm?: (action: 'keep' | 'regenerate') => void) => void;
@@ -85,7 +96,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     });
   };
 
-  const authExtension = async () => {
+  const authExtension = async (saveToSession: boolean = true) => {
     try {
       const signer = new ExtensionSigner();
       const pubkey = await signer.getPublicKey();
@@ -96,6 +107,16 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'extension',
       });
+
+      // Save session for auto-restore on next visit
+      if (saveToSession) {
+        const session: ExtensionSession = {
+          authMethod: 'extension',
+          pubkey,
+          timestamp: Date.now(),
+        };
+        saveSession(session);
+      }
 
       // Fetch user data including relay list
       await fetchUserData(pubkey);
@@ -125,7 +146,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     }
   };
 
-  const authBunker = async (bunkerUri: string) => {
+  const authBunker = async (bunkerUri: string, saveToSession: boolean = true) => {
     try {
       debug('[Auth] Connecting to bunker:', bunkerUri);
 
@@ -146,6 +167,17 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         authMethod: 'bunker',
       });
 
+      // Save session for auto-restore on next visit
+      if (saveToSession) {
+        const session: BunkerSession = {
+          authMethod: 'bunker',
+          pubkey,
+          timestamp: Date.now(),
+          bunkerUri,
+        };
+        saveSession(session);
+      }
+
       // Fetch user data including relay list
       await fetchUserData(pubkey);
     } catch (error) {
@@ -164,6 +196,9 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         signer,
         authMethod: 'nostrconnect',
       });
+
+      // Save session data (already handled in LoginModal when signer is created)
+      // The session is saved by saveNostrConnectSession in LoginModal before calling this function
 
       // Fetch user data including relay list
       await fetchUserData(pubkey);
@@ -304,13 +339,204 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     }
   };
 
+  /**
+   * Restore user session with signer health check
+   * Attempts to restore the most recent session and verifies signer availability
+   * @returns Result object with success status and details
+   */
+  const restoreSession = async (): Promise<{ success: boolean; method?: string; error?: string }> => {
+    try {
+      // Migrate old NostrConnect sessions first
+      migrateOldNostrConnectSession();
+
+      // Load the most recent session
+      const session = loadSession();
+
+      if (!session) {
+        debug('[Auth] No persisted session found');
+        return { success: false, error: 'No persisted session found' };
+      }
+
+      // Check if session is stale (older than 30 days)
+      if (isSessionStale(session)) {
+        debug('[Auth] Session is stale, clearing');
+        clearSession(session.authMethod);
+        return { success: false, error: 'Session expired (stale)' };
+      }
+
+      debug('[Auth] Attempting to restore session:', {
+        method: session.authMethod,
+        pubkey: session.pubkey,
+        age: Date.now() - session.timestamp
+      });
+
+      // Restore based on auth method
+      switch (session.authMethod) {
+        case 'extension': {
+          try {
+            // Health check: Try to get public key from extension
+            const signer = new ExtensionSigner();
+            const pubkey = await signer.getPublicKey();
+
+            // Verify it matches stored session
+            if (pubkey !== session.pubkey) {
+              debug('[Auth] Extension pubkey mismatch, clearing session');
+              clearSession('extension');
+              return { success: false, error: 'Extension signer pubkey mismatch' };
+            }
+
+            // Success! Restore session without saving again
+            await authExtension(false);
+            debug('[Auth] Extension session restored successfully');
+            return { success: true, method: 'extension' };
+          } catch (error: any) {
+            debug('[Auth] Extension health check failed:', error.message);
+            clearSession('extension');
+            return { success: false, error: `Extension unavailable: ${error.message}` };
+          }
+        }
+
+        case 'nostrconnect': {
+          try {
+            const ncSession = session as UnifiedNostrConnectSession;
+
+            // Convert hex client secret back to Uint8Array
+            const clientSecret = new Uint8Array(ncSession.clientSecret.length / 2);
+            for (let i = 0; i < ncSession.clientSecret.length; i += 2) {
+              clientSecret[i / 2] = parseInt(ncSession.clientSecret.substring(i, i + 2), 16);
+            }
+
+            // Create PrivateKeySigner from the stored client secret
+            const clientSigner = new PrivateKeySigner(clientSecret);
+
+            // Create NostrConnectSigner with the restored session
+            const signer = new NostrConnectSigner({
+              relays: ncSession.relays,
+              remote: ncSession.remotePubkey,
+              secret: ncSession.secret,
+              signer: clientSigner,
+              pubkey: ncSession.pubkey,
+            });
+
+            // Open connection with timeout
+            const openTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Connection timeout')), 10000)
+            );
+
+            await Promise.race([signer.open(), openTimeout]);
+
+            // Health check: Try to get public key
+            const healthTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Health check timeout')), 5000)
+            );
+
+            const pubkey = await Promise.race([
+              signer.getPublicKey(),
+              healthTimeout
+            ]) as string;
+
+            // Verify it matches stored session
+            if (pubkey !== ncSession.pubkey) {
+              debug('[Auth] NostrConnect pubkey mismatch, clearing session');
+              signer.close();
+              clearSession('nostrconnect');
+              return { success: false, error: 'NostrConnect signer pubkey mismatch' };
+            }
+
+            // Success! Complete authentication
+            setUser({
+              isAnon: false,
+              pubkey: ncSession.pubkey,
+              signer,
+              authMethod: 'nostrconnect',
+            });
+
+            await fetchUserData(ncSession.pubkey);
+            debug('[Auth] NostrConnect session restored successfully');
+            return { success: true, method: 'nostrconnect' };
+          } catch (error: any) {
+            debug('[Auth] NostrConnect health check failed:', error.message);
+            clearSession('nostrconnect');
+            return { success: false, error: `NostrConnect unavailable: ${error.message}` };
+          }
+        }
+
+        case 'bunker': {
+          try {
+            const bunkerSession = session as BunkerSession;
+
+            // Attempt to reconnect to bunker with timeout
+            const connectTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Bunker connection timeout')), 10000)
+            );
+
+            const signer = await Promise.race([
+              NostrConnectSigner.fromBunkerURI(bunkerSession.bunkerUri, {
+                permissions: NostrConnectSigner.buildSigningPermissions([0, 1, 3, 6, 7]),
+              }),
+              connectTimeout
+            ]) as NostrConnectSigner;
+
+            // Health check: Try to get public key
+            const healthTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Health check timeout')), 5000)
+            );
+
+            const pubkey = await Promise.race([
+              signer.getPublicKey(),
+              healthTimeout
+            ]) as string;
+
+            // Verify it matches stored session
+            if (pubkey !== bunkerSession.pubkey) {
+              debug('[Auth] Bunker pubkey mismatch, clearing session');
+              clearSession('bunker');
+              return { success: false, error: 'Bunker signer pubkey mismatch' };
+            }
+
+            // Success! Complete authentication without saving again
+            setUser({
+              isAnon: false,
+              pubkey: bunkerSession.pubkey,
+              signer,
+              authMethod: 'bunker',
+            });
+
+            await fetchUserData(bunkerSession.pubkey);
+            debug('[Auth] Bunker session restored successfully');
+            return { success: true, method: 'bunker' };
+          } catch (error: any) {
+            debug('[Auth] Bunker health check failed:', error.message);
+            clearSession('bunker');
+            return { success: false, error: `Bunker unavailable: ${error.message}` };
+          }
+        }
+
+        default: {
+          return { success: false, error: `Unknown auth method: ${(session as any).authMethod}` };
+        }
+      }
+    } catch (error: any) {
+      console.error('[Auth] Session restoration failed:', error);
+      return { success: false, error: error.message || 'Unknown error' };
+    }
+  };
+
   const logout = async () => {
     const currentUser = user();
 
-    // Clear nostrconnect session if applicable
+    // Clear appropriate session storage
     if (currentUser?.authMethod === 'nostrconnect') {
-      const { clearNostrConnectSession } = await import('../lib/nostrconnect-storage');
-      clearNostrConnectSession();
+      clearSession('nostrconnect');
+
+      // Close the signer connection
+      if (currentUser.signer && 'close' in currentUser.signer) {
+        (currentUser.signer as NostrConnectSigner).close();
+      }
+    } else if (currentUser?.authMethod === 'extension') {
+      clearSession('extension');
+    } else if (currentUser?.authMethod === 'bunker') {
+      clearSession('bunker');
 
       // Close the signer connection
       if (currentUser.signer && 'close' in currentUser.signer) {
@@ -427,6 +653,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
         authBunker,
         authNostrConnect,
         restoreNostrConnectSession,
+        restoreSession,
         fetchUserData,
         logout,
         setAnonPersistence,

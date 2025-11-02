@@ -160,68 +160,110 @@ pub fn mine_event(
         &serde_wasm_bindgen::to_value(&initial_progress).unwrap(),
     );
 
-    // Pre-serialization optimization: serialize event once with fixed-width nonce placeholder
-    const NONCE_WIDTH: usize = 20; // Support nonces up to 10^20
-    const NONCE_PLACEHOLDER: &str = "00000000000000000000"; // 20 zeros
+    // Digit-length–aware template: build a template whose nonce string is exactly the
+    // current number of digits. Rebuild only when digit length grows.
+    #[inline]
+    fn num_digits_u64(mut x: u64) -> usize {
+        let mut d = 1usize;
+        while x >= 10 {
+            x /= 10;
+            d += 1;
+        }
+        d
+    }
 
-    // Set nonce tag to fixed-width placeholder
-    if let Some(index) = nonce_index {
-        if let Some(tag) = event.tags.get_mut(index) {
-            if tag.len() >= 3 {
-                tag[1] = NONCE_PLACEHOLDER.to_string();
-                tag[2] = difficulty.to_string();
+    #[inline]
+    fn pow10_u64(p: usize) -> u64 {
+        let mut acc: u64 = 1;
+        for _ in 0..p {
+            match acc.checked_mul(10) {
+                Some(v) => acc = v,
+                None => return u64::MAX,
             }
         }
+        acc
     }
 
-    // Serialize the canonical event array once
-    let hashable_event = HashableEvent(
-        0u32,
-        &event.pubkey,
-        event.created_at.unwrap(),
-        event.kind,
-        &event.tags,
-        &event.content,
-    );
+    #[inline]
+    fn build_template_for_digits(event: &NostrEvent, digits_len: usize) -> Result<(Vec<u8>, usize), String> {
+        // Clone and set nonce tag to `digits_len` zeros for a stable region
+        let mut evt = event.clone();
+        let nonce_str = "0".repeat(digits_len);
+        let mut found = false;
+        for tag in &mut evt.tags {
+            if !tag.is_empty() && tag[0] == "nonce" {
+                if tag.len() >= 2 {
+                    tag[1] = nonce_str.clone();
+                    found = true;
+                }
+                break;
+            }
+        }
+        if !found { return Err("Missing nonce tag while building template".to_string()); }
 
-    let mut serialized_template = match serde_json::to_vec(&hashable_event) {
-        Ok(bytes) => bytes,
+        let hashable_event = HashableEvent(
+            0u32,
+            &evt.pubkey,
+            evt.created_at.unwrap(),
+            evt.kind,
+            &evt.tags,
+            &evt.content,
+        );
+
+        let mut bytes = serde_json::to_vec(&hashable_event)
+            .map_err(|e| format!("Failed to serialize event template: {}", e))?;
+
+        const NONCE_PREFIX: &str = "\"nonce\",\""; // unescaped: "nonce"," (first two elements of tag)
+        let prefix = NONCE_PREFIX.as_bytes();
+        let pos = bytes.windows(prefix.len()).position(|w| w == prefix)
+            .ok_or_else(|| "Failed to find \"nonce\",\" prefix in serialized template".to_string())?;
+        let offset = pos + prefix.len();
+
+        if offset + digits_len >= bytes.len() {
+            return Err("Nonce region exceeds serialized buffer length".to_string());
+        }
+
+        // Initialize region with zeros
+        for i in 0..digits_len {
+            bytes[offset + i] = b'0';
+        }
+
+        Ok((bytes, offset))
+    }
+
+    let mut digits_len = num_digits_u64(nonce);
+    let mut next_len_threshold = pow10_u64(digits_len);
+    let (mut serialized_template, mut nonce_offset) = match build_template_for_digits(&event, digits_len) {
+        Ok(v) => v,
         Err(err) => {
-            console::log_1(&format!("Failed to serialize event template: {}", err).into());
-            return serde_wasm_bindgen::to_value(&serde_json::json!({
-                "error": format!("Failed to serialize event template: {}", err)
-            }))
-            .unwrap_or(JsValue::NULL);
+            console::log_1(&format!("{}", err).into());
+            return serde_wasm_bindgen::to_value(&serde_json::json!({ "error": err }))
+                .unwrap_or(JsValue::NULL);
         }
     };
-
-    // Find the offset of the nonce placeholder in the serialized JSON
-    let placeholder_bytes = NONCE_PLACEHOLDER.as_bytes();
-    let nonce_offset = serialized_template.windows(placeholder_bytes.len())
-        .position(|window| window == placeholder_bytes);
-
-    let nonce_offset = match nonce_offset {
-        Some(offset) => offset,
-        None => {
-            console::log_1(&"Failed to find nonce placeholder in serialized template".into());
-            return serde_wasm_bindgen::to_value(&serde_json::json!({
-                "error": "Failed to find nonce placeholder in serialized template"
-            }))
-            .unwrap_or(JsValue::NULL);
-        }
-    };
-
-    // Pre-fill nonce region with zeros ONCE (outside loop)
-    for i in 0..NONCE_WIDTH {
-        serialized_template[nonce_offset + i] = b'0';
-    }
 
     loop {
-        // Write nonce digits directly to buffer (no String allocation)
-        let mut temp_nonce = nonce;
-        for i in (0..NONCE_WIDTH).rev() {
-            serialized_template[nonce_offset + i] = b'0' + (temp_nonce % 10) as u8;
-            temp_nonce /= 10;
+        // Rebuild template if we crossed a digit-length boundary
+        if nonce >= next_len_threshold {
+            while nonce >= next_len_threshold && next_len_threshold != u64::MAX {
+                digits_len += 1;
+                next_len_threshold = pow10_u64(digits_len);
+            }
+            match build_template_for_digits(&event, digits_len) {
+                Ok((bytes, off)) => { serialized_template = bytes; nonce_offset = off; }
+                Err(err) => {
+                    console::log_1(&format!("{}", err).into());
+                    return serde_wasm_bindgen::to_value(&serde_json::json!({ "error": err }))
+                        .unwrap_or(JsValue::NULL);
+                }
+            }
+        }
+
+        // Write nonce digits for this iteration (exactly digits_len wide)
+        let mut tmp = nonce;
+        for i in (0..digits_len).rev() {
+            serialized_template[nonce_offset + i] = b'0' + (tmp % 10) as u8;
+            tmp /= 10;
         }
 
         // Hash the template (reuse same buffer)

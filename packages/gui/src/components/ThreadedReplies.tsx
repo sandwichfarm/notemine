@@ -1,6 +1,6 @@
 import { Component, For, Show, createSignal, createMemo } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { getPowDifficulty } from '../lib/pow';
+import { getPowDifficulty, hasValidPow } from '../lib/pow';
 import { ProfileName } from './ProfileName';
 import { ReplyComposer } from './ReplyComposer';
 
@@ -41,7 +41,7 @@ const ThreadedReply: Component<{
     return `${seconds}s ago`;
   };
 
-  const powDifficulty = () => getPowDifficulty(props.node.event);
+  const powDifficulty = () => hasValidPow(props.node.event, 1) ? getPowDifficulty(props.node.event) : 0;
   return (
     <div class="border-l-2 border-border/30 pl-3 py-2" style={{ 'margin-left': `${props.depth * 1}rem` }}>
       {/* Reply Header */}
@@ -201,7 +201,9 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
           .map(child => buildNode(child, depth + 1))
           .sort((a, b) => {
             // Sort by POW (descending), then by timestamp (ascending)
-            const powDiff = getPowDifficulty(b.event) - getPowDifficulty(a.event);
+            const aPow = hasValidPow(a.event, 1) ? getPowDifficulty(a.event) : 0;
+            const bPow = hasValidPow(b.event, 1) ? getPowDifficulty(b.event) : 0;
+            const powDiff = bPow - aPow;
             if (powDiff !== 0) return powDiff;
             return a.event.created_at - b.event.created_at;
           }),
@@ -213,7 +215,9 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
       .map(reply => buildNode(reply, 0))
       .sort((a, b) => {
         // Sort by POW (descending), then by timestamp (ascending)
-        const powDiff = getPowDifficulty(b.event) - getPowDifficulty(a.event);
+        const aPow = hasValidPow(a.event, 1) ? getPowDifficulty(a.event) : 0;
+        const bPow = hasValidPow(b.event, 1) ? getPowDifficulty(b.event) : 0;
+        const powDiff = bPow - aPow;
         if (powDiff !== 0) return powDiff;
         return a.event.created_at - b.event.created_at;
       });
@@ -238,7 +242,7 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
                     <div class="text-xs text-text-tertiary">
                       {new Date(reply.created_at * 1000).toLocaleString()}
                     </div>
-                    <Show when={getPowDifficulty(reply) > 0}>
+                    <Show when={hasValidPow(reply, 1)}>
                       <span class="text-xs font-mono text-accent">
                         ⛏️ {getPowDifficulty(reply)}
                       </span>

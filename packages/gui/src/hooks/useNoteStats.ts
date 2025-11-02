@@ -1,7 +1,7 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { relayPool, getActiveRelays } from '../lib/applesauce';
-import { getPowDifficulty, calculatePowScore, getPubkeyPowDifficulty } from '../lib/pow';
+import { getPowDifficulty, calculatePowScore, getPubkeyPowDifficulty, hasValidPow } from '../lib/pow';
 import { Subscription } from 'rxjs';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { debug } from '../lib/debug';
@@ -53,10 +53,10 @@ export function useNoteStats(event: NostrEvent) {
     positiveReactionsPow: 0,
     negativeReactionsPow: 0,
     repliesPowTotal: 0,
-    totalScore: getPowDifficulty(event),
+    totalScore: hasValidPow(event, 1) ? getPowDifficulty(event) : 0,
     contributedWork: 0,
     weightedContributedWork: 0,
-    rootPow: getPowDifficulty(event),
+    rootPow: hasValidPow(event, 1) ? getPowDifficulty(event) : 0,
     weightedReactionsPow: 0,
     weightedRepliesPow: 0,
     profilePow: getPubkeyPowDifficulty(event.pubkey),
@@ -124,9 +124,12 @@ export function useNoteStats(event: NostrEvent) {
       // Calculate reaction POW - separate positive and negative
       let positiveReactionsPow = 0;
       let negativeReactionsPow = 0;
+      const prefs = preferences();
+      const threshold = prefs.powInteractionThreshold ?? 1;
 
       for (const reaction of reactions) {
-        const reactionPowValue = getPowDifficulty(reaction);
+        const reactionHasValidPow = hasValidPow(reaction, threshold);
+        const reactionPowValue = reactionHasValidPow ? getPowDifficulty(reaction) : 0;
         const content = reaction.content.trim();
 
         if (content === '-' || content === '👎') {
@@ -139,13 +142,13 @@ export function useNoteStats(event: NostrEvent) {
 
       const reactionsPowTotal = positiveReactionsPow + negativeReactionsPow;
 
-      // Calculate reply POW
+      // Calculate reply POW (only count valid POW with nonce tags)
       const repliesPowTotal = replies.reduce((sum, r) => {
-        return sum + getPowDifficulty(r);
+        const replyHasValidPow = hasValidPow(r, threshold);
+        return sum + (replyHasValidPow ? getPowDifficulty(r) : 0);
       }, 0);
 
       // Calculate total score using the scoring formula with current preferences
-      const prefs = preferences();
       const score = calculatePowScore(event, reactions, replies, {
         reactionPowWeight: prefs.reactionPowWeight,
         replyPowWeight: prefs.replyPowWeight,

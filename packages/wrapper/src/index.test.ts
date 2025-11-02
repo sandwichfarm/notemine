@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Notemine } from './index.js';
 import { Observable } from 'rxjs';
+import { createHash } from 'crypto';
 
 // Small helper to DRY progress simulation with runId
 function sendProgress(
@@ -206,6 +207,75 @@ describe('Phase 8 - Unit Tests', () => {
       // Should be within reasonable range
       expect(state.event.created_at).toBeGreaterThanOrEqual(before);
       expect(state.event.created_at).toBeLessThanOrEqual(after);
+    });
+  });
+
+  describe('Mined Result Canonical ID', () => {
+    const toHex = (bytes: Uint8Array) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const computeCanonicalId = (ev: any) => {
+      const arr = [0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content];
+      const json = JSON.stringify(arr);
+      const hash = createHash('sha256').update(json).digest('hex');
+      return hash;
+    };
+    const powBits = (hexId: string) => {
+      let bits = 0;
+      for (let i = 0; i < hexId.length; i++) {
+        const n = parseInt(hexId[i], 16);
+        if (n === 0) { bits += 4; continue; }
+        if (n >= 8) bits += 0; else if (n >= 4) bits += 1; else if (n >= 2) bits += 2; else bits += 3;
+        break;
+      }
+      return bits;
+    };
+
+    it('recomputes canonical ID equal to event.id (invariant)', () => {
+      const ev = {
+        pubkey: 'e771af0b05c8e95fcdf6feb3500544d2fb1ccd384788e9f490bb3ee28e8ed66f',
+        kind: 1,
+        content: '+',
+        tags: [['nonce', '12345', '8']],
+        created_at: 1700000000,
+      } as any;
+      const id = computeCanonicalId(ev);
+      ev.id = id;
+      // Invariant: recomputing must match
+      const again = computeCanonicalId(ev);
+      expect(again).toBe(ev.id);
+      // Sanity: pow is computed from id and consistent with helper
+      expect(powBits(ev.id)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('fixed-width padded nonce would diverge from canonical', () => {
+      // Demonstrate why fixed-width padding is unsafe: if someone were to hash with a padded string,
+      // the computed hash would not equal canonical for typical nonces.
+      const ev = {
+        pubkey: 'e771af0b05c8e95fcdf6feb3500544d2fb1ccd384788e9f490bb3ee28e8ed66f',
+        kind: 7,
+        content: '🔥',
+        tags: [['nonce', '123', '8']],
+        created_at: 1700001000,
+      } as any;
+      const canonical = computeCanonicalId(ev);
+
+      // Build a padded form: replace the nonce string with 20 zeros in the JSON, then write right-aligned digits
+      const width = 20;
+      const zeros = '0'.repeat(width);
+      const evPadded = { ...ev, tags: ev.tags.map((t: any) => t[0] === 'nonce' ? ['nonce', zeros, t[2]] : t) };
+      const arr = [0, evPadded.pubkey, evPadded.created_at, evPadded.kind, evPadded.tags, evPadded.content];
+      const json0 = JSON.stringify(arr);
+      const prefix = '"nonce","';
+      const idx = json0.indexOf(prefix);
+      expect(idx).toBeGreaterThan(-1);
+      const start = idx + prefix.length;
+      const buf = json0.split('');
+      // right-align digits of 123 within the 20-char region
+      const nonceStr = '123';
+      for (let i = 0; i < width; i++) buf[start + i] = '0';
+      for (let i = 0; i < nonceStr.length; i++) buf[start + width - 1 - i] = nonceStr[nonceStr.length - 1 - i];
+      const jsonPadded = buf.join('');
+      const paddedId = createHash('sha256').update(jsonPadded).digest('hex');
+      expect(paddedId).not.toBe(canonical);
     });
   });
 

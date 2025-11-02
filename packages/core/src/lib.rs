@@ -402,6 +402,7 @@ pub fn mine_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::Digest;
 
     //     {
     //     "id": "bb9727a19e7ed120333e994ada9c3b6e4a360a71739f9ea33def6d69638fff30",
@@ -430,5 +431,121 @@ mod tests {
         let hash_hex = hex::encode(&hash_bytes);
     
         assert_eq!(hash_hex, expected_hash);
+    }
+
+    fn canonical_id(event: &NostrEvent) -> String {
+        hex::encode(get_event_hash(event))
+    }
+
+    // Build a JSON buffer where the nonce field is a fixed number of characters (zeros),
+    // then write the decimal digits of `nonce` right-aligned into that region.
+    // Returns the serialized bytes (to be hashed).
+    fn serialize_with_nonce_width(event: &NostrEvent, width: usize, nonce: u64) -> Vec<u8> {
+        // Clone event and set nonce tag placeholder of `width` zeros
+        let mut evt = event.clone();
+        let zeros = "0".repeat(width);
+        let mut found = false;
+        for tag in &mut evt.tags {
+            if !tag.is_empty() && tag[0] == "nonce" {
+                if tag.len() >= 2 { tag[1] = zeros.clone(); }
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            // If missing, add a basic nonce tag with the placeholder
+            evt.tags.push(vec!["nonce".to_string(), zeros.clone(), "21".to_string()]);
+        }
+
+        let hashable = HashableEvent(
+            0u32,
+            &evt.pubkey,
+            evt.created_at.unwrap(),
+            evt.kind,
+            &evt.tags,
+            &evt.content,
+        );
+        let mut bytes = serde_json::to_vec(&hashable).expect("serialize template");
+
+        // Find the start of the nonce value by looking for "nonce"," (unescaped)
+        const NONCE_PREFIX: &str = "\"nonce\",\"";
+        let prefix = NONCE_PREFIX.as_bytes();
+        let pos = bytes.windows(prefix.len()).position(|w| w == prefix).expect("find nonce prefix");
+        let offset = pos + prefix.len();
+
+        // Fill region with zeros then right-align digits
+        for i in 0..width { bytes[offset + i] = b'0'; }
+        let mut tmp = nonce;
+        for i in (0..width).rev() {
+            bytes[offset + i] = b'0' + (tmp % 10) as u8;
+            tmp /= 10;
+            if tmp == 0 { break; }
+        }
+        bytes
+    }
+
+    #[test]
+    fn test_digit_length_template_matches_canonical() {
+        // Base event
+        let mut event = NostrEvent {
+            pubkey: "e771af0b05c8e95fcdf6feb3500544d2fb1ccd384788e9f490bb3ee28e8ed66f".to_string(),
+            kind: 7,
+            content: "🔥".to_string(),
+            tags: vec![
+                vec!["e".into(), "6b427f7e53a8696a9bcf5df4b18985b67add45365b4bdccb639e5c39c5419d8d".into()],
+                vec!["p".into(), "34d2f5274f1958fcd2cb2463dabeaddf8a21f84ace4241da888023bf05cc8095".into()],
+                vec!["client".into(), "notemine.io".into()],
+                vec!["nonce".into(), "0".into(), "20".into()],
+            ],
+            id: None,
+            created_at: Some(1700000000),
+        };
+
+        // Try a set of nonces across digit length boundaries
+        let nonces: [u64; 9] = [0, 1, 9, 10, 99, 100, 1234, 9999999, 123456789];
+        for n in nonces.iter().copied() {
+            // Canonical event uses unpadded decimal string
+            for tag in &mut event.tags {
+                if !tag.is_empty() && tag[0] == "nonce" { tag[1] = n.to_string(); break; }
+            }
+            let canonical = canonical_id(&event);
+
+            // Build template for the exact digit length and write digits
+            let width = n.to_string().len();
+            let buf = serialize_with_nonce_width(&event, width, n);
+            let hash = Sha256::digest(&buf);
+            let templ = hex::encode(hash);
+
+            assert_eq!(templ, canonical, "nonce {} width {} should match canonical", n, width);
+        }
+    }
+
+    #[test]
+    fn test_fixed_width_template_mismatch() {
+        // Demonstrate that a wide fixed-width region (e.g., 20) changes the hash
+        // compared to canonical unpadded serialization for typical nonces.
+        let mut event = NostrEvent {
+            pubkey: "e771af0b05c8e95fcdf6feb3500544d2fb1ccd384788e9f490bb3ee28e8ed66f".to_string(),
+            kind: 1,
+            content: "+".to_string(),
+            tags: vec![vec!["nonce".into(), "0".into(), "20".into()]],
+            id: None,
+            created_at: Some(1700001234),
+        };
+
+        let nonces: [u64; 5] = [1, 23, 456, 7890, 123456];
+        for n in nonces.iter().copied() {
+            for tag in &mut event.tags {
+                if !tag.is_empty() && tag[0] == "nonce" { tag[1] = n.to_string(); break; }
+            }
+            let canonical = canonical_id(&event);
+
+            // Old approach: width 20 region
+            let buf = serialize_with_nonce_width(&event, 20, n);
+            let hash = Sha256::digest(&buf);
+            let padded = hex::encode(hash);
+
+            assert_ne!(padded, canonical, "fixed-width padded nonce should not equal canonical for {}", n);
+        }
     }
 }

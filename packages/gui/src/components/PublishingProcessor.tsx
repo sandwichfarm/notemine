@@ -3,6 +3,9 @@ import { usePublishing } from '../providers/PublishingProvider';
 import { useUser } from '../providers/UserProvider';
 import { relayPool, eventStore } from '../lib/applesauce';
 import { finalizeEvent } from 'nostr-tools/pure';
+import { sha256 } from '@noble/hashes/sha256';
+import { getPowDifficulty, getTargetDifficulty } from '../lib/pow';
+import { usePreferences } from '../providers/PreferencesProvider';
 import type { NostrEvent } from 'nostr-tools/core';
 import { debug } from '../lib/debug';
 import { type PublishError } from '../types/publishing';
@@ -15,6 +18,7 @@ export const PublishingProcessor: Component = () => {
   const publishing = usePublishing();
   const { publishState, updateJobStatus, updateJobAttempts, setSignedEvent, setActiveJob, getNextEligibleJob } = publishing;
   const { user } = useUser();
+  const { preferences } = usePreferences();
 
   let processingLock = false;
   let wakeupTimer: number | null = null;
@@ -61,6 +65,38 @@ export const PublishingProcessor: Component = () => {
     }
 
     try {
+      // Pre-sign invariant (debug-gated):
+      // Recompute canonical ID for the eventTemplate and verify it matches, and POW >= target.
+      if (preferences().debugMode) {
+        try {
+          // Canonical NIP-01 ID computation: hash [0, pubkey, created_at, kind, tags, content]
+          const arr = [0, eventTemplate.pubkey, eventTemplate.created_at, eventTemplate.kind, eventTemplate.tags, eventTemplate.content];
+          const json = JSON.stringify(arr);
+          const enc = new TextEncoder().encode(json);
+          const digest = sha256(enc);
+          const toHex = (bytes: Uint8Array) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+          const canonicalId = toHex(digest as unknown as Uint8Array);
+
+          const claimedId = (eventTemplate as any).id as string | undefined;
+          if (claimedId && claimedId !== canonicalId) {
+            const err = `Pre-sign ID mismatch: miner id ${claimedId.slice(0,8)}.. != canonical ${canonicalId.slice(0,8)}..`;
+            console.error('[PublishingProcessor] ' + err, { eventTemplate });
+            throw new Error('PRE_SIGN_INVARIANT_FAILED: ' + err);
+          }
+
+          // POW check using canonical ID
+          const target = getTargetDifficulty(eventTemplate) ?? 0;
+          const pow = getPowDifficulty({ ...(eventTemplate as any), id: canonicalId } as NostrEvent);
+          if (pow < target) {
+            const err = `Pre-sign POW check failed: POW ${pow} < target ${target}`;
+            console.error('[PublishingProcessor] ' + err, { eventTemplate, canonicalId });
+            throw new Error('PRE_SIGN_INVARIANT_FAILED: ' + err);
+          }
+        } catch (e) {
+          // Fail fast in debug to catch issues early
+          throw e;
+        }
+      }
       switch (signerType) {
         case 'secret':
           if (!currentUser.secret) throw new Error('No secret available');

@@ -41,6 +41,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test Core (cargo)
+        run: |
+          cd packages/core
+          cargo test --quiet
+
+      - name: Test Wrapper (vitest)
+        run: pnpm --filter @notemine/wrapper test:run
+
       - name: Build workspace
         run: pnpm -r build
 

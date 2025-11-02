@@ -45,6 +45,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Test Core (cargo)
+        run: |
+          cd packages/core
+          cargo test --quiet
+
+      - name: Test Wrapper (vitest)
+        run: pnpm --filter @notemine/wrapper test:run
+
       - name: Build GUI and dependencies
         run: pnpm --filter @notemine/gui... build
 

@@ -2,7 +2,7 @@ import { Component, createSignal, Show, onCleanup } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
 import { QRCodeSVG } from 'solid-qr-code';
 import { NostrConnectSigner } from 'applesauce-signers/signers';
-import { saveNostrConnectSession } from '../lib/nostrconnect-storage';
+import { saveSession, type NostrConnectSession } from '../lib/session-storage';
 import { debug } from '../lib/debug';
 
 interface LoginModalProps {
@@ -76,17 +76,19 @@ export const LoginModal: Component<LoginModalProps> = (props) => {
       const pubkey = await signer.getPublicKey();
       debug('[LoginModal] Got pubkey from remote signer:', pubkey);
 
-      // Save connection details to localStorage
-      const session = {
+      // Save connection details to localStorage using unified session storage
+      const session: NostrConnectSession = {
+        authMethod: 'nostrconnect',
+        pubkey,
+        timestamp: Date.now(),
         clientSecret: Array.from(signer.signer.key)
           .map(b => b.toString(16).padStart(2, '0'))
           .join(''),
         remotePubkey: signer.remote!,
-        userPubkey: pubkey,
         relays: signer.relays,
         secret: signer.secret,
       };
-      saveNostrConnectSession(session);
+      saveSession(session);
 
       // Complete authentication
       await authNostrConnect(signer, pubkey);

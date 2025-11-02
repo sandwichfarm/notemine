@@ -1,7 +1,7 @@
 import { Component, createSignal, onMount, onCleanup, For, Show, createEffect } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { createTimelineStream, getActiveRelays, relayPool, eventStore, batchFetchMetadata, getPowRelays } from '../lib/applesauce';
-import { calculatePowScore, getPowDifficulty } from '../lib/pow';
+import { calculatePowScore, getPowDifficulty, hasValidPow } from '../lib/pow';
 import { Note } from './Note';
 import { Subscription } from 'rxjs';
 import { relayStatsTracker } from '../lib/relay-stats';
@@ -108,8 +108,9 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
 
             // Filter out events that don't meet minimum POW requirement
             const powDifficulty = getPowDifficulty(event);
-            if (powDifficulty < MIN_POW_DIFFICULTY) {
-              debug(`[InfiniteTimeline] Filtering out event ${event.id.slice(0, 8)} (POW ${powDifficulty} < ${MIN_POW_DIFFICULTY})`);
+            const eventHasValidPow = hasValidPow(event, MIN_POW_DIFFICULTY);
+            if (!eventHasValidPow || powDifficulty < MIN_POW_DIFFICULTY) {
+              debug(`[InfiniteTimeline] Filtering out event ${event.id.slice(0, 8)} (POW ${powDifficulty} < ${MIN_POW_DIFFICULTY}, has nonce: ${eventHasValidPow})`);
               return;
             }
 
@@ -216,8 +217,11 @@ export const InfiniteTimeline: Component<InfiniteTimelineProps> = (props) => {
         // Calculate score with reactions
         const score = calculatePowScore(evt, reactions);
 
-        // Add reply POW to total score
-        const repliesPow = replies.reduce((sum, r) => sum + getPowDifficulty(r), 0);
+        // Add reply POW to total score (delegated POW from replies)
+        // Note: calculatePowScore already handles this, but we're adding extra here
+        const repliesPow = replies.reduce((sum, r) => {
+          return sum + (hasValidPow(r, 1) ? getPowDifficulty(r) : 0);
+        }, 0);
         const totalScore = score.totalScore + repliesPow;
 
         return { event: evt, score: totalScore };

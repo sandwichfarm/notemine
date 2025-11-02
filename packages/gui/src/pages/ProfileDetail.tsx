@@ -4,7 +4,7 @@ import { nip19, type NostrEvent } from 'nostr-tools';
 import { relayPool, getActiveRelays, getUserInboxRelays } from '../lib/applesauce';
 import { useProfile } from '../hooks/useProfile';
 import { Note } from '../components/Note';
-import { getPowDifficulty } from '../lib/pow';
+import { getPowDifficulty, hasValidPow } from '../lib/pow';
 import { debug } from '../lib/debug';
 import { useNip05Validation } from '../lib/nip05-validator';
 
@@ -101,7 +101,8 @@ const ProfileDetail: Component = () => {
             const hasETag = event.tags.some((tag) => tag[0] === 'e');
             if (hasETag) return;
 
-            // Check POW
+            // Check POW (must have valid nonce tag)
+            if (!hasValidPow(event, MIN_POW_DIFFICULTY)) return;
             const powDifficulty = getPowDifficulty(event);
             if (powDifficulty < MIN_POW_DIFFICULTY) return;
 

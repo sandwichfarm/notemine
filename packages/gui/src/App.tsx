@@ -34,9 +34,10 @@ import { debug } from './lib/debug';
 
 // App initialization component
 const AppInit: ParentComponent = (props) => {
-  const { user, authAnon, loadPersistedAnonKey, restoreNostrConnectSession, fetchUserData } = useUser();
+  const { user, authAnon, loadPersistedAnonKey, restoreSession, fetchUserData } = useUser();
   const [relaysReady, setRelaysReady] = createSignal(false);
   const [coiError, setCoiError] = createSignal<string | null>(null);
+  const [sessionRestoreError, setSessionRestoreError] = createSignal<string | null>(null);
 
   onMount(async () => {
     // NOTE: COI (Cross-Origin Isolation) is REQUIRED for both:
@@ -97,13 +98,30 @@ const AppInit: ParentComponent = (props) => {
       console.error('[App] Failed to fetch NIP-66 relays:', error);
     }
 
-    // Try to restore NostrConnect session first
-    const { hasPersistedNostrConnectSession } = await import('./lib/nostrconnect-storage');
-    if (hasPersistedNostrConnectSession()) {
-      debug('[App] Restoring NostrConnect session');
-      await restoreNostrConnectSession();
+    // Try to restore persisted session (extension, nostrconnect, or bunker)
+    const { hasPersistedSession } = await import('./lib/session-storage');
+    if (hasPersistedSession()) {
+      debug('[App] Attempting to restore persisted session');
+      const result = await restoreSession();
+
+      if (result.success) {
+        debug('[App] Session restored successfully:', result.method);
+      } else {
+        debug('[App] Session restoration failed:', result.error);
+        setSessionRestoreError(result.error || 'Failed to restore session');
+
+        // Fall back to anonymous user
+        const persistedKey = loadPersistedAnonKey();
+        if (persistedKey) {
+          debug('[App] Loading persisted anonymous key as fallback');
+          authAnon(persistedKey, true);
+        } else {
+          debug('[App] Creating new ephemeral anonymous key as fallback');
+          authAnon();
+        }
+      }
     } else {
-      // Initialize with anonymous user - check for persisted key first
+      // No persisted session - initialize with anonymous user
       const persistedKey = loadPersistedAnonKey();
       if (persistedKey) {
         debug('[App] Loading persisted anonymous key');
@@ -188,6 +206,31 @@ const AppInit: ParentComponent = (props) => {
           </div>
         }
       >
+        {/* Show session restoration error notification if present */}
+        <Show when={sessionRestoreError()}>
+          <div class="fixed top-4 right-4 max-w-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-4 shadow-lg z-50">
+            <div class="flex items-start gap-3">
+              <div class="text-yellow-600 dark:text-yellow-400 text-xl">⚠️</div>
+              <div class="flex-1">
+                <h3 class="font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
+                  Session Restoration Failed
+                </h3>
+                <p class="text-sm text-yellow-700 dark:text-yellow-300">
+                  {sessionRestoreError()}
+                </p>
+                <p class="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                  You've been signed in anonymously. Please sign in again to restore your account.
+                </p>
+              </div>
+              <button
+                onClick={() => setSessionRestoreError(null)}
+                class="text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-200"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </Show>
         {props.children}
       </Show>
     </Show>

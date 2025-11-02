@@ -295,7 +295,7 @@ const NoteDetail: Component = () => {
         next: (response) => {
           if (response !== 'EOSE' && response.kind === 1) {
             const reply = response as NostrEvent;
-            const pow = getPowDifficulty(reply);
+            const pow = hasValidPow(reply, 1) ? getPowDifficulty(reply) : 0;
 
             if (!seenIds.has(reply.id)) {
               seenIds.add(reply.id);
@@ -321,7 +321,7 @@ const NoteDetail: Component = () => {
             fetchRepliesRecursive();
           } else {
             console.log('[NoteDetail] ✓ Loaded all replies in thread:', allReplies.length);
-            const highPowCount = allReplies.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD).length;
+            const highPowCount = allReplies.filter(r => hasValidPow(r, MIN_POW_THRESHOLD) && getPowDifficulty(r) >= MIN_POW_THRESHOLD).length;
             const lowPowCount = allReplies.length - highPowCount;
             console.log('[NoteDetail] Reply breakdown: high-POW:', highPowCount, 'low-POW:', lowPowCount);
           }
@@ -345,7 +345,7 @@ const NoteDetail: Component = () => {
   const filteredReactions = createMemo(() => {
     const all = reactions();
     if (showLowPow()) return all;
-    return all.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD);
+    return all.filter(r => hasValidPow(r, MIN_POW_THRESHOLD) && getPowDifficulty(r) >= MIN_POW_THRESHOLD);
   });
 
   const filteredReplies = createMemo(() => {
@@ -358,7 +358,7 @@ const NoteDetail: Component = () => {
       return all;
     }
 
-    const filtered = all.filter(r => getPowDifficulty(r) >= MIN_POW_THRESHOLD);
+    const filtered = all.filter(r => hasValidPow(r, MIN_POW_THRESHOLD) && getPowDifficulty(r) >= MIN_POW_THRESHOLD);
     console.log('[NoteDetail] Showing high-POW replies only:', filtered.length, 'of', all.length);
     return filtered;
   });

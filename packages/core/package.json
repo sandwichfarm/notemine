@@ -32,6 +32,10 @@
   "scripts": {
     "build": "./scripts/build.sh",
     "publish:rust": "./scripts/publish.sh",
-    "publish:js": "./scripts/publish-js.sh"
+    "publish:js": "./scripts/publish-js.sh",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "2.1.1"
   }
 }

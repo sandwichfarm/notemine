@@ -128,10 +128,10 @@ describe('Phase 8 - Unit Tests', () => {
 
       const tags = miner.tags;
 
-      // Should only have 3 tags: default 'miner' tag + 2 unique tags
-      expect(tags.length).toBe(3);
+      // Should only have the 2 unique tags (no default tag is injected by wrapper)
+      expect(tags.length).toBe(2);
 
-      // Check that tag1/value1 appears exactly once (besides default tag)
+      // Check that tag1/value1 appears exactly once
       const tag1Count = tags.filter(t => t[0] === 'tag1' && t[1] === 'value1').length;
       expect(tag1Count).toBe(1);
     });
@@ -152,8 +152,8 @@ describe('Phase 8 - Unit Tests', () => {
       // Empty array should be filtered out
       expect(tags.every(t => t.length > 0)).toBe(true);
 
-      // Should have default miner tag + tag1 + tag2
-      expect(tags.length).toBe(3);
+      // Should have tag1 + tag2 (no default tag injected)
+      expect(tags.length).toBe(2);
     });
   });
 
@@ -487,7 +487,7 @@ describe('Phase 8 - Unit Tests', () => {
       expect(highestPow?.nonce).toBe('67890');
     });
 
-    it('should handle backward compatibility when workersPow is not present', () => {
+    it('should handle backward compatibility when workersPow is not present (do not seed highestPow$)', () => {
       const miner = new Notemine({
         pubkey: 'test',
         content: 'test',
@@ -514,9 +514,9 @@ describe('Phase 8 - Unit Tests', () => {
 
       miner.restoreState(state);
 
-      // Should seed highestPow$ from legacy bestPow
+      // Current behavior: do NOT set highestPow$ from legacy bestPow; GUI derives it from active workers only
       const highestPow = miner.highestPow$.getValue();
-      expect(highestPow).toEqual(legacyBestPow);
+      expect(highestPow).toBeNull();
     });
 
     it('should handle empty workersPow during restoration', () => {

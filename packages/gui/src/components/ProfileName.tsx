@@ -3,6 +3,7 @@ import { A } from '@solidjs/router';
 import { nip19 } from 'nostr-tools';
 import { useProfile } from '../hooks/useProfile';
 import { getPubkeyPowDifficulty } from '../lib/pow';
+import { ProfilePowBadge } from './ProfilePowBadge';
 
 interface ProfileNameProps {
   pubkey: string;
@@ -47,6 +48,9 @@ export const ProfileName: Component<ProfileNameProps> = (props) => {
   const pubkeyPow = () => getPubkeyPowDifficulty(props.pubkey);
   const hasMindedPubkey = () => pubkeyPow() >= 3; // Show diamond for 3+ leading zeros
 
+  // Get profile event ID for PoW badge
+  const profileEventId = () => profile().event?.id;
+
   const content = () => (
     <span
       class={props.class || 'font-mono text-sm text-text-secondary'}
@@ -65,6 +69,11 @@ export const ProfileName: Component<ProfileNameProps> = (props) => {
       <Show when={hasMindedPubkey()}>
         <span class="ml-1 text-accent" title={`Mined pubkey: ${pubkeyPow()} leading zeros`}>
           ◆
+        </span>
+      </Show>
+      <Show when={profileEventId()}>
+        <span class="ml-1">
+          <ProfilePowBadge profileEventId={profileEventId()} style="inline" />
         </span>
       </Show>
     </span>

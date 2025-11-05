@@ -6,6 +6,8 @@ import { getPowDifficulty, hasValidPow, formatPowDifficulty, calculatePowScore }
 import { nip19 } from 'nostr-tools';
 import { ReactionPicker } from './ReactionPicker';
 import { ReplyComposer } from './ReplyComposer';
+import { ReportModal } from './ReportModal';
+import { RepostConfirmDialog } from './RepostConfirmDialog';
 import { ProfileName } from './ProfileName';
 import { ParsedContent } from './ParsedContent';
 import { usePreferences } from '../providers/PreferencesProvider';
@@ -27,6 +29,8 @@ const [globalOpenTooltipId, setGlobalOpenTooltipId] = createGlobalSignal<string 
 export const Note: Component<NoteProps> = (props) => {
   const [showReactionPicker, setShowReactionPicker] = createSignal(false);
   const [showReplyComposer, setShowReplyComposer] = createSignal(false);
+  const [showReportModal, setShowReportModal] = createSignal(false);
+  const [showRepostDialog, setShowRepostDialog] = createSignal(false);
   const [showScoreTooltip, setShowScoreTooltip] = createSignal(false);
   const { preferences } = usePreferences();
   const { activeTooltip, setActiveTooltip, setTooltipContent, closeAllPanels } = useTooltip();
@@ -336,6 +340,12 @@ export const Note: Component<NoteProps> = (props) => {
           react
         </button>
         <button
+          onClick={() => setShowRepostDialog(true)}
+          class="text-text-tertiary hover:text-green-500 transition-colors"
+        >
+          repost
+        </button>
+        <button
           onClick={() => {
             const noteId = nip19.noteEncode(props.event.id);
             navigator.clipboard.writeText(`https://notemine.io/n/${noteId}`);
@@ -343,6 +353,12 @@ export const Note: Component<NoteProps> = (props) => {
           class="text-text-tertiary hover:text-accent transition-colors"
         >
           share
+        </button>
+        <button
+          onClick={() => setShowReportModal(true)}
+          class="text-text-tertiary hover:text-red-500 transition-colors"
+        >
+          report
         </button>
       </div>
 
@@ -363,6 +379,30 @@ export const Note: Component<NoteProps> = (props) => {
           <ReplyComposer
             parentEvent={props.event}
             onClose={() => setShowReplyComposer(false)}
+          />
+        </Show>
+      </Portal>
+
+      {/* Report Modal - Rendered at document root */}
+      <Portal>
+        <Show when={showReportModal()}>
+          <ReportModal
+            isOpen={showReportModal()}
+            onClose={() => setShowReportModal(false)}
+            eventId={props.event.id}
+            authorPubkey={props.event.pubkey}
+            targetKind={1}
+          />
+        </Show>
+      </Portal>
+
+      {/* Repost Dialog - Rendered at document root */}
+      <Portal>
+        <Show when={showRepostDialog()}>
+          <RepostConfirmDialog
+            isOpen={showRepostDialog()}
+            onClose={() => setShowRepostDialog(false)}
+            originalEvent={props.event}
           />
         </Show>
       </Portal>

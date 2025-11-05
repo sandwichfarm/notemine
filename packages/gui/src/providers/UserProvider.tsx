@@ -525,6 +525,22 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
   const logout = async () => {
     const currentUser = user();
 
+    // PHASE 1: Cancel active mining session (exactly once) before any state changes
+    try {
+      // Check if MiningContext is available via dynamic import to avoid circular dependencies
+      const { useMining } = await import('./MiningProvider');
+      const miningContext = useMining();
+
+      // Cancel mining if active
+      if (miningContext.miningState().mining) {
+        debug('[Auth] Cancelling active mining session before logout');
+        miningContext.stopMining();
+      }
+    } catch (error) {
+      debug('[Auth] Unable to access MiningProvider, continuing logout:', error);
+      // Non-fatal: continue with logout even if we can't cancel mining
+    }
+
     // Clear appropriate session storage
     if (currentUser?.authMethod === 'nostrconnect') {
       clearSession('nostrconnect');
@@ -544,7 +560,10 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       }
     }
 
-    setUser(null);
+    // PHASE 1: Single-tick transition to anonymous mode
+    // Don't set to null - transition directly to anon to avoid limbo state
+    debug('[Auth] Transitioning to anonymous mode');
+    authAnon();
   };
 
   /**

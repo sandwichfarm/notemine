@@ -15,6 +15,7 @@ export const PublishingPanel: Component = () => {
   } = usePublishing();
 
   const [expandedErrors, setExpandedErrors] = createSignal<Set<string>>(new Set());
+  const [expandedRelays, setExpandedRelays] = createSignal<Set<string>>(new Set());
 
   const handlePause = () => {
     pausePublishing();
@@ -53,6 +54,17 @@ export const PublishingPanel: Component = () => {
     setExpandedErrors(newSet);
   };
 
+  const toggleRelaysExpanded = (jobId: string) => {
+    const current = expandedRelays();
+    const newSet = new Set(current);
+    if (newSet.has(jobId)) {
+      newSet.delete(jobId);
+    } else {
+      newSet.add(jobId);
+    }
+    setExpandedRelays(newSet);
+  };
+
   const getPendingSignJobs = () =>
     publishState().items.filter((job) => job.status === 'pending-sign');
 
@@ -60,13 +72,17 @@ export const PublishingPanel: Component = () => {
     publishState().items.filter((job) => job.status === 'signed-pending-publish');
 
   const getPublishedJobs = () =>
-    publishState().items.filter((job) => job.status === 'published');
+    publishState().items
+      .filter((job) => job.status === 'published')
+      .sort((a, b) => b.updatedAt - a.updatedAt); // Newest first
 
   const getFailedJobs = () =>
     publishState().items.filter((job) => job.status === 'failed');
 
   const getCancelledJobs = () =>
-    publishState().items.filter((job) => job.status === 'cancelled');
+    publishState().items
+      .filter((job) => job.status === 'cancelled')
+      .sort((a, b) => b.updatedAt - a.updatedAt); // Newest first
 
   const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
@@ -118,6 +134,164 @@ export const PublishingPanel: Component = () => {
     return content.slice(0, maxLength) + '...';
   };
 
+  // Render compact finished job card for published/cancelled items
+  const renderFinishedJobCard = (job: PublishJob) => {
+    const relaysExpanded = () => expandedRelays().has(job.id);
+    const successfulRelays = () => job.relayResults?.filter(r => r.status === 'success') || [];
+    const failedRelays = () => job.relayResults?.filter(r => r.status === 'failed') || [];
+    const timeoutRelays = () => job.relayResults?.filter(r => r.status === 'timeout') || [];
+
+    // Get first 20 chars of note ID to show leading zeros
+    const noteId = () => (job.signedEvent?.id || job.eventTemplate.id || '').slice(0, 20);
+
+    // Format time ago for when job finished
+    const getTimeAgo = () => {
+      const now = Date.now();
+      const diff = now - job.updatedAt;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) return `${days}d ago`;
+      if (hours > 0) return `${hours}h ago`;
+      if (minutes > 0) return `${minutes}m ago`;
+      if (seconds > 0) return `${seconds}s ago`;
+      return 'just now';
+    };
+
+    return (
+      <div class="p-3 rounded bg-bg-secondary/50 flex flex-col gap-2">
+        {/* Header row */}
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-2 flex-wrap">
+            {getStatusBadge(job.status)}
+            <span class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded">
+              {job.meta.type}
+            </span>
+            <span class="text-xs text-accent">
+              POW: {job.meta.difficulty}
+            </span>
+            <span class="text-xs text-text-secondary">
+              Kind: {job.meta.kind}
+            </span>
+            <Show when={noteId()}>
+              <span class="text-xs font-mono text-text-secondary">
+                ID: {noteId()}...
+              </span>
+            </Show>
+            <span class="text-xs text-text-secondary">
+              {job.status === 'published' ? 'Published' : 'Cancelled'} {getTimeAgo()}
+            </span>
+          </div>
+
+          {/* Action buttons - with separator before delete */}
+          <div class="flex items-center gap-1">
+            <button
+              onClick={() => handleCopyEvent(job)}
+              class="text-xs px-2 py-1 bg-bg-tertiary text-text-secondary rounded hover:bg-bg-tertiary/80 transition-colors"
+              title="Copy event JSON"
+            >
+              📋
+            </button>
+            <div class="w-px h-4 bg-bg-tertiary mx-1"></div>
+            <button
+              onClick={() => handleRemove(job.id)}
+              class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
+              title="Remove"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div class="text-sm text-text-primary">
+          {formatContent(job, 80)}
+        </div>
+
+        {/* Relay results */}
+        <Show when={job.relayResults && job.relayResults.length > 0}>
+          <div class="mt-1">
+            <button
+              onClick={() => toggleRelaysExpanded(job.id)}
+              class="text-xs hover:text-text-primary transition-colors flex items-center gap-1"
+              classList={{
+                'text-green-500': successfulRelays().length > 0,
+                'text-red-500': successfulRelays().length === 0,
+              }}
+            >
+              <span>{relaysExpanded() ? '▼' : '▶'}</span>
+              <span>
+                Relays: {successfulRelays().length}/{job.relays.length} successful
+              </span>
+            </button>
+            <Show when={relaysExpanded()}>
+              <div class="mt-2 space-y-2">
+                {/* Successful relays */}
+                <Show when={successfulRelays().length > 0}>
+                  <div class="p-2 bg-green-500/10 border border-green-500/30 rounded">
+                    <div class="text-xs text-green-500 font-semibold mb-1">
+                      ✓ Published ({successfulRelays().length})
+                    </div>
+                    <div class="space-y-1">
+                      <For each={successfulRelays()}>
+                        {(relay) => (
+                          <div class="text-xs text-text-primary font-mono">
+                            {relay.url}
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Failed relays */}
+                <Show when={failedRelays().length > 0}>
+                  <div class="p-2 bg-red-500/10 border border-red-500/30 rounded">
+                    <div class="text-xs text-red-500 font-semibold mb-1">
+                      ✗ Failed ({failedRelays().length})
+                    </div>
+                    <div class="space-y-1">
+                      <For each={failedRelays()}>
+                        {(relay) => (
+                          <div class="text-xs">
+                            <div class="font-mono text-text-primary">{relay.url}</div>
+                            <Show when={relay.error}>
+                              <div class="text-red-400 ml-2">{relay.error}</div>
+                            </Show>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                {/* Timeout relays */}
+                <Show when={timeoutRelays().length > 0}>
+                  <div class="p-2 bg-yellow-500/10 border border-yellow-500/30 rounded">
+                    <div class="text-xs text-yellow-500 font-semibold mb-1">
+                      ⏱ Timeout ({timeoutRelays().length})
+                    </div>
+                    <div class="space-y-1">
+                      <For each={timeoutRelays()}>
+                        {(relay) => (
+                          <div class="text-xs font-mono text-text-primary">
+                            {relay.url}
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </Show>
+      </div>
+    );
+  };
+
   const renderJobCard = (job: PublishJob) => {
     const isActive = () => publishState().activeJobId === job.id;
     const errorExpanded = () => expandedErrors().has(job.id);
@@ -150,7 +324,7 @@ export const PublishingPanel: Component = () => {
             </span>
           </div>
 
-          {/* Action buttons */}
+          {/* Action buttons - with separator before delete */}
           <div class="flex items-center gap-1">
             <Show when={job.status === 'pending-sign' || job.status === 'signed-pending-publish' || job.status === 'failed'}>
               <button
@@ -168,6 +342,7 @@ export const PublishingPanel: Component = () => {
             >
               📋
             </button>
+            <div class="w-px h-4 bg-bg-tertiary mx-1"></div>
             <button
               onClick={() => handleRemove(job.id)}
               class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
@@ -249,7 +424,7 @@ export const PublishingPanel: Component = () => {
   };
 
   return (
-    <div class="px-6 py-4 bg-black/90">
+    <div class="px-6 py-4 bg-black/90 max-h-[calc(100vh-200px)] overflow-y-auto">
       <div class="max-w-6xl mx-auto">
         {/* Header */}
         <div class="flex items-center justify-between mb-4">
@@ -366,7 +541,7 @@ export const PublishingPanel: Component = () => {
               Published ({getPublishedJobs().length})
             </summary>
             <div class="mt-2 space-y-2">
-              <For each={getPublishedJobs()}>{(job) => renderJobCard(job)}</For>
+              <For each={getPublishedJobs()}>{(job) => renderFinishedJobCard(job)}</For>
             </div>
           </details>
         </Show>
@@ -378,7 +553,7 @@ export const PublishingPanel: Component = () => {
               Cancelled ({getCancelledJobs().length})
             </summary>
             <div class="mt-2 space-y-2">
-              <For each={getCancelledJobs()}>{(job) => renderJobCard(job)}</For>
+              <For each={getCancelledJobs()}>{(job) => renderFinishedJobCard(job)}</For>
             </div>
           </details>
         </Show>

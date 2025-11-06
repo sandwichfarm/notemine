@@ -21,6 +21,21 @@ export interface PublishError {
 }
 
 /**
+ * Status for individual relay publishing attempt
+ */
+export type RelayStatus = 'success' | 'failed' | 'timeout';
+
+/**
+ * Per-relay result tracking
+ */
+export interface RelayResult {
+  url: string;
+  status: RelayStatus;
+  error?: string;
+  timestamp: number;
+}
+
+/**
  * Metadata about the source of this publish job
  */
 export interface PublishJobMeta {
@@ -44,6 +59,7 @@ export interface PublishJob {
 
   // Publishing configuration
   relays: string[];            // Target relays for publishing
+  relayResults?: RelayResult[]; // Per-relay publish results
 
   // Retry tracking
   attempts: {

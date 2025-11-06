@@ -8,7 +8,7 @@ import { getPowDifficulty, getTargetDifficulty } from '../lib/pow';
 import { usePreferences } from '../providers/PreferencesProvider';
 import type { NostrEvent } from 'nostr-tools/core';
 import { debug } from '../lib/debug';
-import { type PublishError } from '../types/publishing';
+import { type PublishError, type RelayResult } from '../types/publishing';
 
 /**
  * PublishingProcessor handles background processing of publish jobs.
@@ -16,7 +16,7 @@ import { type PublishError } from '../types/publishing';
  */
 export const PublishingProcessor: Component = () => {
   const publishing = usePublishing();
-  const { publishState, updateJobStatus, updateJobAttempts, setSignedEvent, setActiveJob, getNextEligibleJob } = publishing;
+  const { publishState, updateJobStatus, updateJobAttempts, setSignedEvent, setRelayResults, setActiveJob, getNextEligibleJob } = publishing;
   const { user } = useUser();
   const { preferences } = usePreferences();
 
@@ -130,10 +130,12 @@ export const PublishingProcessor: Component = () => {
     signedEvent: NostrEvent,
     relays: string[],
     timeoutMs: number = 7000
-  ): Promise<{ anySuccess: boolean; perRelay: Record<string, 'ok' | 'error' | 'timeout'> }> => {
+  ): Promise<{ anySuccess: boolean; perRelay: Record<string, 'ok' | 'error' | 'timeout'>; relayResults: RelayResult[] }> => {
     const perRelay: Record<string, 'ok' | 'error' | 'timeout'> = {};
+    const relayResults: RelayResult[] = [];
 
     const publishPromises = relays.map(async (relayUrl) => {
+      const timestamp = Date.now();
       try {
         const relay = relayPool.relay(relayUrl);
         const timeoutPromise = new Promise((_, reject) =>
@@ -142,11 +144,28 @@ export const PublishingProcessor: Component = () => {
 
         await Promise.race([relay.publish(signedEvent), timeoutPromise]);
         perRelay[relayUrl] = 'ok';
+        relayResults.push({
+          url: relayUrl,
+          status: 'success',
+          timestamp,
+        });
       } catch (error: any) {
         if (error.message === 'timeout') {
           perRelay[relayUrl] = 'timeout';
+          relayResults.push({
+            url: relayUrl,
+            status: 'timeout',
+            error: 'Relay timeout',
+            timestamp,
+          });
         } else {
           perRelay[relayUrl] = 'error';
+          relayResults.push({
+            url: relayUrl,
+            status: 'failed',
+            error: error.message || String(error),
+            timestamp,
+          });
         }
       }
     });
@@ -155,7 +174,7 @@ export const PublishingProcessor: Component = () => {
 
     const anySuccess = Object.values(perRelay).some((status) => status === 'ok');
 
-    return { anySuccess, perRelay };
+    return { anySuccess, perRelay, relayResults };
   };
 
   // Process the next eligible job
@@ -257,7 +276,10 @@ export const PublishingProcessor: Component = () => {
         }
 
         debug('[PublishingProcessor] Publishing to', nextJob.relays.length, 'relays');
-        const { anySuccess, perRelay } = await publishToRelays(nextJob.signedEvent, nextJob.relays);
+        const { anySuccess, perRelay, relayResults } = await publishToRelays(nextJob.signedEvent, nextJob.relays);
+
+        // Save relay results to job
+        setRelayResults(nextJob.id, relayResults);
 
         const successCount = Object.values(perRelay).filter((s) => s === 'ok').length;
         debug('[PublishingProcessor] Publishing result:', {

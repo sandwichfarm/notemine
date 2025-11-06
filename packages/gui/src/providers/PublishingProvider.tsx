@@ -5,6 +5,7 @@ import type {
   CreatePublishJobInput,
   PublishJobStatus,
   PublishError,
+  RelayResult,
 } from '../types/publishing';
 import { createLocalStore } from '../lib/localStorage';
 import { debug } from '../lib/debug';
@@ -18,6 +19,7 @@ interface PublishingContextType {
   updateJobStatus: (jobId: string, status: PublishJobStatus, error?: PublishError) => void;
   updateJobAttempts: (jobId: string, phase: 'sign' | 'publish', nextAttemptAt: number, error?: PublishError) => void;
   setSignedEvent: (jobId: string, signedEvent: any) => void;
+  setRelayResults: (jobId: string, relayResults: RelayResult[]) => void;
   setActiveJob: (jobId: string | null) => void;
   pausePublishing: () => void;
   resumePublishing: () => void;
@@ -289,6 +291,28 @@ export const PublishingProvider: Component<{ children: JSX.Element }> = (props) 
     flushQueue(); // Persist signed event immediately
   };
 
+  // Set relay results for a job
+  const setRelayResults = (jobId: string, relayResults: RelayResult[]) => {
+    setPublishState((prev) => ({
+      ...prev,
+      items: prev.items.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              relayResults,
+              updatedAt: Date.now(),
+            }
+          : job
+      ),
+    }));
+
+    debug(`[PublishingQueue] Set relay results for job ${jobId}:`, {
+      success: relayResults.filter((r) => r.status === 'success').length,
+      failed: relayResults.filter((r) => r.status === 'failed').length,
+      timeout: relayResults.filter((r) => r.status === 'timeout').length,
+    });
+  };
+
   // Set active job
   const setActiveJob = (jobId: string | null) => {
     setPublishState((prev) => ({
@@ -373,6 +397,7 @@ export const PublishingProvider: Component<{ children: JSX.Element }> = (props) 
     updateJobStatus,
     updateJobAttempts,
     setSignedEvent,
+    setRelayResults,
     setActiveJob,
     pausePublishing,
     resumePublishing,

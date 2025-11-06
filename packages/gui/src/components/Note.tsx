@@ -208,10 +208,10 @@ export const Note: Component<NoteProps> = (props) => {
         'border-l-gray-500/30 bg-bg-secondary/50 dark:bg-bg-tertiary/50 opacity-60': !hasPow(),
       }}
     >
-      {/* Header - Low contrast msetadata */}
+      {/* Header - Low contrast metadata */}
       <div class="flex items-start justify-between mb-2 opacity-60">
         <div class="flex items-center gap-2 min-w-0 flex-1">
-          <ProfileName pubkey={props.event.pubkey} asLink={true} />
+          <ProfileName pubkey={props.event.pubkey} asLink={true} showAvatar={true} />
           <div class="text-xs text-text-tertiary">{timestamp()}</div>
         </div>
 

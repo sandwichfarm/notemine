@@ -494,6 +494,23 @@ export async function loadCachedEvents(mainEventStore: any): Promise<number> {
 }
 
 /**
+ * Query cached events directly by Nostr filters (cache-first read helper)
+ * Returns [] if cache is not initialized or on error
+ */
+export async function getCachedEventsByFilters(filters: any[]): Promise<any[]> {
+  if (!cacheDatabase) {
+    return [];
+  }
+  try {
+    const events = await cacheDatabase.getByFilters(filters);
+    return events || [];
+  } catch (error) {
+    console.error('[Cache] Error querying cached events:', error);
+    return [];
+  }
+}
+
+/**
  * Clear all cached data
  */
 export async function clearCache(): Promise<void> {

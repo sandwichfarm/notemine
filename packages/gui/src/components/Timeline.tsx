@@ -205,6 +205,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
           if (!existing.find(r => r.id === reaction.id)) {
             existing.push(reaction);
             reactionsCache.set(eventId, existing);
+            // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
+            eventStore.add(reaction);
             recalculateScores();
           }
         }
@@ -225,6 +227,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
           if (!existing.find(r => r.id === reply.id)) {
             existing.push(reply);
             repliesCache.set(eventId, existing);
+            // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
+            eventStore.add(reply);
             recalculateScores();
           }
         }

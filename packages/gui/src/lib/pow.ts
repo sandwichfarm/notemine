@@ -5,7 +5,14 @@ import type { NostrEvent } from 'nostr-tools/core';
  * Counts the number of leading zero bits in the event ID
  */
 export function getPowDifficulty(event: NostrEvent): number {
-  const hash = event.id;
+  return getPowDifficultyFromId(event.id);
+}
+
+/**
+ * Extract POW difficulty from an event ID string (NIP-13)
+ * Counts the number of leading zero bits in the hash
+ */
+export function getPowDifficultyFromId(hash: string): number {
   let count = 0;
 
   for (let i = 0; i < hash.length; i++) {

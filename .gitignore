@@ -7,6 +7,10 @@ docs
 
 relay/data
 
+# Go cache directories
+.gocache/
+.gomodcache/
+
 # Claude Flow generated files
 .claude/
 .memory/

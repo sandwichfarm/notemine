@@ -231,6 +231,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
           if (!existing.find(r => r.id === reaction.id)) {
             existing.push(reaction);
             reactionsCache.set(eventId, existing);
+            // Persist to global EventStore for cache/state coherence across views
+            eventStore.add(reaction);
             recalculateScores();
           }
         }
@@ -252,6 +254,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
           if (!existing.find(r => r.id === reply.id)) {
             existing.push(reply);
             repliesCache.set(eventId, existing);
+            // Persist to global EventStore for cache/state coherence across views
+            eventStore.add(reply);
             recalculateScores();
           }
         }

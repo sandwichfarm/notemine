@@ -12,32 +12,6 @@ export function getPowDifficulty(event: NostrEvent): number {
 }
 
 /**
- * Extract POW difficulty from an event ID string (NIP-13)
- * Counts the number of leading zero bits in the hash
- */
-export function getPowDifficultyFromId(hash: string): number {
-  let count = 0;
-
-  for (let i = 0; i < hash.length; i++) {
-    const nibble = parseInt(hash[i], 16);
-    if (nibble === 0) {
-      count += 4;
-      continue;
-    }
-
-    // Count leading zeros in the non-zero nibble
-    // Use a lookup table for accuracy
-    if (nibble >= 8) count += 0; // 1xxx
-    else if (nibble >= 4) count += 1; // 01xx
-    else if (nibble >= 2) count += 2; // 001x
-    else count += 3; // 0001
-    break;
-  }
-
-  return count;
-}
-
-/**
  * Check if an event has a valid POW commitment (nonce tag)
  */
 export function hasValidPow(event: NostrEvent, minDifficulty: number = 0): boolean {

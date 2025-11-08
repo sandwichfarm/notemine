@@ -1,10 +1,22 @@
 # @notemine/wrapper
 
+## 1.0.0
+
+### Minor Changes
+
+- Performance improvements, mining resumability, state bugfixes
+
+### Patch Changes
+
+- Updated dependencies
+  - @notemine/core@0.5.0
+
 ## Unreleased
 
 ### Minor Changes
 
 - **Pause & Resume**: Added ability to pause mining operations and resume from exact same state
+
   - New `pause()` method stops workers while preserving state
   - New `resume(workerNonces?)` method resumes mining from paused state
   - New `getState()` method returns serializable mining state
@@ -13,6 +25,7 @@
   - Added `MiningState` interface for state serialization
 
 - **State Persistence**: Mining state can now be saved and restored across page refreshes
+
   - State includes worker nonces, best POW, event data, and difficulty
   - Storage mechanism is implementation-agnostic (localStorage, IndexedDB, etc.)
 

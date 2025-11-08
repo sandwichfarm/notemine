@@ -1,5 +1,13 @@
 # @notemine/svelte-demo
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @notemine/wrapper@1.0.0
+  - @notemine/core@0.5.0
+
 ## 0.1.4
 
 ### Patch Changes

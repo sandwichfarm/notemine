@@ -1,6 +1,6 @@
 {
   "name": "@notemine/estimator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Payload- and thread-aware PoW time estimator for the web",
   "type": "module",
   "main": "dist/index.js",

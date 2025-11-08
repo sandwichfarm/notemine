@@ -122,7 +122,11 @@ export const QueuePanel: Component = () => {
     return state.items.filter((item) => item.status === 'queued');
   };
 
-  const getCompletedItems = () => queueState().items.filter((item) => ['completed', 'failed', 'skipped'].includes(item.status));
+  const getCompletedItems = () => {
+    return queueState().items
+      .filter((item) => ['completed', 'failed', 'skipped'].includes(item.status))
+      .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)); // Newest first
+  };
   const getActiveItem = () => queueState().items.find((item) => item.id === queueState().activeItemId);
   const hasActiveOrQueuedItems = () => {
     const state = queueState();
@@ -145,7 +149,7 @@ export const QueuePanel: Component = () => {
   };
 
   return (
-    <div class="px-6 py-4 bg-black/90">
+    <div class="px-6 py-4 bg-black/90 max-h-[calc(100vh-200px)] overflow-y-auto">
       <div class="max-w-6xl mx-auto">
         {/* Header */}
         <div class="flex items-center justify-between mb-4">
@@ -354,8 +358,9 @@ export const QueuePanel: Component = () => {
                       </div>
                     </div>
 
-                    {/* Delete button on the right */}
-                    <div class="flex items-start ml-2 pt-1">
+                    {/* Delete button on the right with separator */}
+                    <div class="flex items-start ml-2 pt-1 gap-1">
+                      <div class="w-px h-4 bg-bg-tertiary"></div>
                       <button
                         onClick={() => handleDelete(item)}
                         class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
@@ -377,24 +382,79 @@ export const QueuePanel: Component = () => {
             <summary class="text-xs text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
               Completed ({getCompletedItems().length})
             </summary>
-            <div class="mt-2 space-y-1">
+            <div class="mt-2 space-y-2">
               <For each={getCompletedItems()}>
-                {(item) => (
-                  <div class="p-2 bg-bg-secondary/30 rounded text-xs flex items-center justify-between">
-                    <div class="flex items-center gap-2 flex-1">
-                      <span class={getStatusColor(item.status)}>{item.status}</span>
-                      <span class="text-text-secondary">
-                        {formatContent(item.content, 60)}
-                      </span>
+                {(item) => {
+                  // Get first 20 chars of note ID (hash) to show leading zeros
+                  const noteId = () => (item.miningState?.bestPow?.hash || '').slice(0, 20);
+                  const finalPow = () => item.miningState?.bestPow?.bestPow || 0;
+
+                  // Format time ago for when item was completed
+                  const getTimeAgo = () => {
+                    if (!item.completedAt) return '';
+                    const now = Date.now();
+                    const diff = now - item.completedAt;
+                    const seconds = Math.floor(diff / 1000);
+                    const minutes = Math.floor(seconds / 60);
+                    const hours = Math.floor(minutes / 60);
+                    const days = Math.floor(hours / 24);
+
+                    if (days > 0) return `${days}d ago`;
+                    if (hours > 0) return `${hours}h ago`;
+                    if (minutes > 0) return `${minutes}m ago`;
+                    if (seconds > 0) return `${seconds}s ago`;
+                    return 'just now';
+                  };
+
+                  return (
+                    <div class="p-3 bg-bg-secondary/50 rounded flex flex-col gap-2">
+                      {/* Header row */}
+                      <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class={`text-xs px-1.5 py-0.5 rounded ${getStatusColor(item.status)}`}>
+                            {item.status}
+                          </span>
+                          <span class="text-xs px-1.5 py-0.5 bg-bg-tertiary rounded">
+                            {item.type}
+                          </span>
+                          <span class="text-xs text-accent">
+                            POW: {finalPow()}
+                          </span>
+                          <span class="text-xs text-text-secondary">
+                            Kind: {item.kind}
+                          </span>
+                          <Show when={noteId()}>
+                            <span class="text-xs font-mono text-text-secondary">
+                              ID: {noteId()}...
+                            </span>
+                          </Show>
+                          <Show when={item.completedAt}>
+                            <span class="text-xs text-text-secondary">
+                              Mined {getTimeAgo()}
+                            </span>
+                          </Show>
+                        </div>
+
+                        {/* Delete button with separator */}
+                        <div class="flex items-center gap-1">
+                          <div class="w-px h-4 bg-bg-tertiary mx-1"></div>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            class="text-xs px-2 py-1 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30 transition-colors"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div class="text-sm text-text-primary">
+                        {formatContent(item.content, 80)}
+                      </div>
                     </div>
-                    <button
-                      onClick={() => handleDelete(item)}
-                      class="text-text-secondary hover:text-red-500 transition-colors"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
+                  );
+                }}
               </For>
             </div>
           </details>

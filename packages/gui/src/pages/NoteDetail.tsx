@@ -1,15 +1,18 @@
-import { Component, createSignal, onMount, onCleanup, Show, createMemo } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, Show, createMemo, createEffect } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useParams, useNavigate } from '@solidjs/router';
 import { nip19, type NostrEvent } from 'nostr-tools';
-import { relayPool, getActiveRelays, eventStore } from '../lib/applesauce';
+import { relayPool, getActiveRelays, eventStore, createTimelineStream } from '../lib/applesauce';
 import { getPowDifficulty, hasValidPow } from '../lib/pow';
+import { getCachedEventsByFilters } from '../lib/cache';
 import { ReactionBreakdown } from '../components/ReactionBreakdown';
 import { ThreadedReplies } from '../components/ThreadedReplies';
 import { ProfileName } from '../components/ProfileName';
 import { ParsedContent } from '../components/ParsedContent';
 import { ReactionPicker } from '../components/ReactionPicker';
 import { ReplyComposer } from '../components/ReplyComposer';
+import { ProfilePowBadge } from '../components/ProfilePowBadge';
+import { useProfile } from '../hooks/useProfile';
 
 // Minimum POW threshold for replies/reactions
 const MIN_POW_THRESHOLD = 16;
@@ -23,7 +26,22 @@ const NoteDetail: Component = () => {
   const [replies, setReplies] = createSignal<NostrEvent[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
-  const [showLowPow, setShowLowPow] = createSignal(false);
+  // Persisted UI state for low-POW visibility
+  const SHOW_LOW_POW_KEY = 'notemine:ui:showLowPowInteractions';
+  const initialShowLowPow = (() => {
+    try {
+      const v = localStorage.getItem(SHOW_LOW_POW_KEY);
+      return v === '1' || v === 'true';
+    } catch {
+      return false;
+    }
+  })();
+  const [showLowPow, setShowLowPow] = createSignal(initialShowLowPow);
+  createEffect(() => {
+    try {
+      localStorage.setItem(SHOW_LOW_POW_KEY, showLowPow() ? '1' : '0');
+    } catch {}
+  });
 
   // Interaction state - for reaction picker and reply composer modals
   const [showReactionPicker, setShowReactionPicker] = createSignal(false);
@@ -31,8 +49,13 @@ const NoteDetail: Component = () => {
 
   let storeSubscription: any = null;
   let relaySubscription: any = null;
+  let reactionsModelSubscription: any = null;
+  let threadModelSubscription: any = null;
   let fetchTimeout: any = null;
   let safetyTimeout: any = null;
+  let storeRepliesSubscription: any = null;
+  let reactionsSubscription: any = null;
+  const replySubscriptions: any[] = [];
 
   const cleanup = () => {
     if (storeSubscription) {
@@ -43,6 +66,14 @@ const NoteDetail: Component = () => {
       relaySubscription.unsubscribe();
       relaySubscription = null;
     }
+    if (reactionsModelSubscription) {
+      reactionsModelSubscription.unsubscribe();
+      reactionsModelSubscription = null;
+    }
+    if (threadModelSubscription) {
+      threadModelSubscription.unsubscribe();
+      threadModelSubscription = null;
+    }
     if (fetchTimeout) {
       clearTimeout(fetchTimeout);
       fetchTimeout = null;
@@ -50,6 +81,18 @@ const NoteDetail: Component = () => {
     if (safetyTimeout) {
       clearTimeout(safetyTimeout);
       safetyTimeout = null;
+    }
+    if (storeRepliesSubscription) {
+      try { storeRepliesSubscription.unsubscribe(); } catch {}
+      storeRepliesSubscription = null;
+    }
+    if (reactionsSubscription) {
+      try { reactionsSubscription.unsubscribe(); } catch {}
+      reactionsSubscription = null;
+    }
+    if (replySubscriptions.length > 0) {
+      replySubscriptions.forEach(sub => { try { sub.unsubscribe?.(); } catch {} });
+      replySubscriptions.length = 0;
     }
   };
 
@@ -247,69 +290,171 @@ const NoteDetail: Component = () => {
       relays = [...baseRelays];
     }
 
-    // Load reactions (kind 7)
-    const reactionsObs = relayPool.req(relays, {
-      kinds: [7],
-      '#e': [event.id],
-      limit: 500
-    });
+    // Helper: is reaction targeted at this root id (NIP-25 style via #e)
+    const isReactionToRoot = (rxn: NostrEvent, rootId: string): boolean => {
+      if (!rxn || rxn.kind !== 7) return false;
+      const eTags = rxn.tags.filter(t => t[0] === 'e');
+      return eTags.some(t => t[1] === rootId);
+    };
 
+    // Load reactions (kind 7) via cache-first, then stream+store
     const allReactions: NostrEvent[] = [];
-    reactionsObs.subscribe({
-      next: (response) => {
-        if (response !== 'EOSE' && response.kind === 7) {
-          const reaction = response as NostrEvent;
-          if (!allReactions.find(r => r.id === reaction.id)) {
-            allReactions.push(reaction);
 
-            // Add ALL reactions to event store (filtering happens at UI layer)
-            eventStore.add(reaction);
-
-            updateReactions();
+    // Prime from cache immediately
+    try {
+      const cachedReacts = await getCachedEventsByFilters([
+        { kinds: [7], '#e': [event.id], limit: 1000 },
+      ]);
+      if (cachedReacts.length > 0) {
+        for (const r of cachedReacts) {
+          if (!isReactionToRoot(r, event.id)) continue;
+          if (!allReactions.find(x => x.id === r.id)) {
+            allReactions.push(r);
+            // Ensure present in global store for coherence
+            eventStore.add(r);
           }
+        }
+        updateReactions();
+        console.log('[NoteDetail] Preloaded reactions from cache:', cachedReacts.length);
+      }
+    } catch (e) {
+      console.warn('[NoteDetail] Cached reactions preload failed:', e);
+    }
+    const reactions$ = createTimelineStream(
+      relays,
+      [{ kinds: [7], '#e': [event.id], limit: 500 }],
+      { limit: 500 }
+    );
+    reactionsSubscription = reactions$.subscribe({
+      next: (evt: any) => {
+        if (!evt || evt.kind !== 7) return;
+        const reaction = evt as NostrEvent;
+        if (!isReactionToRoot(reaction, event.id)) return;
+        if (!allReactions.find(r => r.id === reaction.id)) {
+          allReactions.push(reaction);
+          // Loader integrates with EventStore; no need to add again
+          updateReactions();
         }
       },
       complete: () => {
-        console.log('[NoteDetail] ✓ Loaded', allReactions.length, 'reactions');
+        console.log('[NoteDetail] ✓ Loaded', allReactions.length, 'reactions (cache-first)');
       },
     });
+
+    // Also subscribe to reactions from the EventStore (store-first, strictly #e -> root)
+    try {
+      reactionsModelSubscription = eventStore
+        .filters({ kinds: [7], '#e': [event.id] })
+        .subscribe({
+          next: (rxn: any) => {
+            if (!rxn || rxn.kind !== 7) return;
+            if (!isReactionToRoot(rxn as NostrEvent, event.id)) return;
+            if (!allReactions.find(r => r.id === rxn.id)) {
+              allReactions.push(rxn);
+              updateReactions();
+            }
+          },
+        });
+    } catch (e) {
+      console.warn('[NoteDetail] EventStore reactions(#e) subscription failed:', e);
+    }
 
     // Load ALL replies in the thread (direct replies + nested replies)
     const allReplies: NostrEvent[] = [];
     const seenIds = new Set<string>();
     const replyIds = new Set<string>([event.id]); // Start with root note
 
-    function fetchRepliesRecursive() {
+    // Helper: True if reply's NIP-10 reply reference points to one of known IDs
+    function isReplyToKnown(reply: NostrEvent, known: Set<string>): boolean {
+      const eTags = reply.tags.filter(t => t[0] === 'e');
+      if (eTags.length === 0) return false;
+
+      // Prefer explicit reply markers
+      const replyTag = eTags.find(t => t[3] === 'reply');
+      if (replyTag && replyTag[1]) {
+        return known.has(replyTag[1]);
+      }
+
+      // If markers exist but are only 'mention', do not treat as reply
+      const hasAnyMarker = eTags.some(t => !!t[3]);
+      const onlyMentions = hasAnyMarker && eTags.every(t => t[3] && t[3] === 'mention');
+      if (onlyMentions) return false;
+
+      // Unmarked fallback (legacy): last e-tag is the parent
+      const lastETag = eTags[eTags.length - 1];
+      return !!lastETag?.[1] && known.has(lastETag[1]);
+    }
+
+    // STORE-FIRST: stream replies from EventStore (existing + new)
+    try {
+      const storeReplies$ = eventStore.filters({ kinds: [1], '#e': [event.id] });
+      storeRepliesSubscription = storeReplies$.subscribe({
+        next: (evt: any) => {
+          if (!evt || evt.kind !== 1) return;
+          const reply = evt as NostrEvent;
+          if (!isReplyToKnown(reply, replyIds)) return;
+          if (seenIds.has(reply.id)) return;
+          seenIds.add(reply.id);
+          allReplies.push(reply);
+          replyIds.add(reply.id);
+          updateReplies();
+        },
+        error: (err) => console.warn('[NoteDetail] store replies error:', err),
+      });
+    } catch (e) {
+      console.warn('[NoteDetail] EventStore.filters for replies failed:', e);
+    }
+
+    async function fetchRepliesRecursive() {
       const currentIds = Array.from(replyIds);
 
-      // Fetch replies to all known IDs
-      const repliesObs = relayPool.req(relays, {
-        kinds: [1],
-        '#e': currentIds,
-        limit: 500
-      });
+      // Prime from cache for currentIds
+      try {
+        const cached = await getCachedEventsByFilters([
+          { kinds: [1], '#e': currentIds, limit: 2000 },
+        ]);
+        let added = 0;
+        for (const reply of cached) {
+          if (!isReplyToKnown(reply, replyIds)) continue;
+          if (seenIds.has(reply.id)) continue;
+          seenIds.add(reply.id);
+          allReplies.push(reply);
+          replyIds.add(reply.id);
+          added++;
+        }
+        if (added > 0) {
+          console.log('[NoteDetail] Preloaded replies from cache (filtered):', added);
+          updateReplies();
+        }
+      } catch (e) {
+        console.warn('[NoteDetail] Cached replies preload failed:', e);
+      }
+
+      // Fetch replies to all known IDs (cache-first timeline stream)
+      const repliesObs = createTimelineStream(
+        relays,
+        [{ kinds: [1], '#e': currentIds, limit: 500 }],
+        { limit: 500 }
+      );
 
       let newRepliesFound = 0;
 
-      repliesObs.subscribe({
-        next: (response) => {
-          if (response !== 'EOSE' && response.kind === 1) {
-            const reply = response as NostrEvent;
-            const pow = hasValidPow(reply, 1) ? getPowDifficulty(reply) : 0;
+      const sub = repliesObs.subscribe({
+        next: (evt: any) => {
+          if (!evt || evt.kind !== 1) return;
+          const reply = evt as NostrEvent;
+          if (!isReplyToKnown(reply, replyIds)) return;
+          const pow = hasValidPow(reply, 1) ? getPowDifficulty(reply) : 0;
 
-            if (!seenIds.has(reply.id)) {
-              seenIds.add(reply.id);
-              allReplies.push(reply);
-              replyIds.add(reply.id); // Track for next recursive fetch
-              newRepliesFound++;
+          if (!seenIds.has(reply.id)) {
+            seenIds.add(reply.id);
+            allReplies.push(reply);
+            replyIds.add(reply.id); // Track for next recursive fetch
+            newRepliesFound++;
 
-              console.log('[NoteDetail] Received reply:', reply.id.slice(0, 8), 'POW:', pow);
-
-              // Add ALL replies to event store (filtering happens at UI layer)
-              eventStore.add(reply);
-
-              updateReplies();
-            }
+            console.log('[NoteDetail] Received reply:', reply.id.slice(0, 8), 'POW:', pow);
+            // Loader integrates with EventStore; no need to add again
+            updateReplies();
           }
         },
         complete: () => {
@@ -327,10 +472,14 @@ const NoteDetail: Component = () => {
           }
         },
       });
+      replySubscriptions.push(sub);
     }
 
     // Start recursive fetch
     fetchRepliesRecursive();
+
+    // Note: we avoid EventStore.thread() here because its model filter includes any event that references the root via #e,
+    // which may include mentions. We curate replies via NIP-10 semantics in this component instead.
 
     function updateReactions() {
       setReactions([...allReactions]);
@@ -370,6 +519,10 @@ const NoteDetail: Component = () => {
     return date.toLocaleString();
   };
 
+  // Get profile for compact profile section - useProfile accepts a signal
+  const authorPubkey = () => note()?.pubkey;
+  const authorProfile = useProfile(authorPubkey);
+
   return (
     <div class="max-w-4xl mx-auto space-y-6">
       {/* Back Button */}
@@ -379,6 +532,44 @@ const NoteDetail: Component = () => {
       >
         ← back to feed
       </button>
+
+      {/* Compact Profile Section */}
+      <Show when={note() && authorProfile()}>
+        <div class="card p-4 border-l-2 border-l-accent/30">
+          <div class="flex items-center gap-3">
+            {/* Avatar */}
+            <Show when={authorProfile().metadata?.picture}>
+              <img
+                src={authorProfile().metadata!.picture}
+                alt="Profile"
+                class="w-12 h-12 rounded-full object-cover"
+              />
+            </Show>
+
+            {/* Profile Info */}
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <ProfileName
+                  pubkey={note()!.pubkey}
+                  asLink={true}
+                  class="font-medium text-base text-text-primary"
+                />
+                <Show when={authorProfile().event?.id}>
+                  <ProfilePowBadge
+                    profileEventId={authorProfile().event!.id}
+                    style="inline"
+                  />
+                </Show>
+              </div>
+              <Show when={authorProfile().metadata?.about}>
+                <p class="text-sm text-text-secondary mt-1 line-clamp-2">
+                  {authorProfile().metadata!.about}
+                </p>
+              </Show>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Loading State */}
       <Show when={loading()}>
@@ -471,7 +662,7 @@ const NoteDetail: Component = () => {
               <input
                 type="checkbox"
                 checked={showLowPow()}
-                onChange={(e) => setShowLowPow(e.target.checked)}
+                onChange={(e) => setShowLowPow((e.currentTarget as HTMLInputElement).checked)}
                 class="rounded"
               />
               <span class="text-text-secondary">

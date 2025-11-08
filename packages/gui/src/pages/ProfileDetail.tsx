@@ -4,6 +4,8 @@ import { nip19, type NostrEvent } from 'nostr-tools';
 import { relayPool, getActiveRelays, getUserInboxRelays } from '../lib/applesauce';
 import { useProfile } from '../hooks/useProfile';
 import { Note } from '../components/Note';
+import { ReportModal } from '../components/ReportModal';
+import { ProfilePowBadge } from '../components/ProfilePowBadge';
 import { getPowDifficulty, hasValidPow } from '../lib/pow';
 import { debug } from '../lib/debug';
 import { useNip05Validation } from '../lib/nip05-validator';
@@ -19,6 +21,7 @@ const ProfileDetail: Component = () => {
   const [loading, setLoading] = createSignal(true);
   const [loadingNotes, setLoadingNotes] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [showReportModal, setShowReportModal] = createSignal(false);
 
   const profile = useProfile(() => pubkey() || undefined);
 
@@ -202,10 +205,15 @@ const ProfileDetail: Component = () => {
 
               {/* Info */}
               <div class="flex-1 mt-4">
-                {/* Name */}
-                <h1 class="text-3xl font-bold text-text-primary mb-2">
-                  {profile().metadata?.display_name || profile().metadata?.name || 'Anonymous'}
-                </h1>
+                {/* Name with PoW Badge */}
+                <div class="flex items-center gap-3 mb-2">
+                  <h1 class="text-3xl font-bold text-text-primary">
+                    {profile().metadata?.display_name || profile().metadata?.name || 'Anonymous'}
+                  </h1>
+                  <Show when={profile().event?.id}>
+                    <ProfilePowBadge profileEventId={profile().event!.id} style="full" />
+                  </Show>
+                </div>
 
                 {/* NIP-05 with validation */}
                 <Show when={profile().metadata?.nip05}>
@@ -236,6 +244,13 @@ const ProfileDetail: Component = () => {
                     title="Copy npub"
                   >
                     📋 copy
+                  </button>
+                  <button
+                    onClick={() => setShowReportModal(true)}
+                    class="text-xs text-red-500 hover:underline"
+                    title="Report profile"
+                  >
+                    🚩 report
                   </button>
                 </div>
 
@@ -298,6 +313,16 @@ const ProfileDetail: Component = () => {
             </div>
           </Show>
         </div>
+      </Show>
+
+      {/* Report Modal */}
+      <Show when={showReportModal()}>
+        <ReportModal
+          isOpen={showReportModal()}
+          onClose={() => setShowReportModal(false)}
+          pubkey={pubkey() || undefined}
+          targetKind={0}
+        />
       </Show>
     </div>
   );

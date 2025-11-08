@@ -1,19 +1,21 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"time"
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/fiatjaf/eventstore/lmdb"
-	"github.com/fiatjaf/khatru"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip11"
-	"github.com/sandwichfarm/notemine/relay/internal/pow"
-	"github.com/sandwichfarm/notemine/relay/internal/retention"
+    "github.com/fiatjaf/eventstore/lmdb"
+    "github.com/fiatjaf/khatru"
+    "github.com/nbd-wtf/go-nostr"
+    "github.com/nbd-wtf/go-nostr/nip11"
+    "github.com/sandwichfarm/notemine/relay/internal/pow"
+    "github.com/sandwichfarm/notemine/relay/internal/retention"
+    "github.com/sandwichfarm/notemine/relay/internal/scoring"
 )
 
 const (
@@ -51,8 +53,23 @@ func main() {
 		log.Fatalf("[Relay] Failed to initialize LMDB: %v", err)
 	}
 
-	// Create retention manager
-	retentionMgr := retention.NewManager(db)
+    // Create retention manager
+    retentionMgr := retention.NewManager(db)
+
+    // Configure and create scoring manager
+    reportWeight := 1.0
+    if rw := os.Getenv("REPORT_WEIGHT"); rw != "" {
+        if f, err := strconv.ParseFloat(rw, 64); err == nil {
+            reportWeight = f
+        }
+    }
+    debugScoring := strings.EqualFold(os.Getenv("SCORING_DEBUG"), "1") || strings.EqualFold(os.Getenv("SCORING_DEBUG"), "true")
+
+    scorer := scoring.NewScorer(scoring.Config{
+        ReportWeight:     reportWeight,
+        MinPowDifficulty: MinPOWDifficulty,
+        Debug:            debugScoring,
+    })
 
 	// Create relay instance
 	relay := khatru.NewRelay()
@@ -69,28 +86,125 @@ func main() {
 	}
 
 	// Set up POW validation hook
-	relay.RejectEvent = append(relay.RejectEvent, func(ctx context.Context, event *nostr.Event) (bool, string) {
-		// Reject events without sufficient POW for kind 1
-		if event.Kind == 1 {
-			if !pow.HasValidPOW(event, MinPOWDifficulty) {
-				difficulty := pow.GetDifficulty(event)
-				return true, fmt.Sprintf("insufficient POW: got %d, required %d", difficulty, MinPOWDifficulty)
-			}
-		}
+    relay.RejectEvent = append(relay.RejectEvent, func(ctx context.Context, event *nostr.Event) (bool, string) {
+        // Reject events without sufficient POW for kind 1
+        if event.Kind == 1 {
+            if !pow.HasValidPOW(event, MinPOWDifficulty) {
+                difficulty := pow.GetDifficulty(event)
+                return true, fmt.Sprintf("insufficient POW: got %d, required %d", difficulty, MinPOWDifficulty)
+            }
+        }
 
-		// Allow reactions (kind 7) with any POW
-		// Allow other kinds
-		return false, ""
-	})
+        // Allow reactions (kind 7) with any POW
+        // Allow other kinds
+        return false, ""
+    })
 
-	// Set up storage hooks
-	relay.StoreEvent = append(relay.StoreEvent, func(ctx context.Context, event *nostr.Event) error {
-		return db.SaveEvent(ctx, event)
-	})
+    // Set up storage hooks
+    relay.StoreEvent = append(relay.StoreEvent, func(ctx context.Context, event *nostr.Event) error {
+        if err := db.SaveEvent(ctx, event); err != nil {
+            return err
+        }
 
-	relay.QueryEvents = append(relay.QueryEvents, func(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
-		return db.QueryEvents(ctx, filter)
-	})
+        // Feed scoring aggregates and enforce deindex when crossing threshold
+        switch event.Kind {
+        case 1:
+            // Base POW for the note
+            scorer.IngestNote(event)
+
+        case 7:
+            // Reaction: may cause deindexing
+            if shouldDeindex := scorer.IngestReaction(event); shouldDeindex {
+                // Extract target event id from e tag
+                var targetID string
+                for _, tag := range event.Tags {
+                    if len(tag) >= 2 && tag[0] == "e" {
+                        targetID = tag[1]
+                        break
+                    }
+                }
+                if targetID != "" {
+                    // Cascade delete children, then delete the target event
+                    if err := retentionMgr.CascadeDelete(ctx, targetID); err != nil {
+                        log.Printf("[Relay] Cascade delete failed for %s: %v", targetID, err)
+                    }
+
+                    // Query the target event by ID to delete it
+                    q := nostr.Filter{IDs: []string{targetID}}
+                    ch, err := db.QueryEvents(ctx, q)
+                    if err == nil {
+                        for ev := range ch {
+                            if err := db.DeleteEvent(ctx, ev); err != nil {
+                                log.Printf("[Relay] Failed to delete target event %s: %v", targetID, err)
+                            } else {
+                                log.Printf("[Relay] Deindexed note %s due to negative reaction scoring", targetID[:8])
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+
+        case 1984:
+            // Report: may cause deindexing
+            if shouldDeindex := scorer.IngestReport(event); shouldDeindex {
+                // Extract target event id from e tag (only notes supported)
+                var targetID string
+                for _, tag := range event.Tags {
+                    if len(tag) >= 2 && tag[0] == "e" {
+                        targetID = tag[1]
+                        break
+                    }
+                }
+                if targetID != "" {
+                    // Cascade delete children, then delete the target event
+                    if err := retentionMgr.CascadeDelete(ctx, targetID); err != nil {
+                        log.Printf("[Relay] Cascade delete failed for %s: %v", targetID, err)
+                    }
+
+                    // Query the target event by ID to delete it
+                    q := nostr.Filter{IDs: []string{targetID}}
+                    ch, err := db.QueryEvents(ctx, q)
+                    if err == nil {
+                        for ev := range ch {
+                            if err := db.DeleteEvent(ctx, ev); err != nil {
+                                log.Printf("[Relay] Failed to delete target event %s: %v", targetID, err)
+                            } else {
+                                log.Printf("[Relay] Deindexed note %s due to reports scoring", targetID[:8])
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        return nil
+    })
+
+    // Filter query results to hide notes currently below threshold according to scorer
+    relay.QueryEvents = append(relay.QueryEvents, func(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
+        in, err := db.QueryEvents(ctx, filter)
+        if err != nil {
+            return nil, err
+        }
+        out := make(chan *nostr.Event, 16)
+        go func() {
+            defer close(out)
+            for ev := range in {
+                if ev != nil && ev.Kind == 1 {
+                    if scorer.ShouldDeindex(ev.ID) {
+                        if debugScoring {
+                            log.Printf("[Relay] Filtering deindexed note %s from query results", ev.ID[:8])
+                        }
+                        continue
+                    }
+                }
+                out <- ev
+            }
+        }()
+        return out, nil
+    })
 
 	relay.DeleteEvent = append(relay.DeleteEvent, func(ctx context.Context, event *nostr.Event) error {
 		return db.DeleteEvent(ctx, event)

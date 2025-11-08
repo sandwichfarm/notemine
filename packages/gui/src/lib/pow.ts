@@ -1,5 +1,8 @@
 import type { NostrEvent } from 'nostr-tools/core';
 
+// Memoization cache for difficulty calculations
+const difficultyCache = new Map<string, number>();
+
 /**
  * Extract POW difficulty from a nostr event (NIP-13)
  * Counts the number of leading zero bits in the event ID
@@ -205,6 +208,45 @@ export function getPubkeyPowDifficulty(pubkey: string): number {
     else break;
   }
   return count;
+}
+
+/**
+ * Get POW difficulty from event ID (memoized)
+ * Useful for profile events where we just have the ID
+ */
+export function getPowDifficultyFromId(eventId: string): number {
+  // Check cache first
+  if (difficultyCache.has(eventId)) {
+    return difficultyCache.get(eventId)!;
+  }
+
+  // Calculate difficulty
+  let count = 0;
+  for (let i = 0; i < eventId.length; i++) {
+    const nibble = parseInt(eventId[i], 16);
+    if (nibble === 0) {
+      count += 4;
+      continue;
+    }
+
+    // Count leading zeros in the non-zero nibble
+    if (nibble >= 8) count += 0; // 1xxx
+    else if (nibble >= 4) count += 1; // 01xx
+    else if (nibble >= 2) count += 2; // 001x
+    else count += 3; // 0001
+    break;
+  }
+
+  // Cache the result
+  difficultyCache.set(eventId, count);
+  return count;
+}
+
+/**
+ * Clear the difficulty cache (useful for testing)
+ */
+export function clearDifficultyCache(): void {
+  difficultyCache.clear();
 }
 
 /**

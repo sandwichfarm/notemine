@@ -1,0 +1,21 @@
+linters:
+  fast: false
+  enable-all: true
+  disable:
+    - gomnd
+    - gochecknoglobals
+    - testpackage
+    - goerr113
+    - exhaustivestruct
+    - paralleltest
+    - nolintlint
+    - ifshort
+    - varnamelen
+    - exhaustruct
+    - nonamedreturns
+
+    # Deprecated
+    - maligned
+    - scopelint
+    - golint
+    - interfacer

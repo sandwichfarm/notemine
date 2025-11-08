@@ -21,13 +21,28 @@ export interface PublishError {
 }
 
 /**
+ * Status for individual relay publishing attempt
+ */
+export type RelayStatus = 'success' | 'failed' | 'timeout';
+
+/**
+ * Per-relay result tracking
+ */
+export interface RelayResult {
+  url: string;
+  status: RelayStatus;
+  error?: string;
+  timestamp: number;
+}
+
+/**
  * Metadata about the source of this publish job
  */
 export interface PublishJobMeta {
   sourceQueueItemId?: string;  // Reference to original mining queue item
   kind: number;                // Nostr event kind
   difficulty: number;          // PoW difficulty target
-  type: 'note' | 'reply' | 'reaction' | 'profile' | 'report';
+  type: 'note' | 'reply' | 'reaction' | 'profile' | 'report' | 'repost';
   relayDiscoveryWarning?: string;  // Warning if relay discovery encountered issues
 }
 
@@ -44,6 +59,7 @@ export interface PublishJob {
 
   // Publishing configuration
   relays: string[];            // Target relays for publishing
+  relayResults?: RelayResult[]; // Per-relay publish results
 
   // Retry tracking
   attempts: {

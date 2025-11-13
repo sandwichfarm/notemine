@@ -10,6 +10,8 @@ import { QueueProvider } from './providers/QueueProvider';
 import { QueueProcessor } from './components/QueueProcessor';
 import { PublishingProvider } from './providers/PublishingProvider';
 import { PublishingProcessor } from './components/PublishingProcessor';
+import { EmojiProvider } from './providers/EmojiProvider';
+import { EmojiSetsProvider } from './providers/EmojiSetsProvider';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -243,30 +245,34 @@ const App: Component = () => {
       <PreferencesProvider>
         <TooltipProvider>
           <EventStoreProvider>
-            <UserProvider>
-              <MiningProvider>
-                <QueueProvider>
-                  <PublishingProvider>
-                    <QueueProcessor />
-                    <PublishingProcessor />
-                    <AppInit>
-                    <Router root={Layout}>
-                      <Route path="/" component={Home} />
-                      <Route path="/feed" component={Feed} />
-                      <Route path="/about" component={About} />
-                      <Route path="/relays" component={Relays} />
-                      <Route path="/diagnostics" component={Diagnostics} />
-                      <Route path="/stats" component={Stats} />
-                      <Route path="/preferences" component={Preferences} />
-                      <Route path="/n/:id" component={NoteDetail} />
-                      <Route path="/e/:id" component={NoteDetail} />
-                      <Route path="/p/:identifier" component={ProfileDetail} />
-                    </Router>
-                  </AppInit>
-                  </PublishingProvider>
-                </QueueProvider>
-              </MiningProvider>
-            </UserProvider>
+            <EmojiProvider>
+              <EmojiSetsProvider>
+                <UserProvider>
+                  <MiningProvider>
+                    <QueueProvider>
+                      <PublishingProvider>
+                        <QueueProcessor />
+                        <PublishingProcessor />
+                        <AppInit>
+                        <Router root={Layout}>
+                          <Route path="/" component={Home} />
+                          <Route path="/feed" component={Feed} />
+                          <Route path="/about" component={About} />
+                          <Route path="/relays" component={Relays} />
+                          <Route path="/diagnostics" component={Diagnostics} />
+                          <Route path="/stats" component={Stats} />
+                          <Route path="/preferences" component={Preferences} />
+                          <Route path="/n/:id" component={NoteDetail} />
+                          <Route path="/e/:id" component={NoteDetail} />
+                          <Route path="/p/:identifier" component={ProfileDetail} />
+                        </Router>
+                      </AppInit>
+                      </PublishingProvider>
+                    </QueueProvider>
+                  </MiningProvider>
+                </UserProvider>
+              </EmojiSetsProvider>
+            </EmojiProvider>
           </EventStoreProvider>
         </TooltipProvider>
       </PreferencesProvider>

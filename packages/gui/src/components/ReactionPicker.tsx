@@ -1,7 +1,9 @@
-import { Component, createSignal, Show, For } from 'solid-js';
+import { Component, createSignal, Show, For, onMount, createEffect } from 'solid-js';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useQueue } from '../providers/QueueProvider';
+import { useEmojiSets, type EmojiSet } from '../providers/EmojiSetsProvider';
+import type { Emoji } from '../providers/EmojiProvider';
 import { debug } from '../lib/debug';
 
 interface ReactionPickerProps {
@@ -21,15 +23,36 @@ const COMMON_REACTIONS = [
   { emoji: '⚡', label: 'Zap', type: 'neutral' },
 ];
 
+type Tab = 'quick' | 'sets' | 'custom';
+
 export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
   const { preferences, updatePreference } = usePreferences();
 
+  const [activeTab, setActiveTab] = createSignal<Tab>('quick');
+  const [selectedSet, setSelectedSet] = createSignal<EmojiSet | null>(null);
   const [customEmoji, setCustomEmoji] = createSignal('');
   const [difficulty, setDifficulty] = createSignal(preferences().powDifficultyReaction);
   const [queueSuccess, setQueueSuccess] = createSignal(false);
 
   const { user } = useUser();
   const { addToQueue } = useQueue();
+  const { sets, loadForUser, isLoading, error } = useEmojiSets();
+
+  // Load emoji sets when modal opens
+  onMount(() => {
+    const currentUser = user();
+    if (currentUser && !currentUser.isAnon) {
+      loadForUser(currentUser.pubkey);
+    }
+  });
+
+  // Auto-select first set when loaded
+  createEffect(() => {
+    const availableSets = sets();
+    if (availableSets.length > 0 && !selectedSet()) {
+      setSelectedSet(availableSets[0]);
+    }
+  });
 
   // Save difficulty preference when changed
   const handleDifficultyChange = (newDifficulty: number) => {
@@ -37,7 +60,7 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
     updatePreference('powDifficultyReaction', newDifficulty);
   };
 
-  const handleReact = async (emoji: string) => {
+  const handleReact = async (emoji: string, customEmoji?: Emoji) => {
     setQueueSuccess(false);
 
     const currentUser = user();
@@ -49,17 +72,26 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
     try {
       debug('[ReactionPicker] Adding reaction to mining queue...');
 
+      // Build tags array
+      const tags: string[][] = [
+        ['e', props.eventId],
+        ['p', props.eventAuthor],
+        ['client', 'notemine.io'],
+      ];
+
+      // Add emoji tag for NIP-30 custom emojis
+      if (customEmoji) {
+        tags.push(['emoji', customEmoji.shortcode, customEmoji.url]);
+        debug('[ReactionPicker] Adding custom emoji tag:', customEmoji.shortcode, customEmoji.url);
+      }
+
       // Add to queue
       addToQueue({
         type: 'reaction',
         content: emoji,
         pubkey: currentUser.pubkey,
         difficulty: difficulty(),
-        tags: [
-          ['e', props.eventId],
-          ['p', props.eventAuthor],
-          ['client', 'notemine.io'],
-        ],
+        tags,
         kind: 7, // kind 7 is reaction
         metadata: {
           targetEventId: props.eventId,
@@ -99,10 +131,43 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
           </div>
         </div>
 
+        {/* Tab Navigation */}
+        <div class="flex border-b border-border">
+          <button
+            onClick={() => setActiveTab('quick')}
+            class="flex-1 px-4 py-2 text-sm font-medium transition-colors"
+            classList={{
+              'text-accent border-b-2 border-accent': activeTab() === 'quick',
+              'text-text-secondary hover:text-text-primary': activeTab() !== 'quick',
+            }}
+          >
+            Quick
+          </button>
+          <button
+            onClick={() => setActiveTab('sets')}
+            class="flex-1 px-4 py-2 text-sm font-medium transition-colors"
+            classList={{
+              'text-accent border-b-2 border-accent': activeTab() === 'sets',
+              'text-text-secondary hover:text-text-primary': activeTab() !== 'sets',
+            }}
+          >
+            My Sets {sets().length > 0 && `(${sets().length})`}
+          </button>
+          <button
+            onClick={() => setActiveTab('custom')}
+            class="flex-1 px-4 py-2 text-sm font-medium transition-colors"
+            classList={{
+              'text-accent border-b-2 border-accent': activeTab() === 'custom',
+              'text-text-secondary hover:text-text-primary': activeTab() !== 'custom',
+            }}
+          >
+            Custom
+          </button>
+        </div>
+
         <div class="p-4 space-y-4">
-          {/* Common reactions */}
-          <div>
-            <label class="block text-sm font-medium mb-2">Quick reactions</label>
+          {/* Quick Tab - Common reactions */}
+          <Show when={activeTab() === 'quick'}>
             <div class="grid grid-cols-4 gap-2">
               <For each={COMMON_REACTIONS}>
                 {(reaction) => (
@@ -116,30 +181,116 @@ export const ReactionPicker: Component<ReactionPickerProps> = (props) => {
                 )}
               </For>
             </div>
-          </div>
+          </Show>
 
-          {/* Custom emoji */}
-          <div>
-            <label class="block text-sm font-medium mb-2">Custom emoji</label>
-            <div class="flex gap-2">
-              <input
-                type="text"
-                value={customEmoji()}
-                onInput={(e) => setCustomEmoji(e.currentTarget.value)}
-                placeholder="Enter any emoji"
-                class="flex-1 px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-              <button
-                onClick={handleCustomReact}
-                disabled={!customEmoji().trim()}
-                class="btn-primary"
-              >
-                Add to Queue
-              </button>
+          {/* My Sets Tab */}
+          <Show when={activeTab() === 'sets'}>
+            <Show
+              when={!isLoading() && !error() && sets().length > 0}
+              fallback={
+                <div class="text-center py-8">
+                  <Show when={isLoading()}>
+                    <div class="text-text-secondary">Loading emoji sets...</div>
+                  </Show>
+                  <Show when={!isLoading() && error()}>
+                    <div class="space-y-2">
+                      <div class="text-red-600 dark:text-red-400">Failed to load emoji sets</div>
+                      <div class="text-xs text-text-tertiary">
+                        {error()}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const currentUser = user();
+                          if (currentUser && !currentUser.isAnon) {
+                            loadForUser(currentUser.pubkey);
+                          }
+                        }}
+                        class="text-sm text-accent hover:underline mt-2"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </Show>
+                  <Show when={!isLoading() && !error() && sets().length === 0}>
+                    <div class="space-y-2 text-text-secondary">
+                      <div>No emoji sets found.</div>
+                      <div class="text-xs">
+                        You haven't created any NIP-51 emoji sets yet.
+                      </div>
+                    </div>
+                  </Show>
+                </div>
+              }
+            >
+              {/* Emoji Set Selector */}
+              <div>
+                <label class="block text-sm font-medium mb-2">Select Set</label>
+                <select
+                  value={selectedSet()?.id || ''}
+                  onChange={(e) => {
+                    const set = sets().find(s => s.id === e.currentTarget.value);
+                    setSelectedSet(set || null);
+                  }}
+                  class="w-full px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <For each={sets()}>
+                    {(set) => (
+                      <option value={set.id}>
+                        {set.name} ({set.emojis.length} emojis)
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </div>
+
+              {/* Emoji Grid */}
+              <Show when={selectedSet()}>
+                <div class="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto">
+                  <For each={selectedSet()!.emojis}>
+                    {(emoji) => (
+                      <button
+                        onClick={() => handleReact(`:${emoji.shortcode}:`, emoji)}
+                        class="p-2 hover:bg-bg-secondary dark:hover:bg-bg-tertiary rounded-lg transition-colors border border-border"
+                        title={emoji.shortcode}
+                      >
+                        <img
+                          src={emoji.url}
+                          alt={emoji.alt || emoji.shortcode}
+                          class="w-8 h-8 mx-auto"
+                          style={{ 'object-fit': 'contain' }}
+                        />
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </Show>
+          </Show>
+
+          {/* Custom Tab */}
+          <Show when={activeTab() === 'custom'}>
+            <div>
+              <label class="block text-sm font-medium mb-2">Custom emoji</label>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  value={customEmoji()}
+                  onInput={(e) => setCustomEmoji(e.currentTarget.value)}
+                  placeholder="Enter any emoji"
+                  class="flex-1 px-3 py-2 bg-bg-secondary dark:bg-bg-tertiary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+                <button
+                  onClick={handleCustomReact}
+                  disabled={!customEmoji().trim()}
+                  class="btn-primary"
+                >
+                  Add to Queue
+                </button>
+              </div>
             </div>
-          </div>
+          </Show>
 
-          {/* Difficulty slider */}
+          {/* Difficulty slider - shown on all tabs */}
           <div>
             <label class="block text-sm font-medium mb-2">
               POW Difficulty: {difficulty()}

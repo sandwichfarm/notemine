@@ -4,6 +4,7 @@ import { getPowDifficulty } from '../lib/pow';
 import { useQueue } from '../providers/QueueProvider';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
+import type { Emoji } from '../providers/EmojiProvider';
 
 interface ReactionBreakdownProps {
   reactions: NostrEvent[];
@@ -16,6 +17,7 @@ interface ReactionGroup {
   count: number;
   totalPow: number;
   reactions: NostrEvent[];
+  customEmoji?: Emoji; // NIP-30 custom emoji data
 }
 
 export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
@@ -23,8 +25,8 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
   const { user } = useUser();
   const { preferences } = usePreferences();
 
-  // Track which emoji is being held and progress
-  const [holdingEmoji, setHoldingEmoji] = createSignal<string | null>(null);
+  // Track which reaction group is being held and progress
+  const [holdingGroup, setHoldingGroup] = createSignal<ReactionGroup | null>(null);
   const [holdProgress, setHoldProgress] = createSignal(0);
 
   let holdTimer: number | null = null;
@@ -35,6 +37,28 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
 
     for (const reaction of props.reactions) {
       let emoji = reaction.content.trim();
+      let customEmoji: Emoji | undefined;
+
+      // Check for custom emoji tags (NIP-30)
+      // Format: ['emoji', '<shortcode>', '<url>']
+      if (emoji.startsWith(':') && emoji.endsWith(':')) {
+        const shortcode = emoji.slice(1, -1);
+        const emojiTag = reaction.tags?.find(
+          (tag) => tag[0] === 'emoji' && tag[1] === shortcode && tag[2]
+        );
+
+        if (emojiTag && emojiTag[2]) {
+          // Validate URL (only http/https)
+          const url = emojiTag[2];
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            customEmoji = {
+              shortcode,
+              url,
+              alt: emoji,
+            };
+          }
+        }
+      }
 
       // Normalize + to upvote arrow
       if (emoji === '+') {
@@ -62,6 +86,7 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
           count: 1,
           totalPow: pow,
           reactions: [reaction],
+          customEmoji,
         });
       }
     }
@@ -70,11 +95,11 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
     return Array.from(groups.values()).sort((a, b) => b.totalPow - a.totalPow);
   });
 
-  const startHold = (emoji: string) => {
+  const startHold = (group: ReactionGroup) => {
     // Can only add reactions if logged in and we have event details
     if (!user() || !props.eventId || !props.eventAuthor) return;
 
-    setHoldingEmoji(emoji);
+    setHoldingGroup(group);
     setHoldProgress(0);
 
     const startTime = Date.now();
@@ -89,7 +114,7 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
 
     // Complete after 1 second
     holdTimer = window.setTimeout(() => {
-      completeHold(emoji);
+      completeHold(group);
     }, holdDuration);
   };
 
@@ -102,29 +127,37 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
       clearInterval(progressInterval);
       progressInterval = null;
     }
-    setHoldingEmoji(null);
+    setHoldingGroup(null);
     setHoldProgress(0);
   };
 
-  const completeHold = (emoji: string) => {
+  const completeHold = (group: ReactionGroup) => {
     cancelHold();
+
+    // Build tags array
+    const tags: string[][] = [
+      ['e', props.eventId!],
+      ['p', props.eventAuthor!],
+      ['client', 'notemine.io'],
+    ];
+
+    // Add emoji tag for NIP-30 custom emojis
+    if (group.customEmoji) {
+      tags.push(['emoji', group.customEmoji.shortcode, group.customEmoji.url]);
+    }
 
     // Add reaction to mining queue
     addToQueue({
       type: 'reaction',
-      content: emoji,
+      content: group.emoji,
       pubkey: user()!.pubkey,
       difficulty: preferences().powDifficultyReaction,
-      tags: [
-        ['e', props.eventId!],
-        ['p', props.eventAuthor!],
-        ['client', 'notemine.io'],
-      ],
+      tags,
       kind: 7,
       metadata: {
         targetEventId: props.eventId!,
         targetAuthor: props.eventAuthor!,
-        reactionContent: emoji,
+        reactionContent: group.emoji,
       },
     });
   };
@@ -141,31 +174,47 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
           <div
             class="cursor-pointer flex items-center px-2 pt-1 rounded-lg bg-bg-secondary/30 dark:bg-bg-tertiary/30 bg-black/10 dark:bg-black/40 relative overflow-hidden transition-all"
             classList={{
-              'ring-2 ring-accent': holdingEmoji() === group.emoji,
+              'ring-2 ring-accent': holdingGroup()?.emoji === group.emoji,
             }}
             onMouseDown={(e) => {
               e.preventDefault();
-              startHold(group.emoji);
+              startHold(group);
             }}
             onMouseUp={cancelHold}
             onMouseLeave={cancelHold}
             onTouchStart={(e) => {
               e.preventDefault();
-              startHold(group.emoji);
+              startHold(group);
             }}
             onTouchEnd={cancelHold}
             onTouchCancel={cancelHold}
           >
             {/* Loading bar - fills from left to right */}
-            <Show when={holdingEmoji() === group.emoji}>
+            <Show when={holdingGroup()?.emoji === group.emoji}>
               <div
                 class="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-accent/60 to-accent/80 z-0"
                 style={`width: ${holdProgress()}%`}
               />
             </Show>
 
-            {/* Emoji */}
-            <span class="text-sm relative z-10">{group.emoji}</span>
+            {/* Emoji - render as image if custom, otherwise as text */}
+            <Show
+              when={group.customEmoji}
+              fallback={<span class="text-sm relative z-10">{group.emoji}</span>}
+            >
+              <img
+                src={group.customEmoji!.url}
+                alt={group.customEmoji!.alt || group.emoji}
+                title={group.emoji}
+                class="inline-block align-middle relative z-10"
+                style={{
+                  width: group.customEmoji!.w ? `${Math.min(group.customEmoji!.w, 20)}px` : '16px',
+                  height: group.customEmoji!.h ? `${Math.min(group.customEmoji!.h, 20)}px` : '16px',
+                  'max-width': '20px',
+                  'max-height': '20px',
+                }}
+              />
+            </Show>
 
             {/* Count */}
             <span class="text-text-primary text-xs font-medium ml-1 relative z-10">

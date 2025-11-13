@@ -63,6 +63,11 @@ export const Timeline: Component<TimelineProps> = (props) => {
       // Subscribe to timeline updates
       subscription = timeline$.subscribe({
         next: (event: NostrEvent) => {
+          // Stop showing spinner on first cache/network event (even if reply)
+          if (loading()) {
+            setLoading(false);
+          }
+
           // Filter out replies - only show root notes (no 'e' tags)
           const hasETag = event.tags.some((tag) => tag[0] === 'e');
           if (hasETag) {
@@ -106,28 +111,18 @@ export const Timeline: Component<TimelineProps> = (props) => {
         if (loadingMore() || !hasMore()) return;
 
         setLoadingMore(true);
-        debug('[Timeline] Loading more notes, since:', oldestTimestamp - 1);
+        const since = oldestTimestamp - 1;
+        debug('[Timeline] Loading more via loader, since:', since);
 
-        // Use relayPool.req directly for pagination with proper filters
-        const moreTimeline$ = relayPool.req(
+        const moreTimeline$ = createTimelineStream(
           relays,
-          { kinds: [1, 30023], limit: LOAD_MORE_BATCH, until: oldestTimestamp - 1 }
+          [{ kinds: [1, 30023], limit: LOAD_MORE_BATCH }],
+          { limit: LOAD_MORE_BATCH, since }
         );
 
         let receivedCount = 0;
         moreTimeline$.subscribe({
-          next: (response) => {
-            if (response === 'EOSE') {
-              setLoadingMore(false);
-              if (receivedCount < LOAD_MORE_BATCH || eventCache.size >= maxEvents) {
-                setHasMore(false);
-                debug('[Timeline] No more notes to load');
-              }
-              return;
-            }
-
-            const event = response as NostrEvent;
-
+          next: (event: NostrEvent) => {
             // Filter out replies - only show root notes
             const hasETag = event.tags.some((tag) => tag[0] === 'e');
             if (hasETag) return;
@@ -135,23 +130,23 @@ export const Timeline: Component<TimelineProps> = (props) => {
             if (!eventCache.has(event.id)) {
               eventCache.set(event.id, event);
               receivedCount++;
-
-              // CRITICAL FIX: Add event to eventStore (same as main subscription)
               eventStore.add(event);
-
               if (event.created_at < oldestTimestamp) {
                 oldestTimestamp = event.created_at;
               }
-
-              // Initialize caches
-              if (!reactionsCache.has(event.id)) {
-                reactionsCache.set(event.id, []);
-              }
-              if (!repliesCache.has(event.id)) {
-                repliesCache.set(event.id, []);
-              }
-
+              if (!reactionsCache.has(event.id)) reactionsCache.set(event.id, []);
+              if (!repliesCache.has(event.id)) repliesCache.set(event.id, []);
               recalculateScores();
+            }
+          },
+          error: () => {
+            setLoadingMore(false);
+          },
+          complete: () => {
+            setLoadingMore(false);
+            if (receivedCount < LOAD_MORE_BATCH || eventCache.size >= maxEvents) {
+              setHasMore(false);
+              debug('[Timeline] No more notes to load (complete)');
             }
           },
         });

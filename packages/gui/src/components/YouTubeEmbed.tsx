@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 
 interface YouTubeEmbedProps {
   videoId: string;
+  reservedHeight?: number;
 }
 
 export const YouTubeEmbed: Component<YouTubeEmbedProps> = (props) => {
@@ -19,6 +20,15 @@ export const YouTubeEmbed: Component<YouTubeEmbedProps> = (props) => {
     }
   };
 
+  // Container style with reserved height for stable rendering (Phase 2)
+  // Falls back to 16:9 aspect ratio if no reserved height provided
+  const containerStyle = () => {
+    if (props.reservedHeight) {
+      return { 'min-height': `${props.reservedHeight}px` };
+    }
+    return { 'padding-bottom': '56.25%' }; // 16:9 fallback
+  };
+
   return (
     <div class="my-3">
       <Show
@@ -29,13 +39,23 @@ export const YouTubeEmbed: Component<YouTubeEmbedProps> = (props) => {
             target="_blank"
             rel="noopener noreferrer"
             class="block relative w-full cursor-pointer group"
-            style={{ 'padding-bottom': '56.25%' }}
+            classList={{
+              'h-auto': !!props.reservedHeight,
+            }}
+            style={containerStyle()}
             onClick={(e) => {
               e.preventDefault();
               handleClick();
             }}
           >
-            <div class="absolute top-0 left-0 w-full h-full bg-black rounded-lg overflow-hidden">
+            <div
+              class="bg-black rounded-lg overflow-hidden"
+              classList={{
+                'absolute top-0 left-0 w-full h-full': !props.reservedHeight,
+                'relative': !!props.reservedHeight,
+              }}
+              style={props.reservedHeight ? { height: `${props.reservedHeight}px` } : {}}
+            >
               <img
                 src={thumbnailUrl}
                 alt="YouTube video thumbnail"
@@ -56,14 +76,24 @@ export const YouTubeEmbed: Component<YouTubeEmbedProps> = (props) => {
           </a>
         }
       >
-        <div class="relative w-full" style={{ 'padding-bottom': '56.25%' }}>
+        <div
+          class="w-full"
+          classList={{
+            'relative': !props.reservedHeight,
+          }}
+          style={containerStyle()}
+        >
           <iframe
             src={embedUrl}
             title="YouTube video player"
             frameborder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen
-            class="absolute top-0 left-0 w-full h-full rounded-lg"
+            classList={{
+              'absolute top-0 left-0 w-full h-full rounded-lg': !props.reservedHeight,
+              'w-full rounded-lg': !!props.reservedHeight,
+            }}
+            style={props.reservedHeight ? { height: `${props.reservedHeight}px` } : {}}
           />
         </div>
       </Show>

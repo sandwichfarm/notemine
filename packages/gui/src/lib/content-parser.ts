@@ -70,9 +70,12 @@ const FACEBOOK_REGEX = /https?:\/\/(?:www\.|m\.)?facebook\.com\/(?:(?:[^\/]+\/)?
 
 /**
  * Regular expression to match Substack URLs
- * Matches: subdomain.substack.com/p/post-slug or custom domains
+ * Matches:
+ * - subdomain.substack.com/p/post-slug
+ * - subdomain.substack.com/pub/username/p/post-slug
+ * - subdomain.substack.com (homepage)
  */
-const SUBSTACK_REGEX = /https?:\/\/([a-zA-Z0-9-]+)\.substack\.com(?:\/p\/([a-zA-Z0-9-]+))?(?:\?[^\s]*)?/gi;
+const SUBSTACK_REGEX = /https?:\/\/([a-zA-Z0-9-]+)\.substack\.com(?:\/(?:pub\/[a-zA-Z0-9-]+\/)?p\/([a-zA-Z0-9-]+))?(?:[^\s]*)?/gi;
 
 /**
  * Regular expression to match Medium URLs

@@ -4,6 +4,8 @@ import { isImageDeblurred, markImageDeblurred } from '../lib/image-deblur-cache'
 
 interface ImageEmbedProps {
   url: string;
+  /** Reserved height for stable rendering (Phase 2) */
+  reservedHeight?: number;
 }
 
 export const ImageEmbed: Component<ImageEmbedProps> = (props) => {
@@ -47,9 +49,21 @@ export const ImageEmbed: Component<ImageEmbedProps> = (props) => {
     }
   };
 
+  // Container style with reserved height for stable rendering
+  const containerStyle = () => {
+    const style: Record<string, string> = {};
+    if (props.reservedHeight) {
+      style['min-height'] = `${props.reservedHeight}px`;
+    }
+    return style;
+  };
+
   return (
     <div class="my-3">
-      <div class="overflow-hidden rounded-lg">
+      <div
+        class="overflow-hidden rounded-lg"
+        style={containerStyle()}
+      >
         <img
           src={props.url}
           alt="Embedded image"

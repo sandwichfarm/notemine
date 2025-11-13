@@ -13,6 +13,7 @@ import { ParsedContent } from './ParsedContent';
 import { ReactionBreakdown } from './ReactionBreakdown';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useTooltip } from '../providers/TooltipProvider';
+import type { PreparedNote } from '../types/FeedTypes';
 
 interface NoteProps {
   event: NostrEvent;
@@ -21,6 +22,7 @@ interface NoteProps {
   reactions?: NostrEvent[];
   replies?: NostrEvent[];
   onVisible?: (eventId: string) => void; // Callback when note becomes visible
+  preparedNote?: PreparedNote; // Reserved heights for stable rendering (Phase 2)
 }
 
 // Global signal to track which note's tooltip is open (must be reactive)
@@ -198,11 +200,45 @@ export const Note: Component<NoteProps> = (props) => {
 
       onCleanup(() => observer.disconnect());
     }
+
+    // Phase 2: ResizeObserver to assert heights don't shrink (stable rendering)
+    if (noteRef && props.preparedNote) {
+      let maxHeight = 0;
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const currentHeight = entry.contentRect.height;
+
+          // Initialize max height on first observation
+          if (maxHeight === 0) {
+            maxHeight = currentHeight;
+            return;
+          }
+
+          // Check if height decreased (potential layout shift)
+          if (currentHeight < maxHeight) {
+            const shrinkage = maxHeight - currentHeight;
+            console.warn(
+              `[Note ${props.event.id.slice(0, 8)}] Height decreased by ${shrinkage.toFixed(1)}px (${maxHeight.toFixed(1)}px -> ${currentHeight.toFixed(1)}px). This may cause layout shifts.`
+            );
+            // Update max to allow for intentional height changes (like collapsed content)
+            // but we've logged the warning
+          } else if (currentHeight > maxHeight) {
+            // Height increased - this is acceptable (content expanding)
+            maxHeight = currentHeight;
+          }
+        }
+      });
+
+      resizeObserver.observe(noteRef);
+
+      onCleanup(() => resizeObserver.disconnect());
+    }
   });
 
   return (
     <div
       ref={noteRef}
+      data-note-id={props.event.id}
       class="!mb-10 note"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
@@ -279,6 +315,7 @@ export const Note: Component<NoteProps> = (props) => {
         content={props.event.content}
         event={props.event}
         class={contentClass()}
+        reservedHeights={props.preparedNote?.reservedHeights}
       />
       </div>
 

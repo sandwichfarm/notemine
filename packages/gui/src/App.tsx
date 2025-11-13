@@ -62,7 +62,7 @@ const AppInit: ParentComponent = (props) => {
 
     // Initialize local cache (COI confirmed available)
     try {
-      await initializeCache();
+      await initializeCache({ allowMemoryFallback: true });
       console.log('[CACHE-IMPL] Cache initialized');
 
       // Load cached events into event store

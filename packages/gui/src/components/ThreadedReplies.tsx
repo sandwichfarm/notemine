@@ -3,6 +3,7 @@ import type { NostrEvent } from 'nostr-tools/core';
 import { getPowDifficulty, hasValidPow } from '../lib/pow';
 import { ProfileName } from './ProfileName';
 import { ReplyComposer } from './ReplyComposer';
+import { ParsedContent } from './ParsedContent';
 
 interface ThreadedRepliesProps {
   replies: NostrEvent[];
@@ -69,9 +70,11 @@ const ThreadedReply: Component<{
 
       {/* Reply Content */}
       <Show when={!collapsed()}>
-        <div class="text-sm text-text-primary whitespace-pre-wrap break-words mb-2">
-          {props.node.event.content}
-        </div>
+        <ParsedContent
+          content={props.node.event.content}
+          event={props.node.event}
+          class="text-sm text-text-primary mb-2"
+        />
 
         {/* Reply Action Button */}
         <button

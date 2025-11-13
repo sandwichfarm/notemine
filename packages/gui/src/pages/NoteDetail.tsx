@@ -611,6 +611,7 @@ const NoteDetail: Component = () => {
             {/* Content */}
             <ParsedContent
               content={note()!.content}
+              event={note()!}
               class="text-text-primary break-words text-2xl mb-6"
             />
 

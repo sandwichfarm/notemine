@@ -277,6 +277,7 @@ export const Note: Component<NoteProps> = (props) => {
       {/* Content - HIGH CONTRAST, the focus */}
       <ParsedContent
         content={props.event.content}
+        event={props.event}
         class={contentClass()}
       />
       </div>
@@ -305,14 +306,14 @@ export const Note: Component<NoteProps> = (props) => {
           💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
         </span>
       </Show>
-        <Show when={props.replies?.length > 0}>
+        <Show when={props.replies?.length && props.replies.length > 0}>
             {props.replies?.length} replies
         </Show>
-        <Show when={props.replies?.length > 0 && props.reactions?.length > 0}>
+        <Show when={props.replies?.length && props.replies.length > 0 && props.reactions?.length && props.reactions.length > 0}>
             {' & '}
         </Show>
-        <Show when={props.reactions?.length > 0}>            
-            {props.reactions!.length} reactions
+        <Show when={props.reactions?.length && props.reactions.length > 0}>
+            {props.reactions?.length} reactions
         </Show>
       </div>
 

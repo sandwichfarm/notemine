@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools';
 
-export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack';
+export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium';
 
 export interface ParsedEntity {
   type: EntityType;
@@ -73,6 +73,12 @@ const FACEBOOK_REGEX = /https?:\/\/(?:www\.|m\.)?facebook\.com\/(?:(?:[^\/]+\/)?
  * Matches: subdomain.substack.com/p/post-slug or custom domains
  */
 const SUBSTACK_REGEX = /https?:\/\/([a-zA-Z0-9-]+)\.substack\.com(?:\/p\/([a-zA-Z0-9-]+))?(?:\?[^\s]*)?/gi;
+
+/**
+ * Regular expression to match Medium URLs
+ * Matches: medium.com/@username/post-slug or medium.com/publication/post-slug
+ */
+const MEDIUM_REGEX = /https?:\/\/(?:www\.)?medium\.com\/(?:@([a-zA-Z0-9_-]+)|([a-zA-Z0-9_-]+))\/([a-zA-Z0-9_-]+)(?:\?[^\s]*)?/gi;
 
 /**
  * Parse a string to find all nostr: entity references
@@ -200,6 +206,21 @@ function findMediaEntities(content: string): ParsedEntity[] {
     entities.push({
       type: 'substack',
       data: { publication, type, url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
+  // Find Medium links
+  const mediumMatches = content.matchAll(MEDIUM_REGEX);
+  for (const match of mediumMatches) {
+    const author = match[1]; // @username format
+    const publication = match[2]; // publication name
+
+    entities.push({
+      type: 'medium',
+      data: { author, publication, url: match[0] },
       start: match.index!,
       end: match.index! + match[0].length,
       raw: match[0],

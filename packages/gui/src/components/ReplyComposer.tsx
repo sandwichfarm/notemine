@@ -237,15 +237,18 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
         <div class="relative  ">
           <textarea
             ref={textareaRef}
-            class="w-full p-3 
+            class="
+            w-full 
+            p-3 
             bg-[var(--bg-secondary)] 
             text-[var(--text-primary)] 
             border-0
             focus:outline-none 
             focus:ring-0 
             resize-none 
-            font-sans 
             placeholder:opacity-40  
+            placeholder:font-mono
+            font-mono
             rounded-0 
             border 
             border-2 

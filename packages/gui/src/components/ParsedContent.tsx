@@ -1,11 +1,16 @@
 import { Component, For } from 'solid-js';
-import { parseContent } from '../lib/nip19-parser';
+import { parseContent } from '../lib/content-parser';
 import { NpubEmbed } from './NpubEmbed';
 import { NeventEmbed } from './NeventEmbed';
 import { NaddrEmbed } from './NaddrEmbed';
 import { ImageEmbed } from './ImageEmbed';
 import { VideoEmbed } from './VideoEmbed';
 import { YouTubeEmbed } from './YouTubeEmbed';
+import { SpotifyEmbed } from './SpotifyEmbed';
+import { GitHubEmbed } from './GitHubEmbed';
+import { XEmbed } from './XEmbed';
+import { FacebookEmbed } from './FacebookEmbed';
+import { SubstackEmbed } from './SubstackEmbed';
 
 interface ParsedContentProps {
   content: string;
@@ -53,6 +58,21 @@ export const ParsedContent: Component<ParsedContentProps> = (props) => {
 
               case 'youtube':
                 return <YouTubeEmbed videoId={entity.data.videoId} />;
+
+              case 'spotify':
+                return <SpotifyEmbed type={entity.data.type} id={entity.data.id} />;
+
+              case 'github':
+                return <GitHubEmbed {...entity.data} />;
+
+              case 'x':
+                return <XEmbed {...entity.data} />;
+
+              case 'facebook':
+                return <FacebookEmbed {...entity.data} />;
+
+              case 'substack':
+                return <SubstackEmbed {...entity.data} />;
 
               case 'nsec':
                 // Don't render nsec (private key) - just show warning

@@ -5,8 +5,8 @@ import { nip19 } from 'nostr-tools';
 import { relayPool, eventStore, getActiveRelays } from '../lib/applesauce';
 import { getPowDifficulty } from '../lib/pow';
 import { ProfileName } from './ProfileName';
-import { getEventId, getRelayHints } from '../lib/nip19-parser';
-import type { ParsedEntity } from '../lib/nip19-parser';
+import { getEventId, getRelayHints } from '../lib/content-parser';
+import type { ParsedEntity } from '../lib/content-parser';
 
 interface NeventEmbedProps {
   entity: ParsedEntity;

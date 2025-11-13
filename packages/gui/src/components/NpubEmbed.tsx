@@ -1,7 +1,7 @@
 import { Component } from 'solid-js';
 import { ProfileName } from './ProfileName';
-import { getPubkey } from '../lib/nip19-parser';
-import type { ParsedEntity } from '../lib/nip19-parser';
+import { getPubkey } from '../lib/content-parser';
+import type { ParsedEntity } from '../lib/content-parser';
 
 interface NpubEmbedProps {
   entity: ParsedEntity;

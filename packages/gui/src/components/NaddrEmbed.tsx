@@ -4,8 +4,8 @@ import { A } from '@solidjs/router';
 import { nip19 } from 'nostr-tools';
 import { relayPool, eventStore, getActiveRelays } from '../lib/applesauce';
 import { ProfileName } from './ProfileName';
-import { getRelayHints } from '../lib/nip19-parser';
-import type { ParsedEntity } from '../lib/nip19-parser';
+import { getRelayHints } from '../lib/content-parser';
+import type { ParsedEntity } from '../lib/content-parser';
 
 interface NaddrEmbedProps {
   entity: ParsedEntity;

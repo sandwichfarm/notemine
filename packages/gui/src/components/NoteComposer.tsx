@@ -178,8 +178,23 @@ export const NoteComposer: Component = () => {
         <div class="mb-4 relative">
           <textarea
             ref={textareaRef}
-            class="w-full p-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] border-0 rounded-lg focus:outline-none focus:ring-0 resize-none font-sans placeholder:opacity-40"
-            placeholder={`What's on your mind? (${maxContentLength()} chars max, POW required, use @ to mention users)`}
+            class="
+            w-full 
+            p-3 
+            bg-[var(--bg-secondary)] 
+            text-[var(--text-primary)] 
+            border-0
+            focus:outline-none 
+            focus:ring-0 
+            resize-none 
+            placeholder:opacity-40  
+            placeholder:font-mono
+            font-mono
+            rounded-0 
+            border 
+            border-2 
+            border-black 
+            shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)]"            placeholder={`What's on your mind? (${maxContentLength()} chars max, POW required, use @ to mention users)`}
             rows={4}
             value={content()}
             onInput={handleContentChange}
@@ -236,7 +251,18 @@ export const NoteComposer: Component = () => {
           <button
             type="submit"
             disabled={!canSubmit()}
-            class="flex-1 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            class="
+            flex-1 
+            px-4 
+            py-2 
+            bg-accent 
+            text-white 
+            rounded-lg 
+            font-medium 
+            hover:opacity-90 
+            transition-opacity 
+            disabled:opacity-50 
+            disabled:cursor-not-allowed"
           >
             Add to Queue
           </button>

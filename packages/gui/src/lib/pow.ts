@@ -228,8 +228,12 @@ export function clearDifficultyCache(): void {
  */
 export function formatPowDifficulty(difficulty: number): string {
   if (difficulty === 0) return 'none';
-  if (difficulty < 16) return `⛏️ ${difficulty}`;
-  if (difficulty < 20) return `⛏️⛏️ ${difficulty}`;
-  if (difficulty < 24) return `⛏️⛏️⛏️ ${difficulty}`;
-  return `⛏️⛏️⛏️⛏️ ${difficulty}`;
+  if (difficulty < 16) return `💎 ${difficulty}`;
+  if (difficulty < 20) return `💎💎 ${difficulty}`;
+  if (difficulty < 24) return `💎💎💎 ${difficulty}`;
+  if (difficulty < 28) return `💎💎💎💎 ${difficulty}`;
+  if (difficulty < 32) return `💎💎💎💎💎 ${difficulty}`;
+  if (difficulty < 36) return `💎💎💎💎💎💎 ${difficulty}`;
+  if (difficulty < 40) return `💎💎💎💎💎💎💎 ${difficulty}`;
+  return `🤯💎💎💎💎💎💎💎💎 ${difficulty}`;
 }

@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools';
 
-export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube';
+export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack';
 
 export interface ParsedEntity {
   type: EntityType;
@@ -19,8 +19,11 @@ export interface ContentSegment {
 /**
  * Regular expression to match nostr: references
  * Matches: nostr:npub..., nostr:note..., nostr:nprofile..., nostr:nevent..., nostr:naddr...
+ * Uses exact bech32 character set: qpzry9x8gf2tvdw0s3jn54khce6mua7l
+ * Excludes: 1 (separator), b, i, o (confusing characters)
+ * Uses word boundary to prevent matching text after the identifier
  */
-const NOSTR_ENTITY_REGEX = /nostr:(npub|note|nprofile|nevent|naddr|nsec)[a-zA-Z0-9]+/gi;
+const NOSTR_ENTITY_REGEX = /nostr:(?:npub|note|nprofile|nevent|naddr|nsec)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+\b/g;
 
 /**
  * Regular expression to match image URLs
@@ -34,8 +37,42 @@ const VIDEO_REGEX = /https?:\/\/[^\s]+\.(?:mp4|webm|ogg|mov|avi|mkv)(?:\?[^\s]*)
 
 /**
  * Regular expression to match YouTube URLs
+ * Matches:
+ * - youtube.com/watch?v=VIDEO_ID
+ * - youtube.com/live/VIDEO_ID
+ * - youtu.be/VIDEO_ID
  */
-const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[^\s]*)?/gi;
+const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[^\s]*)?/gi;
+
+/**
+ * Regular expression to match Spotify URLs
+ * Matches: open.spotify.com/(track|album|playlist|episode|show)/ID
+ */
+const SPOTIFY_REGEX = /https?:\/\/open\.spotify\.com\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)(?:\?[^\s]*)?/gi;
+
+/**
+ * Regular expression to match GitHub URLs
+ * Matches repos, issues, PRs, releases
+ */
+const GITHUB_REGEX = /https?:\/\/github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_.-]+)(?:\/(issues|pull|releases\/tag)\/([0-9a-zA-Z_.-]+))?/gi;
+
+/**
+ * Regular expression to match X/Twitter URLs
+ * Matches: x.com/username/status/ID or twitter.com/username/status/ID
+ */
+const X_REGEX = /https?:\/\/(?:(?:www|mobile)\.)?(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)\/status\/(\d+)(?:\?[^\s]*)?/gi;
+
+/**
+ * Regular expression to match Facebook URLs
+ * Matches posts, photos, videos, pages
+ */
+const FACEBOOK_REGEX = /https?:\/\/(?:www\.|m\.)?facebook\.com\/(?:(?:[^\/]+\/)?(?:posts|photos|videos|permalink)\/([^\/\s?]+)|([a-zA-Z0-9.]+))(?:\?[^\s]*)?/gi;
+
+/**
+ * Regular expression to match Substack URLs
+ * Matches: subdomain.substack.com/p/post-slug or custom domains
+ */
+const SUBSTACK_REGEX = /https?:\/\/([a-zA-Z0-9-]+)\.substack\.com(?:\/p\/([a-zA-Z0-9-]+))?(?:\?[^\s]*)?/gi;
 
 /**
  * Parse a string to find all nostr: entity references
@@ -60,11 +97,9 @@ export function findNostrEntities(content: string): ParsedEntity[] {
         raw,
       });
     } catch (error) {
-      console.warn('[nip19-parser] Failed to decode:', identifier, error);
       // Skip invalid entities
     }
   }
-
   return entities;
 }
 
@@ -87,9 +122,99 @@ function findMediaEntities(content: string): ParsedEntity[] {
     });
   }
 
+  // Find Spotify links
+  const spotifyMatches = content.matchAll(SPOTIFY_REGEX);
+  for (const match of spotifyMatches) {
+    const type = match[1] as 'track' | 'album' | 'playlist' | 'episode' | 'show';
+    const id = match[2];
+    entities.push({
+      type: 'spotify',
+      data: { type, id, url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
+  // Find GitHub links
+  const githubMatches = content.matchAll(GITHUB_REGEX);
+  for (const match of githubMatches) {
+    const owner = match[1];
+    const repo = match[2];
+    const pathType = match[3]; // 'issues', 'pull', 'releases/tag', or undefined
+    const number = match[4];
+
+    let type: 'repo' | 'issue' | 'pr' | 'release' = 'repo';
+    if (pathType === 'issues') type = 'issue';
+    else if (pathType === 'pull') type = 'pr';
+    else if (pathType === 'releases/tag') type = 'release';
+
+    entities.push({
+      type: 'github',
+      data: { type, owner, repo, number, url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
+  // Find X/Twitter links
+  const xMatches = content.matchAll(X_REGEX);
+  for (const match of xMatches) {
+    const username = match[1];
+    const tweetId = match[2];
+    entities.push({
+      type: 'x',
+      data: { username, tweetId, url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
+  // Find Facebook links
+  const facebookMatches = content.matchAll(FACEBOOK_REGEX);
+  for (const match of facebookMatches) {
+    // Determine type based on URL structure
+    let type: 'post' | 'photo' | 'video' | 'page' = 'post';
+    if (match[0].includes('/photos/')) type = 'photo';
+    else if (match[0].includes('/videos/')) type = 'video';
+    else if (!match[1]) type = 'page';
+
+    entities.push({
+      type: 'facebook',
+      data: { type, url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
+  // Find Substack links
+  const substackMatches = content.matchAll(SUBSTACK_REGEX);
+  for (const match of substackMatches) {
+    const publication = match[1];
+    const postSlug = match[2];
+    const type = postSlug ? 'post' : 'home';
+
+    entities.push({
+      type: 'substack',
+      data: { publication, type, url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
   // Find video files
   const videoMatches = content.matchAll(VIDEO_REGEX);
   for (const match of videoMatches) {
+    // Skip if this URL is already matched as YouTube
+    const isAlreadyMatched = entities.some(
+      e => e.start <= match.index! && e.end >= match.index! + match[0].length
+    );
+    if (isAlreadyMatched) continue;
+
     entities.push({
       type: 'video',
       data: { url: match[0] },
@@ -102,6 +227,12 @@ function findMediaEntities(content: string): ParsedEntity[] {
   // Find images
   const imageMatches = content.matchAll(IMAGE_REGEX);
   for (const match of imageMatches) {
+    // Skip if this URL is already matched as video or YouTube
+    const isAlreadyMatched = entities.some(
+      e => e.start <= match.index! && e.end >= match.index! + match[0].length
+    );
+    if (isAlreadyMatched) continue;
+
     entities.push({
       type: 'image',
       data: { url: match[0] },

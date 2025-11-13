@@ -47,16 +47,26 @@
 }
 
 @layer components {
+
+
   .btn {
-    @apply px-4 py-2 rounded border border-[var(--border-color)] hover:border-[var(--accent)] cursor-pointer;
+    @apply px-4 py-2 rounded border border-[var(--border-color)] hover:border-[var(--accent)] cursor-pointer shadow-[0.5rem_0.5rem_[var(--accent)]];;
   }
 
   .btn-primary {
-    @apply btn bg-[var(--accent)] text-white border-[var(--accent)];
+    @apply btn bg-[var(--accent)] text-white border-[var(--accent)] shadow-[0.5rem_0.5rem_[var(--accent)]];;
   }
 
   .card {
     @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded p-4;
+  }
+
+  .note {
+    @apply mb-6 bg-gray-300/30 dark:bg-black/30 rounded-none border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)];
+  }
+
+  .tooltip {
+    @apply mb-6 bg-gray-800 dark:bg-gray-900 rounded-none border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,10,0.6)];
   }
 
   .input {

@@ -3,6 +3,7 @@ import type { NostrEvent } from 'nostr-tools/core';
 import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays, eventStore } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
+import { AlgorithmControls } from './AlgorithmControls';
 import { Subscription } from 'rxjs';
 import { usePreferences } from '../providers/PreferencesProvider';
 
@@ -328,6 +329,11 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
   return (
     <div class="w-full max-w-2xl mx-auto space-y-4">
+      {/* Algorithm Controls */}
+      <Show when={!loading() && notes().length > 0}>
+        <AlgorithmControls onUpdate={recalculateScoresImmediate} />
+      </Show>
+
       {/* Loading state */}
       <Show when={loading()}>
         <div class="card p-8 text-center">
@@ -357,9 +363,9 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       {/* Notes list */}
       <Show when={notes().length > 0}>
         <div class="space-y-3">
-          <div class="text-sm text-text-secondary mb-2">
+          {/* <div class="text-sm text-text-secondary mb-6 p-6">
             {notes().length} notes from your Web of Trust • sorted by total PoW (including delegated)
-          </div>
+          </div> */}
           <For each={notes()}>
             {(scoredNote) => (
               <Note

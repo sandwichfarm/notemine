@@ -3,6 +3,7 @@ import type { NostrEvent } from 'nostr-tools/core';
 import { createTimelineStream, getActiveRelays, relayPool, eventStore } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
+import { AlgorithmControls } from './AlgorithmControls';
 import { Subscription } from 'rxjs';
 import { debug } from '../lib/debug';
 import { usePreferences } from '../providers/PreferencesProvider';
@@ -278,6 +279,11 @@ export const Timeline: Component<TimelineProps> = (props) => {
 
   return (
     <div class="w-full max-w-2xl mx-auto space-y-4">
+      {/* Algorithm Controls */}
+      <Show when={!loading() && notes().length > 0}>
+        <AlgorithmControls onUpdate={recalculateScoresImmediate} />
+      </Show>
+
       {/* Loading state */}
       <Show when={loading()}>
         <div class="card p-8 text-center">

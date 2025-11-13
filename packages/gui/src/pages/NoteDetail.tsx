@@ -588,9 +588,9 @@ const NoteDetail: Component = () => {
 
       {/* Note Content */}
       <Show when={note()}>
-        <div id={note().id}>
+        <div id={note()!.id}>
 
-          <div class="mb-6 bg-black/30 rounded-0 border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)]">
+          <div class="note">
             {/* Header */}
             <div class="flex items-start justify-between mb-4">
               <div class="flex items-center gap-2">
@@ -617,7 +617,11 @@ const NoteDetail: Component = () => {
             {/* REACTIONS - Horizontal bar between content and replies */}
             <Show when={filteredReactions().length > 0}>
               <div class="mb-4 pl-0 ml-0">
-                <ReactionBreakdown reactions={filteredReactions()} />
+                <ReactionBreakdown
+                  reactions={filteredReactions()}
+                  eventId={note()!.id}
+                  eventAuthor={note()!.pubkey}
+                />
               </div>
             </Show>
 

@@ -2,7 +2,7 @@ import { Component, createSignal, Show } from 'solid-js';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { clearDeblurCache, getDeblurCacheStats } from '../lib/image-deblur-cache';
 
-type TabId = 'pow' | 'content' | 'mining' | 'advanced';
+type TabId = 'pow' | 'content' | 'algorithm' | 'mining' | 'advanced';
 
 export const Preferences: Component = () => {
   const { preferences, updatePreference, resetPreferences } = usePreferences();
@@ -27,6 +27,7 @@ export const Preferences: Component = () => {
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: 'pow', label: 'POW Settings' },
     { id: 'content', label: 'Content & Timeline' },
+    { id: 'algorithm', label: 'Timeline Algorithm' },
     { id: 'mining', label: 'Mining' },
     { id: 'advanced', label: 'UI & Advanced' },
   ];
@@ -219,126 +220,130 @@ export const Preferences: Component = () => {
         </div>
       </section>
 
-      {/* POW Weighting Factors */}
-      <section class="mb-8">
-        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">POW Score Weighting</h2>
+      </Show>
 
-        <div class="space-y-4">
-          {/* Reaction Weight */}
-          <div class="card">
-            <label class="block text-sm font-medium text-text-secondary mb-2">
-              Reaction POW Weight: {(preferences().reactionPowWeight * 100).toFixed(0)}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={preferences().reactionPowWeight}
-              onInput={(e) => updatePreference('reactionPowWeight', Number(e.currentTarget.value))}
-              class="w-full"
-            />
-            <p class="text-xs text-text-tertiary mt-1 opacity-50">
-              How much reactions influence note score (default: 50%)
-            </p>
-          </div>
+      {/* Timeline Algorithm Tab */}
+      <Show when={activeTab() === 'algorithm'}>
+        {/* POW Weighting Factors */}
+        <section class="mb-8">
+          <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">POW Score Weighting</h2>
 
-          {/* Reply Weight */}
-          <div class="card">
-            <label class="block text-sm font-medium text-text-secondary mb-2">
-              Reply POW Weight: {(preferences().replyPowWeight * 100).toFixed(0)}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={preferences().replyPowWeight}
-              onInput={(e) => updatePreference('replyPowWeight', Number(e.currentTarget.value))}
-              class="w-full"
-            />
-            <p class="text-xs text-text-tertiary mt-1 opacity-50">
-              How much replies influence note score (default: 70%)
-            </p>
-          </div>
+          <div class="space-y-4">
+            {/* Reaction Weight */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Reaction POW Weight: {(preferences().reactionPowWeight * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={preferences().reactionPowWeight}
+                onInput={(e) => updatePreference('reactionPowWeight', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How much reactions influence note score (default: 50%)
+              </p>
+            </div>
 
-          {/* Profile Weight */}
-          <div class="card">
-            <label class="block text-sm font-medium text-text-secondary mb-2">
-              Profile POW Weight: {(preferences().profilePowWeight * 100).toFixed(0)}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={preferences().profilePowWeight}
-              onInput={(e) => updatePreference('profilePowWeight', Number(e.currentTarget.value))}
-              class="w-full"
-            />
-            <p class="text-xs text-text-tertiary mt-1 opacity-50">
-              How much author's mined pubkey influences note score (default: 30%)
-            </p>
-          </div>
+            {/* Reply Weight */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Reply POW Weight: {(preferences().replyPowWeight * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={preferences().replyPowWeight}
+                onInput={(e) => updatePreference('replyPowWeight', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How much replies influence note score (default: 70%)
+              </p>
+            </div>
 
-          {/* Non-POW Reaction Weight */}
-          <div class="card">
-            <label class="block text-sm font-medium text-text-secondary mb-2">
-              Non-POW Reaction Weight: {(preferences().nonPowReactionWeight * 100).toFixed(0)}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={preferences().nonPowReactionWeight}
-              onInput={(e) => updatePreference('nonPowReactionWeight', Number(e.currentTarget.value))}
-              class="w-full"
-            />
-            <p class="text-xs text-text-tertiary mt-1 opacity-50">
-              How much reactions WITHOUT POW influence note score (default: 10%)
-            </p>
-          </div>
+            {/* Profile Weight */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Profile POW Weight: {(preferences().profilePowWeight * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={preferences().profilePowWeight}
+                onInput={(e) => updatePreference('profilePowWeight', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How much author's mined pubkey influences note score (default: 30%)
+              </p>
+            </div>
 
-          {/* Non-POW Reply Weight */}
-          <div class="card">
-            <label class="block text-sm font-medium text-text-secondary mb-2">
-              Non-POW Reply Weight: {(preferences().nonPowReplyWeight * 100).toFixed(0)}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={preferences().nonPowReplyWeight}
-              onInput={(e) => updatePreference('nonPowReplyWeight', Number(e.currentTarget.value))}
-              class="w-full"
-            />
-            <p class="text-xs text-text-tertiary mt-1 opacity-50">
-              How much replies WITHOUT POW influence note score (default: 10%)
-            </p>
-          </div>
+            {/* Non-POW Reaction Weight */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Non-POW Reaction Weight: {(preferences().nonPowReactionWeight * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={preferences().nonPowReactionWeight}
+                onInput={(e) => updatePreference('nonPowReactionWeight', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How much reactions WITHOUT POW influence note score (default: 10%)
+              </p>
+            </div>
 
-          {/* POW Interaction Threshold */}
-          <div class="card">
-            <label class="block text-sm font-medium text-text-secondary mb-2">
-              POW Interaction Threshold: {preferences().powInteractionThreshold}
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              step="1"
-              value={preferences().powInteractionThreshold}
-              onInput={(e) => updatePreference('powInteractionThreshold', Number(e.currentTarget.value))}
-              class="w-full"
-            />
-            <p class="text-xs text-text-tertiary mt-1 opacity-50">
-              Minimum POW difficulty for an interaction to count as "with POW" (default: 1)
-            </p>
+            {/* Non-POW Reply Weight */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Non-POW Reply Weight: {(preferences().nonPowReplyWeight * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={preferences().nonPowReplyWeight}
+                onInput={(e) => updatePreference('nonPowReplyWeight', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How much replies WITHOUT POW influence note score (default: 10%)
+              </p>
+            </div>
+
+            {/* POW Interaction Threshold */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                POW Interaction Threshold: {preferences().powInteractionThreshold}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="1"
+                value={preferences().powInteractionThreshold}
+                onInput={(e) => updatePreference('powInteractionThreshold', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Minimum POW difficulty for an interaction to count as "with POW" (default: 1)
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       </Show>
 
       {/* Content & Timeline Tab */}

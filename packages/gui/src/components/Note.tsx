@@ -10,6 +10,7 @@ import { ReportModal } from './ReportModal';
 import { RepostConfirmDialog } from './RepostConfirmDialog';
 import { ProfileName } from './ProfileName';
 import { ParsedContent } from './ParsedContent';
+import { ReactionBreakdown } from './ReactionBreakdown';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useTooltip } from '../providers/TooltipProvider';
 
@@ -63,7 +64,7 @@ export const Note: Component<NoteProps> = (props) => {
 
   const contentClass = () =>
     [
-      'text-text-primary break-words font-sans text-base leading-relaxed mb-4',
+      'leading-relaxed text-xl',
       !hasPow() ? 'opacity-70' : null,
     ]
       .filter(Boolean)
@@ -202,22 +203,22 @@ export const Note: Component<NoteProps> = (props) => {
   return (
     <div
       ref={noteRef}
-      class="p-5 mb-4 rounded-lg dark:bg-white/5 transition-all"
+      class="!mb-10 note"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
         'border-l-gray-500/30 bg-bg-secondary dark:bg-bg-tertiary': !hasPow(),
       }}
     >
       {/* Header - Low contrast metadata */}
-      <div class="flex items-start justify-between mb-2 opacity-60">
-        <div class="flex items-center gap-2 min-w-0 flex-1">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex items-center gap-2 min-w-0 flex-1 opacity-60">
           <ProfileName pubkey={props.event.pubkey} asLink={true} showAvatar={true} />
           <div class="text-xs text-text-tertiary">{timestamp()}</div>
         </div>
 
         <div class="flex items-center gap-2">
           {/* POW Badge */}
-          <Show when={hasPow()} fallback={<span class="text-xs text-text-tertiary">no pow</span>}>
+          <Show when={hasPow()} fallback={<span class="text-xs text-text-tertiary opacity-60">no pow</span>}>
             <span
               class="text-xs font-mono text-accent/70 cursor-pointer hover:text-accent transition-colors"
               onClick={toggleTooltip}
@@ -231,7 +232,7 @@ export const Note: Component<NoteProps> = (props) => {
             <div class="relative">
               <span
                 ref={scoreSpanRef}
-                class="text-xs font-mono text-text-tertiary cursor-pointer hover:text-text-secondary transition-colors"
+                class="text-xs font-mono text-text-tertiary cursor-pointer hover:text-text-secondary transition-colors opacity-60"
                 onClick={() => {
                   const currentlyOpen = showScoreTooltip();
 
@@ -251,7 +252,15 @@ export const Note: Component<NoteProps> = (props) => {
               {/* Tooltip positioned relative to score - stays pinned */}
               <Show when={showScoreTooltip()}>
                 <div
-                  class="absolute top-6 right-0 z-[9998] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-3 shadow-xl min-w-[300px] max-w-[400px]"
+                  class="
+                    absolute 
+                    top-6 
+                    right-0 
+                    z-[9998] 
+                    opacity-100
+                    tooltip
+                    min-w-[300px] 
+                    max-w-[400px]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <pre class="text-xs font-mono text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
@@ -264,11 +273,13 @@ export const Note: Component<NoteProps> = (props) => {
         </div>
       </div>
 
+      <div class="my-6">
       {/* Content - HIGH CONTRAST, the focus */}
       <ParsedContent
         content={props.event.content}
         class={contentClass()}
       />
+      </div>
 
       {/* Topics - Display #t tags */}
       <Show when={topics().length > 0}>
@@ -283,14 +294,51 @@ export const Note: Component<NoteProps> = (props) => {
         </div>
       </Show>
 
+      
+
+      <div class="mb-3 text-xs font-mono text-black/60 dark:text-white/60">
+        <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
+        <span
+          class="text-text-secondary cursor-help"
+          title="Contributed Work: Total raw POW from reactions and replies combined"
+        >
+          💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
+        </span>
+      </Show>
+        <Show when={props.replies?.length > 0}>
+            {props.replies?.length} replies
+        </Show>
+        <Show when={props.replies?.length > 0 && props.reactions?.length > 0}>
+            {' & '}
+        </Show>
+        <Show when={props.reactions?.length > 0}>            
+            {props.reactions!.length} reactions
+        </Show>
+      </div>
+
+
+
+      {/* Reactions Bar - Visual breakdown of reactions */}
+      <Show when={props.reactions && props.reactions.length > 0}>
+        <div class="mb-3">
+          <ReactionBreakdown
+            reactions={props.reactions!}
+            eventId={props.event.id}
+            eventAuthor={props.event.pubkey}
+          />
+        </div>
+      </Show>
+
+      
+      
       {/* Interaction Stats - Subtle, low contrast */}
-      <Show when={(props.reactions?.length || 0) > 0 || (props.replies?.length || 0) > 0}>
+      {/* <Show when={(props.reactions?.length || 0) > 0 || (props.replies?.length || 0) > 0}>
         <div class="mb-3 text-xs font-mono">
+          <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
+
+          </Show>
           <span class="text-text-tertiary">
-            <Show when={props.reactions && props.reactions.length > 0}>
-              {props.reactions!.length} reactions{' '}
-            </Show>
-            💬{props.replies?.length || 0}{' '}
+            
             <Show when={stats().repliesPowTotal > 0}>
               <span
                 class="text-text-tertiary/60 cursor-help"
@@ -300,24 +348,10 @@ export const Note: Component<NoteProps> = (props) => {
               </span>
               {' | '}
             </Show>
-            <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
-              <span
-                class="text-text-secondary cursor-help"
-                title="Contributed Work: Total raw POW from reactions and replies combined"
-              >
-                CW: {(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)}
-              </span>
-              {' '}
-              <span
-                class="text-text-secondary cursor-help"
-                title="Weighted Work: POW after applying reaction and reply weight multipliers from preferences"
-              >
-                WW: {(stats().weightedReactionsPow + stats().weightedRepliesPow).toFixed(1)}
-              </span>
-            </Show>
+            
           </span>
         </div>
-      </Show>
+      </Show> */}
 
       {/* Footer - Low contrast actions */}
       <div class="flex gap-4 text-xs opacity-50 hover:opacity-70 transition-opacity">

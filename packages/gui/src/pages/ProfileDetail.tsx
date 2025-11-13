@@ -1,29 +1,72 @@
-import { Component, createSignal, onMount, Show, For } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, createEffect, Show, For } from 'solid-js';
 import { useParams, useNavigate } from '@solidjs/router';
 import { nip19, type NostrEvent } from 'nostr-tools';
-import { relayPool, getActiveRelays, getUserInboxRelays } from '../lib/applesauce';
+import { relayPool, getActiveRelays, getUserInboxRelays, eventStore } from '../lib/applesauce';
+import { getCachedEventsByFilters } from '../lib/cache';
 import { useProfile } from '../hooks/useProfile';
+import { usePreferences } from '../providers/PreferencesProvider';
 import { Note } from '../components/Note';
 import { ReportModal } from '../components/ReportModal';
 import { ProfilePowBadge } from '../components/ProfilePowBadge';
-import { getPowDifficulty, hasValidPow } from '../lib/pow';
+import { hasValidPow } from '../lib/pow';
 import { debug } from '../lib/debug';
 import { useNip05Validation } from '../lib/nip05-validator';
 
-const MIN_POW_DIFFICULTY = 16;
+const INITIAL_LOAD = 10;
+const LOAD_MORE_BATCH = 5;
+const REQUIRE_POW_KEY = 'notemine:ui:profileRequirePow';
 
 const ProfileDetail: Component = () => {
   const params = useParams();
   const navigate = useNavigate();
+  const { preferences, updatePreference } = usePreferences();
 
   const [pubkey, setPubkey] = createSignal<string | null>(null);
   const [notes, setNotes] = createSignal<NostrEvent[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingNotes, setLoadingNotes] = createSignal(true);
+  const [loadingMore, setLoadingMore] = createSignal(false);
+  const [hasMore, setHasMore] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [showReportModal, setShowReportModal] = createSignal(false);
 
+  // POW filter toggle - default to false (show all notes)
+  const initialRequirePow = (() => {
+    try {
+      const v = localStorage.getItem(REQUIRE_POW_KEY);
+      return v === '1' || v === 'true';
+    } catch {
+      return false;
+    }
+  })();
+  const [requirePow, setRequirePow] = createSignal(initialRequirePow);
+
+  // Persist POW requirement preference
+  createEffect(() => {
+    try {
+      localStorage.setItem(REQUIRE_POW_KEY, requirePow() ? '1' : '0');
+    } catch {}
+  });
+
+  // Reload notes when POW requirement or difficulty changes
+  createEffect(() => {
+    const currentPubkey = pubkey();
+    requirePow(); // Track this signal
+    preferences().minPowRootNote; // Track this signal too
+
+    if (currentPubkey && !loading()) {
+      debug('[ProfileDetail] POW settings changed, reloading notes');
+      loadUserNotes(currentPubkey);
+    }
+  });
+
   const profile = useProfile(() => pubkey() || undefined);
+
+  // State for infinite scroll
+  let oldestTimestamp = Math.floor(Date.now() / 1000);
+  let eventCache = new Map<string, NostrEvent>();
+  let sentinelRef: HTMLDivElement | undefined;
+  let relaySubscription: any = null;
 
   // NIP-05 validation
   const nip05Validation = useNip05Validation(
@@ -76,11 +119,73 @@ const ProfileDetail: Component = () => {
     }
   });
 
+  // Setup infinite scroll observer
+  onMount(() => {
+    if (sentinelRef) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMore() && !loadingMore()) {
+            loadMore();
+          }
+        },
+        { rootMargin: '200px' } // Start loading when 200px away from sentinel
+      );
+
+      observer.observe(sentinelRef);
+
+      onCleanup(() => {
+        observer.disconnect();
+        if (relaySubscription) {
+          relaySubscription.unsubscribe();
+        }
+      });
+    }
+  });
+
   const loadUserNotes = async (userPubkey: string) => {
     setLoadingNotes(true);
+    eventCache.clear(); // Reset cache for new user
+    oldestTimestamp = Math.floor(Date.now() / 1000);
+
+    // Get POW threshold at the start of the function
+    const minPowThreshold = preferences().minPowRootNote;
 
     try {
-      // Get user's inbox relays for better discovery
+      // Step 1: Check cache first for existing events
+      debug('[ProfileDetail] Checking cache for existing notes');
+      const cachedEvents = await getCachedEventsByFilters([
+        { kinds: [1, 30023], authors: [userPubkey], limit: INITIAL_LOAD }
+      ]);
+
+      // Add cached events to our event cache
+      let cachedRootNotes = 0;
+      let filteredByPow = 0;
+      cachedEvents.forEach(event => {
+        const hasETag = event.tags.some((tag: string[]) => tag[0] === 'e');
+        if (!hasETag) {
+          cachedRootNotes++;
+          // Check POW only if required
+          const passesPowCheck = !requirePow() || hasValidPow(event, minPowThreshold);
+          if (passesPowCheck) {
+            eventCache.set(event.id, event);
+            if (event.created_at < oldestTimestamp) {
+              oldestTimestamp = event.created_at;
+            }
+          } else {
+            filteredByPow++;
+          }
+        }
+      });
+
+      debug(`[ProfileDetail] Cache results: ${cachedEvents.length} total, ${cachedRootNotes} root notes, ${filteredByPow} filtered by POW, ${eventCache.size} passed`);
+
+      // Update UI with cached notes immediately
+      if (eventCache.size > 0) {
+        updateDisplayedNotes();
+        setLoadingNotes(false); // Show cached notes immediately, continue loading in background
+      }
+
+      // Step 2: Fetch from relays (incremental loading)
       const inboxRelays = await getUserInboxRelays(userPubkey);
       const relays = inboxRelays.length > 0 ? inboxRelays : getActiveRelays();
 
@@ -89,43 +194,178 @@ const ProfileDetail: Component = () => {
       const filter = {
         kinds: [1, 30023],
         authors: [userPubkey],
-        limit: 50,
+        limit: INITIAL_LOAD,
       };
 
-      const allNotes: NostrEvent[] = [];
+      let subscriptionCompleted = false;
 
-      const relay$ = relayPool.req(relays, filter);
-      relay$.subscribe({
+      // Set timeout to ensure loading completes even if relays don't respond
+      const timeoutId = setTimeout(() => {
+        if (!subscriptionCompleted) {
+          debug('[ProfileDetail] Timeout reached, using what we have');
+          subscriptionCompleted = true;
+          setLoadingNotes(false);
+          if (eventCache.size < INITIAL_LOAD) {
+            setHasMore(false);
+          }
+          if (relaySubscription) {
+            relaySubscription.unsubscribe();
+          }
+        }
+      }, 10000); // 10 second timeout
+
+      let eventsReceived = 0;
+      let eventsFiltered = 0;
+      let eventsAdded = 0;
+
+      relaySubscription = relayPool.req(relays, filter).subscribe({
         next: (response) => {
           if (response !== 'EOSE' && (response.kind === 1 || response.kind === 30023)) {
-            const event = response as NostrEvent;
+            eventsReceived++;
+            try {
+              const event = response as NostrEvent;
 
-            // Filter out replies - only root notes
-            const hasETag = event.tags.some((tag) => tag[0] === 'e');
-            if (hasETag) return;
+              // Filter out replies - only root notes
+              const hasETag = event.tags.some((tag) => tag[0] === 'e');
+              if (hasETag) {
+                eventsFiltered++;
+                return;
+              }
 
-            // Check POW (must have valid nonce tag)
-            if (!hasValidPow(event, MIN_POW_DIFFICULTY)) return;
-            const powDifficulty = getPowDifficulty(event);
-            if (powDifficulty < MIN_POW_DIFFICULTY) return;
+              // Check POW only if required
+              if (requirePow() && !hasValidPow(event, minPowThreshold)) {
+                eventsFiltered++;
+                return;
+              }
 
-            // Check for duplicates
-            if (!allNotes.find((n) => n.id === event.id)) {
-              allNotes.push(event);
+              // Add to EventStore for global caching
+              eventStore.add(event);
+
+              // Add to local cache if not duplicate
+              if (!eventCache.has(event.id)) {
+                eventCache.set(event.id, event);
+                eventsAdded++;
+
+                // Track oldest timestamp for pagination
+                if (event.created_at < oldestTimestamp) {
+                  oldestTimestamp = event.created_at;
+                }
+
+                // Update display
+                updateDisplayedNotes();
+              }
+            } catch (err) {
+              debug('[ProfileDetail] Error processing event:', err);
             }
           }
         },
         complete: () => {
-          // Sort by created_at (newest first)
-          allNotes.sort((a, b) => b.created_at - a.created_at);
-          setNotes(allNotes);
-          setLoadingNotes(false);
-          debug(`[ProfileDetail] Loaded ${allNotes.length} notes`);
+          if (!subscriptionCompleted) {
+            clearTimeout(timeoutId);
+            subscriptionCompleted = true;
+            setLoadingNotes(false);
+            // If we got less than INITIAL_LOAD, there are no more
+            if (eventCache.size < INITIAL_LOAD) {
+              setHasMore(false);
+            }
+            debug(`[ProfileDetail] Initial load complete: received ${eventsReceived}, filtered ${eventsFiltered}, added ${eventsAdded}, total cached ${eventCache.size} notes`);
+          }
+        },
+        error: (err) => {
+          if (!subscriptionCompleted) {
+            clearTimeout(timeoutId);
+            subscriptionCompleted = true;
+            debug('[ProfileDetail] Subscription error:', err);
+            setLoadingNotes(false);
+            setHasMore(false);
+          }
         },
       });
     } catch (err) {
       console.error('[ProfileDetail] Error loading notes:', err);
       setLoadingNotes(false);
+    }
+  };
+
+  const updateDisplayedNotes = () => {
+    const sortedNotes = Array.from(eventCache.values()).sort(
+      (a, b) => b.created_at - a.created_at
+    );
+    setNotes(sortedNotes);
+  };
+
+  const loadMore = async () => {
+    if (!hasMore() || loadingMore() || !pubkey()) return;
+
+    setLoadingMore(true);
+    debug('[ProfileDetail] Loading more notes, until:', oldestTimestamp);
+
+    // Get POW threshold for this load more operation
+    const minPowThreshold = preferences().minPowRootNote;
+
+    try {
+      const inboxRelays = await getUserInboxRelays(pubkey()!);
+      const relays = inboxRelays.length > 0 ? inboxRelays : getActiveRelays();
+
+      const filter = {
+        kinds: [1, 30023],
+        authors: [pubkey()!],
+        limit: LOAD_MORE_BATCH,
+        until: oldestTimestamp - 1, // Load notes older than the oldest we have
+      };
+
+      let receivedCount = 0;
+
+      relayPool.req(relays, filter).subscribe({
+        next: (response) => {
+          if (response !== 'EOSE' && (response.kind === 1 || response.kind === 30023)) {
+            try {
+              const event = response as NostrEvent;
+
+              // Filter out replies
+              const hasETag = event.tags.some((tag) => tag[0] === 'e');
+              if (hasETag) return;
+
+              // Check POW only if required
+              if (requirePow() && !hasValidPow(event, minPowThreshold)) return;
+
+              // Add to EventStore
+              eventStore.add(event);
+
+              // Add to local cache
+              if (!eventCache.has(event.id)) {
+                eventCache.set(event.id, event);
+                receivedCount++;
+
+                // Update oldest timestamp
+                if (event.created_at < oldestTimestamp) {
+                  oldestTimestamp = event.created_at;
+                }
+
+                updateDisplayedNotes();
+              }
+            } catch (err) {
+              debug('[ProfileDetail] Error processing event:', err);
+            }
+          }
+        },
+        complete: () => {
+          setLoadingMore(false);
+          // If we got less than requested, no more notes available
+          if (receivedCount < LOAD_MORE_BATCH) {
+            setHasMore(false);
+            debug('[ProfileDetail] No more notes to load');
+          }
+          debug(`[ProfileDetail] Loaded ${receivedCount} more notes`);
+        },
+        error: (err) => {
+          debug('[ProfileDetail] Load more error:', err);
+          setLoadingMore(false);
+        },
+      });
+    } catch (err) {
+      console.error('[ProfileDetail] Error loading more notes:', err);
+      setLoadingMore(false);
     }
   };
 
@@ -287,7 +527,41 @@ const ProfileDetail: Component = () => {
 
         {/* User's Notes */}
         <div class="space-y-4">
-          <h2 class="text-xl font-bold text-text-primary">Notes</h2>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-text-primary">Notes</h2>
+
+            {/* POW Filter Toggle */}
+            <div class="flex items-center gap-3 text-sm">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={requirePow()}
+                  onChange={(e) => setRequirePow(e.currentTarget.checked)}
+                  class="w-4 h-4 accent-accent cursor-pointer"
+                />
+                <span class="text-text-secondary select-none">
+                  Require POW
+                </span>
+              </label>
+
+              {/* POW Difficulty Slider - only visible when POW is required */}
+              <Show when={requirePow()}>
+                <div class="flex items-center gap-2">
+                  <span class="text-text-tertiary text-xs whitespace-nowrap">
+                    {preferences().minPowRootNote}
+                  </span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="32"
+                    value={preferences().minPowRootNote}
+                    onInput={(e) => updatePreference('minPowRootNote', parseInt(e.currentTarget.value))}
+                    class="w-24 h-1 accent-accent cursor-pointer"
+                  />
+                </div>
+              </Show>
+            </div>
+          </div>
 
           <Show when={loadingNotes()}>
             <div class="card p-8 text-center">
@@ -310,6 +584,24 @@ const ProfileDetail: Component = () => {
               <For each={notes()}>
                 {(note) => <Note event={note} showScore={false} />}
               </For>
+
+              {/* Infinite scroll sentinel */}
+              <Show when={hasMore()}>
+                <div ref={sentinelRef} class="h-4" />
+                <Show when={loadingMore()}>
+                  <div class="card p-6 text-center">
+                    <div class="inline-block animate-spin rounded-full h-5 w-5 border-4 border-accent border-t-transparent"></div>
+                    <p class="mt-2 text-sm text-text-secondary">Loading more...</p>
+                  </div>
+                </Show>
+              </Show>
+
+              {/* End of feed message */}
+              <Show when={!hasMore() && notes().length > 0}>
+                <div class="text-center py-6">
+                  <p class="text-sm text-text-tertiary">No more notes to load</p>
+                </div>
+              </Show>
             </div>
           </Show>
         </div>

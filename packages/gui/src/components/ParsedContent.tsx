@@ -21,6 +21,8 @@ interface ParsedContentProps {
   event?: NostrEvent;
   /** Additional CSS classes for text segments */
   class?: string;
+  /** Reserved heights for media items (keyed by media ID or URL) - Phase 2 */
+  reservedHeights?: Record<string, number>;
 }
 
 /**
@@ -141,17 +143,29 @@ export const ParsedContent: Component<ParsedContentProps> = (props) => {
               case 'naddr':
                 return <NaddrEmbed entity={entity} />;
 
-              case 'image':
-                return <ImageEmbed url={entity.data.url} />;
+              case 'image': {
+                // Lookup by URL (media IDs are now URLs for consistent lookup)
+                const height = props.reservedHeights?.[entity.data.url];
+                return <ImageEmbed url={entity.data.url} reservedHeight={height} />;
+              }
 
-              case 'video':
-                return <VideoEmbed url={entity.data.url} />;
+              case 'video': {
+                // Lookup by URL (media IDs are now URLs for consistent lookup)
+                const height = props.reservedHeights?.[entity.data.url];
+                return <VideoEmbed url={entity.data.url} reservedHeight={height} />;
+              }
 
-              case 'youtube':
-                return <YouTubeEmbed videoId={entity.data.videoId} />;
+              case 'youtube': {
+                const mediaId = `youtube-${entity.data.videoId}`;
+                const height = props.reservedHeights?.[mediaId];
+                return <YouTubeEmbed videoId={entity.data.videoId} reservedHeight={height} />;
+              }
 
-              case 'spotify':
-                return <SpotifyEmbed type={entity.data.type} id={entity.data.id} />;
+              case 'spotify': {
+                const mediaId = `spotify-${entity.data.type}-${entity.data.id}`;
+                const height = props.reservedHeights?.[mediaId];
+                return <SpotifyEmbed type={entity.data.type} id={entity.data.id} reservedHeight={height} />;
+              }
 
               case 'github':
                 return <GitHubEmbed {...entity.data} />;

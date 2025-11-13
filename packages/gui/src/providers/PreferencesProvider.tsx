@@ -45,6 +45,7 @@ export interface UserPreferences {
 
   // Debug settings
   debugMode: boolean;
+  feedDebugMode: boolean; // Enable diagnostic logging for feed system (Phase 4)
 
   // Relay settings
   enabledRelays: {
@@ -65,6 +66,20 @@ export interface UserPreferences {
   // Queue ordering strategy
   // Controls how new items are inserted and whether lower-difficulty items preempt higher ones
   queueOrderingStrategy: QueueOrderingStrategy;
+
+  // Feed parameters (adaptive fetch settings)
+  feedParams: {
+    desiredCount: number;
+    initialLimit: number;
+    maxLimit: number;
+    initialHorizonHours: number;
+    maxHorizonDays: number;
+    growthFast: number;
+    growthSlow: number;
+    overlapRatio: number;
+    overfetch: number;
+    skewMarginMinutes: number; // Clock skew tolerance in minutes
+  };
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -105,6 +120,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
   // Debug defaults
   debugMode: false,
+  feedDebugMode: false, // Disabled by default (Phase 4)
 
   // Relay defaults (empty initially, will be populated when relays are discovered)
   enabledRelays: {},
@@ -117,6 +133,20 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
   // Queue ordering default
   queueOrderingStrategy: 'lowDifficultyFirst',
+
+  // Feed parameters defaults
+  feedParams: {
+    desiredCount: 20,
+    initialLimit: 20,
+    maxLimit: 500,
+    initialHorizonHours: 12,
+    maxHorizonDays: 14,
+    growthFast: 3.0,
+    growthSlow: 1.6,
+    overlapRatio: 0.15,
+    overfetch: 2.0,
+    skewMarginMinutes: 15, // 15 minutes clock skew tolerance
+  },
 };
 
 interface PreferencesContextType {

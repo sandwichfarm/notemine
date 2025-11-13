@@ -3,6 +3,7 @@ import { Component, Show } from 'solid-js';
 interface SpotifyEmbedProps {
   type: 'track' | 'album' | 'playlist' | 'episode' | 'show';
   id: string;
+  reservedHeight?: number;
 }
 
 export const SpotifyEmbed: Component<SpotifyEmbedProps> = (props) => {
@@ -19,7 +20,13 @@ export const SpotifyEmbed: Component<SpotifyEmbedProps> = (props) => {
     show: 'Podcast Show',
   }[props.type];
 
-  const height = props.type === 'track' || props.type === 'episode' ? '152px' : '352px';
+  // Use reserved height from Phase 2 if available, otherwise use defaults based on type
+  const height = () => {
+    if (props.reservedHeight) {
+      return `${props.reservedHeight}px`;
+    }
+    return props.type === 'track' || props.type === 'episode' ? '152px' : '352px';
+  };
 
   return (
     <div class="my-3">
@@ -32,7 +39,7 @@ export const SpotifyEmbed: Component<SpotifyEmbedProps> = (props) => {
               target="_blank"
               rel="noopener noreferrer"
               class="block relative w-full cursor-pointer group bg-[#1DB954]/10 hover:bg-[#1DB954]/20 transition-colors rounded-lg border border-[#1DB954]/30 overflow-hidden"
-              style={{ height }}
+              style={{ height: height() }}
             >
               <div class="absolute inset-0 flex flex-col items-center justify-center p-6">
                 <div class="bg-[#1DB954] rounded-full p-4 mb-4 group-hover:scale-110 transition-transform">
@@ -54,7 +61,7 @@ export const SpotifyEmbed: Component<SpotifyEmbedProps> = (props) => {
           <iframe
             src={embedUrl}
             width="100%"
-            height={height}
+            height={height()}
             frameborder="0"
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"

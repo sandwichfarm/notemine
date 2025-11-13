@@ -1,6 +1,6 @@
 import { Component, createSignal, onMount, Show, createEffect, onCleanup } from 'solid-js';
 import { getStorageItem, setStorageItem } from '../lib/localStorage';
-import { getCacheStats, clearCache, getCacheMetrics, getCacheHealth, forceCacheFlush, resetCacheMetrics } from '../lib/cache';
+import { getCacheStats, clearCache, getCacheMetrics, getCacheHealth, forceCacheFlush, resetCacheMetrics, getBrowserCapabilities } from '../lib/cache';
 import { debug } from '../lib/debug';
 
 // Helper functions
@@ -44,6 +44,7 @@ export const CacheStats: Component = () => {
   } | null>(null);
   const [metrics, setMetrics] = createSignal<ReturnType<typeof getCacheMetrics> | null>(null);
   const [health, setHealth] = createSignal<ReturnType<typeof getCacheHealth> | null>(null);
+  const [capabilities, setCapabilities] = createSignal<ReturnType<typeof getBrowserCapabilities> | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [clearing, setClearing] = createSignal(false);
   const [flushing, setFlushing] = createSignal(false);
@@ -59,9 +60,11 @@ export const CacheStats: Component = () => {
       const cacheStats = await getCacheStats();
       const cacheMetrics = getCacheMetrics();
       const cacheHealth = getCacheHealth();
+      const browserCaps = getBrowserCapabilities(); // Phase 2: Browser capabilities
       setStats(cacheStats);
       setMetrics(cacheMetrics);
       setHealth(cacheHealth);
+      setCapabilities(browserCaps);
     } catch (error) {
       console.error('[CacheStats] Error loading stats:', error);
     } finally {
@@ -296,7 +299,38 @@ export const CacheStats: Component = () => {
                   <Show when={health()!.info.isLeader}>
                     <div class="flex items-center gap-2 text-xs">
                       <span class="text-green-500">✓</span>
-                      <span>Leader tab (manages compaction)</span>
+                      <span>Leader tab (persistence + compaction)</span>
+                    </div>
+                  </Show>
+                  <Show when={!health()!.info.isLeader && health()!.info.cacheInitialized}>
+                    <div class="flex items-center gap-2 text-xs">
+                      <span class="text-blue-500">ℹ</span>
+                      <span>Follower tab (read-only mode)</span>
+                    </div>
+                  </Show>
+                  {/* Phase 2: Browser Capabilities */}
+                  <Show when={capabilities()}>
+                    <div class="mt-3 pt-3 border-t border-border">
+                      <div class="text-xs font-semibold mb-2">Browser Capabilities</div>
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2 text-xs">
+                          <span class={capabilities()!.opfsSupported ? 'text-green-500' : 'text-red-500'}>
+                            {capabilities()!.opfsSupported ? '✓' : '✗'}
+                          </span>
+                          <span>OPFS SyncAccessHandle (persistent storage)</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                          <span class={capabilities()!.broadcastChannelSupported ? 'text-green-500' : 'text-yellow-500'}>
+                            {capabilities()!.broadcastChannelSupported ? '✓' : '~'}
+                          </span>
+                          <span>BroadcastChannel (multi-tab coordination)</span>
+                        </div>
+                        <Show when={capabilities()!.recommendation !== 'All features supported'}>
+                          <div class="mt-2 p-2 bg-yellow-500/10 rounded text-xs text-yellow-600 dark:text-yellow-400">
+                            {capabilities()!.recommendation}
+                          </div>
+                        </Show>
+                      </div>
                     </div>
                   </Show>
                   <Show when={health()!.issues && health()!.issues.length > 0}>

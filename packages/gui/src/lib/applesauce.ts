@@ -37,6 +37,7 @@ export const PROFILE_RELAYS = [
 
 import { createSignal } from 'solid-js';
 import { debug } from '../lib/debug';
+import { getCachedEventsByFilters } from './cache';
 
 // NIP-66 POW relays (from svelte demo)
 const [powRelays, setPowRelaysSignal] = createSignal<string[]>([]);
@@ -90,8 +91,26 @@ export function createTimelineStream(
   options: TimelineLoaderOptions & { since?: number } = {},
 ) {
   const { since, ...loaderOptions } = options;
+  // Wrap cache to ensure we hydrate enough items for UI filtering (e.g., skip replies)
+  const cacheRequest = async (f: any[]) => {
+    try {
+      // Increase limit for cache path only to improve chance of root notes present
+      const widened = (Array.isArray(f) ? f : [f]).map((flt) => ({
+        ...flt,
+        limit: Math.max(flt.limit ?? 0, (loaderOptions.limit ?? 10) * 25),
+      }));
+      const res = await getCachedEventsByFilters(widened);
+      debug('[TimelineLoader cache]', { requested: f, widenedLimit: widened[0]?.limit, returned: res?.length ?? 0 });
+      return res;
+    } catch (e) {
+      debug('[TimelineLoader cache] error:', e);
+      return [] as any[];
+    }
+  };
+
   const loader = createTimelineLoader(relayPool, relays, filters, {
     eventStore,
+    cache: cacheRequest,
     ...loaderOptions,
   });
 

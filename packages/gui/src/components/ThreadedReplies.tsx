@@ -44,7 +44,7 @@ const ThreadedReply: Component<{
 
   const powDifficulty = () => hasValidPow(props.node.event, 1) ? getPowDifficulty(props.node.event) : 0;
   return (
-    <div class="border-l-2 border-border/30 pl-3 py-2" style={{ 'margin-left': `${props.depth * 1}rem` }}>
+    <div class="pl-3 py-2" style={{ 'margin-left': `${props.depth * 1}rem` }}>
       {/* Reply Header */}
       <div class="flex items-start justify-between mb-2">
         <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -238,7 +238,7 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
           </div>
           <For each={props.replies}>
             {(reply) => (
-              <div class="border-l-2 border-border/30 pl-3 py-2">
+              <div class="pl-3 py-2">
                 <div class="flex items-start justify-between mb-2">
                   <div class="flex items-center gap-2 flex-1 min-w-0">
                     <ProfileName pubkey={reply.pubkey} asLink={true} class="font-mono text-xs text-text-secondary" />

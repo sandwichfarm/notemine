@@ -2,7 +2,7 @@ import { Component, createSignal, Show } from 'solid-js';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { clearDeblurCache, getDeblurCacheStats } from '../lib/image-deblur-cache';
 
-type TabId = 'pow' | 'content' | 'algorithm' | 'mining' | 'advanced';
+type TabId = 'pow' | 'content' | 'feed' | 'algorithm' | 'mining' | 'advanced';
 
 export const Preferences: Component = () => {
   const { preferences, updatePreference, resetPreferences } = usePreferences();
@@ -24,9 +24,19 @@ export const Preferences: Component = () => {
     setShowClearCacheConfirm(false);
   };
 
+  // Helper function to update nested feedParams properties
+  const updateFeedParam = (key: string, value: number) => {
+    const currentFeedParams = preferences().feedParams;
+    updatePreference('feedParams', {
+      ...currentFeedParams,
+      [key]: value,
+    });
+  };
+
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: 'pow', label: 'POW Settings' },
     { id: 'content', label: 'Content & Timeline' },
+    { id: 'feed', label: 'Feed Settings' },
     { id: 'algorithm', label: 'Timeline Algorithm' },
     { id: 'mining', label: 'Mining' },
     { id: 'advanced', label: 'UI & Advanced' },
@@ -220,6 +230,218 @@ export const Preferences: Component = () => {
         </div>
       </section>
 
+      </Show>
+
+      {/* Feed Settings Tab */}
+      <Show when={activeTab() === 'feed'}>
+        <section class="mb-8">
+          <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Adaptive Feed Parameters</h2>
+          <p class="text-sm text-text-tertiary mb-4 opacity-70">
+            Control how the WoT feed loads notes. Lower values = faster initial load, higher values = more content.
+          </p>
+
+          <div class="space-y-4">
+            {/* Desired Note Count */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Desired Note Count: {preferences().feedParams.desiredCount}
+              </label>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={preferences().feedParams.desiredCount}
+                onInput={(e) => updateFeedParam('desiredCount', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Target number of notes to load (default: 20). Higher values take longer to load.
+              </p>
+            </div>
+
+            {/* Initial Limit */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Initial Query Size: {preferences().feedParams.initialLimit}
+              </label>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={preferences().feedParams.initialLimit}
+                onInput={(e) => updateFeedParam('initialLimit', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Starting relay query size (default: 20). First batch of notes requested from relays.
+              </p>
+            </div>
+
+            {/* Max Limit */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Max Query Size: {preferences().feedParams.maxLimit}
+              </label>
+              <input
+                type="range"
+                min="100"
+                max="2000"
+                step="100"
+                value={preferences().feedParams.maxLimit}
+                onInput={(e) => updateFeedParam('maxLimit', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Maximum relay query size cap (default: 500). Upper limit for large queries.
+              </p>
+              <Show when={preferences().feedParams.maxLimit > 1000}>
+                <p class="text-xs text-orange-500 mt-2">
+                  ⚠️ High values may cause slow relay responses
+                </p>
+              </Show>
+            </div>
+
+            {/* Initial Horizon */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Initial Time Horizon: {preferences().feedParams.initialHorizonHours} hours
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="48"
+                step="1"
+                value={preferences().feedParams.initialHorizonHours}
+                onInput={(e) => updateFeedParam('initialHorizonHours', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How far back to search initially (default: 12 hours). Shorter = more recent notes only.
+              </p>
+            </div>
+
+            {/* Max Horizon */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Max Time Horizon: {preferences().feedParams.maxHorizonDays} days
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                step="1"
+                value={preferences().feedParams.maxHorizonDays}
+                onInput={(e) => updateFeedParam('maxHorizonDays', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Maximum lookback period (default: 14 days). Feed will search up to this far back if needed.
+              </p>
+            </div>
+
+            {/* Growth Fast */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Fast Growth Rate: {preferences().feedParams.growthFast.toFixed(1)}x
+              </label>
+              <input
+                type="range"
+                min="1.0"
+                max="5.0"
+                step="0.1"
+                value={preferences().feedParams.growthFast}
+                onInput={(e) => updateFeedParam('growthFast', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Growth multiplier when no results found (default: 3.0). Higher = more aggressive expansion.
+              </p>
+            </div>
+
+            {/* Growth Slow */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Slow Growth Rate: {preferences().feedParams.growthSlow.toFixed(1)}x
+              </label>
+              <input
+                type="range"
+                min="1.0"
+                max="3.0"
+                step="0.1"
+                value={preferences().feedParams.growthSlow}
+                onInput={(e) => updateFeedParam('growthSlow', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Growth multiplier with partial results (default: 1.6). Used when finding some notes but not enough.
+              </p>
+            </div>
+
+            {/* Overlap Ratio */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Window Overlap: {(preferences().feedParams.overlapRatio * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="0.5"
+                step="0.05"
+                value={preferences().feedParams.overlapRatio}
+                onInput={(e) => updateFeedParam('overlapRatio', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Time window overlap percentage (default: 15%). Prevents missing notes between search windows.
+              </p>
+            </div>
+
+            {/* Overfetch */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Overfetch Multiplier: {preferences().feedParams.overfetch.toFixed(1)}x
+              </label>
+              <input
+                type="range"
+                min="1.0"
+                max="5.0"
+                step="0.1"
+                value={preferences().feedParams.overfetch}
+                onInput={(e) => updateFeedParam('overfetch', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Fetch extra notes for better prioritization (default: 2.0). Higher = more notes to choose from.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Info Box */}
+        <section class="mb-8">
+          <div class="card bg-blue-50 dark:bg-blue-900/20 border-blue-500">
+            <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">💡 How It Works</h3>
+            <div class="text-xs text-blue-700 dark:text-blue-300 space-y-2">
+              <p>
+                The adaptive feed uses a smart fetching strategy that starts with a small time window and query size,
+                then expands as needed to find enough notes.
+              </p>
+              <p>
+                <strong>Growth Strategy:</strong> When no notes are found, it grows fast (3x). When some notes are found,
+                it grows slowly (1.6x) to fine-tune the search.
+              </p>
+              <p>
+                <strong>Overlap:</strong> Time windows overlap by 15% to ensure no notes slip through the gaps between queries.
+              </p>
+              <p>
+                <strong>Quick adjustments:</strong> Use the inline "Feed Settings" button above the feed for temporary changes.
+                Settings here persist permanently.
+              </p>
+            </div>
+          </div>
+        </section>
       </Show>
 
       {/* Timeline Algorithm Tab */}
@@ -759,23 +981,45 @@ export const Preferences: Component = () => {
         {/* Debug Settings */}
         <section class="mb-8">
           <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Debug Settings</h2>
-        <div class="card">
-          <label class="flex items-center space-x-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={preferences().debugMode}
-              onChange={(e) => updatePreference('debugMode', e.currentTarget.checked)}
-              class="w-5 h-5"
-            />
-            <div>
-              <span class="block text-sm font-medium text-text-secondary">
-                Enable Debug Mode
-              </span>
-              <p class="text-xs text-text-tertiary opacity-50">
-                Shows detailed console logs including cache operations (may impact mining performance)
-              </p>
+        <div class="space-y-4">
+          <div class="card">
+            <label class="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preferences().debugMode}
+                onChange={(e) => updatePreference('debugMode', e.currentTarget.checked)}
+                class="w-5 h-5"
+              />
+              <div>
+                <span class="block text-sm font-medium text-text-secondary">
+                  Enable Debug Mode
+                </span>
+                <p class="text-xs text-text-tertiary opacity-50">
+                  Shows detailed console logs including cache operations (may impact mining performance)
+                </p>
             </div>
           </label>
+        </div>
+
+          {/* Feed Debug Mode */}
+          <div class="card">
+            <label class="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={preferences().feedDebugMode}
+                onChange={(e) => updatePreference('feedDebugMode', e.currentTarget.checked)}
+                class="w-5 h-5"
+              />
+              <div>
+                <span class="block text-sm font-medium text-text-secondary">
+                  Enable Feed Debug Mode
+                </span>
+                <p class="text-xs text-text-tertiary opacity-50">
+                  Shows diagnostic logs for feed system (adaptive fetch, media preloading, prioritization)
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
       </section>
 

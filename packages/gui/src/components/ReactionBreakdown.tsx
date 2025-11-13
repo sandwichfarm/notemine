@@ -55,25 +55,27 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
   });
 
   return (
-    <div class="flex flex-wrap gap-3">
+    <div class="flex flex-wrap gap-2 opacity-70 hover:opacity-100">
       <For each={groupedReactions()}>
         {(group) => (
-          <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-secondary/30 dark:bg-bg-tertiary/30">
+          <div class="cursor-pointer flex items-center px-2 pt-1 rounded-lg bg-bg-secondary/30 dark:bg-bg-tertiary/30 bg-black/10 dark:bg-black/40">
+
             {/* Emoji */}
-            <span class="text-2xl">{group.emoji}</span>
+            <span class="text-sm">{group.emoji}</span>
 
             {/* Count */}
-            <span class="text-text-primary font-medium">
+            <span class="text-text-primary text-xs font-medium ml-1">
               {group.count}
             </span>
 
             {/* POW */}
-            <div class="flex items-center gap-1 text-xs">
-              <span class="text-accent">⛏️</span>
+            {/* <div class="flex items-center gap-1 text-xs">
+              <span class="text-accent">💎</span>
               <span class="text-text-secondary font-mono">
                 {group.totalPow}
               </span>
-            </div>
+            </div> */}
+            
           </div>
         )}
       </For>

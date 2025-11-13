@@ -67,7 +67,7 @@ export const ProfileName: Component<ProfileNameProps> = (props) => {
       </Show>
       {displayName()}
       <Show when={hasMindedPubkey()}>
-        <span class="ml-1 text-accent" title={`Mined pubkey: ${pubkeyPow()} leading zeros`}>
+        <span class="ml-1 text-accent" title={`Pubkey mined with ${pubkeyPow()} leading zeros`}>
           ◆
         </span>
       </Show>

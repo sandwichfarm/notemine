@@ -205,7 +205,7 @@ export const Note: Component<NoteProps> = (props) => {
       class="p-5 mb-4 rounded-lg dark:bg-white/5 transition-all"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
-        'border-l-gray-500/30 bg-bg-secondary/50 dark:bg-bg-tertiary/50 opacity-60': !hasPow(),
+        'border-l-gray-500/30 bg-bg-secondary dark:bg-bg-tertiary': !hasPow(),
       }}
     >
       {/* Header - Low contrast metadata */}
@@ -285,7 +285,7 @@ export const Note: Component<NoteProps> = (props) => {
 
       {/* Interaction Stats - Subtle, low contrast */}
       <Show when={(props.reactions?.length || 0) > 0 || (props.replies?.length || 0) > 0}>
-        <div class="mb-3 text-xs opacity-50 font-mono">
+        <div class="mb-3 text-xs font-mono">
           <span class="text-text-tertiary">
             <Show when={props.reactions && props.reactions.length > 0}>
               {props.reactions!.length} reactions{' '}

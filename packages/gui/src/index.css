@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Azeret Mono';
+  src: url('/fonts/azeretmono/azeretmono.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Azeret Mono';
+  src: url('/fonts/azeretmono/azeretmono-italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+}
+
 @layer base {
   :root {
     --bg-primary: #ffffff;

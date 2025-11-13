@@ -234,10 +234,23 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
       {/* Reply form */}
       <form onSubmit={handleSubmit} class={props.inline ? "space-y-3" : "p-4 space-y-4"}>
         {/* Textarea */}
-        <div class="relative">
+        <div class="relative  ">
           <textarea
             ref={textareaRef}
-            class="w-full p-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] border-0 rounded-lg focus:outline-none focus:ring-0 resize-none font-sans placeholder:opacity-40"
+            class="w-full p-3 
+            bg-[var(--bg-secondary)] 
+            text-[var(--text-primary)] 
+            border-0
+            focus:outline-none 
+            focus:ring-0 
+            resize-none 
+            font-sans 
+            placeholder:opacity-40  
+            rounded-0 
+            border 
+            border-2 
+            border-black 
+            shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)]"
             placeholder={props.inline ? "Write your reply..." : `Write your reply... (${maxContentLength()} chars max, POW required, use @ to mention users)`}
             rows={props.inline ? 3 : 6}
               value={content()}
@@ -327,7 +340,7 @@ export const ReplyComposer: Component<ReplyComposerProps> = (props) => {
 
   // Return either modal or inline version
   return props.inline ? (
-    <div class="p-3 bg-bg-secondary dark:bg-bg-tertiary rounded-lg border border-border">
+    <div class="bg-bg-secondary dark:bg-bg-tertiary rounded-lg">
       <ComposerContent />
     </div>
   ) : (

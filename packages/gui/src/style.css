@@ -56,7 +56,6 @@ h1 {
 }
 
 .card {
-  padding: 2em;
 }
 
 .read-the-docs {
@@ -93,4 +92,18 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+@font-face {
+  font-family: 'Azeret Mono';
+  src: url('/fonts/azeretmono/azeretmono.ttf') format('truetype');
+  font-weight: 400;  
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Azeret Mono';
+  src: url('/fonts/azeretmono/azeretmono-italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
 }

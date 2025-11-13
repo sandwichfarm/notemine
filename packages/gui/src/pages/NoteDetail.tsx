@@ -534,8 +534,8 @@ const NoteDetail: Component = () => {
       </button>
 
       {/* Compact Profile Section */}
-      <Show when={note() && authorProfile()}>
-        <div class="card p-4 border-l-2 border-l-accent/30">
+      <Show when={false && note() && authorProfile()}>
+        <div class="p-4 border-l-2 border-l-accent/30">
           <div class="flex items-center gap-3">
             {/* Avatar */}
             <Show when={authorProfile().metadata?.picture}>
@@ -573,69 +573,80 @@ const NoteDetail: Component = () => {
 
       {/* Loading State */}
       <Show when={loading()}>
-        <div class="card p-8 text-center">
-          <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-accent border-t-transparent"></div>
+        <div class="p-8 text-center">
+          <div class="inline-block animate-spin rounded-full h-8 w-8"></div>
           <p class="mt-4 text-text-secondary">Loading note...</p>
         </div>
       </Show>
 
       {/* Error State */}
       <Show when={error()}>
-        <div class="card p-4 bg-red-100 dark:bg-red-900/20 border-red-500">
+        <div class="p-4 bg-red-100 dark:bg-red-900/20 border-red-500">
           <p class="text-red-700 dark:text-red-400">Error: {error()}</p>
         </div>
       </Show>
 
       {/* Note Content */}
       <Show when={note()}>
-        <div class="card p-6 border-l-4 border-l-accent">
-          {/* Header */}
-          <div class="flex items-start justify-between mb-4">
-            <div class="flex items-center gap-2">
-              <ProfileName pubkey={note()!.pubkey} asLink={true} />
-              <div class="text-xs text-text-tertiary">
-                {timestamp(note()!.created_at)}
+        <div id={note().id}>
+
+          <div class="mb-6 bg-black/30 rounded-0 border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)]">
+            {/* Header */}
+            <div class="flex items-start justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <ProfileName pubkey={note()!.pubkey} asLink={true} />
+                <div class="text-xs text-text-tertiary opacity-50">
+                  {timestamp(note()!.created_at)}
+                </div>
               </div>
+
+              {/* POW Badge */}
+              <Show when={hasValidPow(note()!, 1)}>
+                <span class="text-xs font-medium px-2 py-1 rounded bg-accent/10 text-accent">
+                  💎 {getPowDifficulty(note()!)}
+                </span>
+              </Show>
             </div>
 
-            {/* POW Badge */}
-            <Show when={hasValidPow(note()!, 1)}>
-              <span class="text-xs font-medium px-2 py-1 rounded bg-accent/10 text-accent">
-                ⛏️ {getPowDifficulty(note()!)}
-              </span>
+            {/* Content */}
+            <ParsedContent
+              content={note()!.content}
+              class="text-text-primary break-words text-2xl mb-6"
+            />
+
+            {/* REACTIONS - Horizontal bar between content and replies */}
+            <Show when={filteredReactions().length > 0}>
+              <div class="mb-4 pl-0 ml-0">
+                <ReactionBreakdown reactions={filteredReactions()} />
+              </div>
             </Show>
-          </div>
 
-          {/* Content */}
-          <ParsedContent
-            content={note()!.content}
-            class="text-text-primary break-words text-lg mb-6"
-          />
-
-          {/* INTERACTION BAR - React, reply, share buttons matching feed functionality */}
-          <div class="flex gap-4 text-xs mb-4 pb-4 border-b border-border opacity-60 hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => setShowRootReplyComposer(!showRootReplyComposer())}
-              class="text-text-tertiary hover:text-accent transition-colors"
-              classList={{ 'text-accent': showRootReplyComposer() }}
-            >
-              💬 reply
-            </button>
-            <button
-              onClick={() => setShowReactionPicker(true)}
-              class="text-text-tertiary hover:text-accent transition-colors"
-            >
-              react
-            </button>
-            <button
-              onClick={() => {
-                const noteId = nip19.noteEncode(note()!.id);
-                navigator.clipboard.writeText(`https://notemine.io/n/${noteId}`);
-              }}
-              class="text-text-tertiary hover:text-accent transition-colors"
-            >
-              share
-            </button>
+            {/* INTERACTION BAR - React, reply, share buttons matching feed functionality */}
+            <div class="flex gap-4 text-xs pb-4 hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => setShowRootReplyComposer(!showRootReplyComposer())}
+                class="text-text-tertiary hover:text-accent transition-colors"
+                classList={{ 'text-accent': showRootReplyComposer() }}
+              >
+                💬 reply
+              </button>
+              <button
+                onClick={() => setShowReactionPicker(true)}
+                class="text-text-tertiary hover:text-accent transition-colors"
+              >
+                react
+              </button>
+              <button
+                onClick={() => {
+                  const noteId = nip19.noteEncode(note()!.id);
+                  navigator.clipboard.writeText(`https://notemine.io/n/${noteId}`);
+                }}
+                class="text-text-tertiary hover:text-accent transition-colors"
+              >
+                share
+              </button>
+            </div>
+            
           </div>
 
           {/* ROOT REPLY COMPOSER - Default visible below root post */}
@@ -649,13 +660,7 @@ const NoteDetail: Component = () => {
             </div>
           </Show>
 
-          {/* REACTIONS - Horizontal bar between content and replies */}
-          <Show when={filteredReactions().length > 0}>
-            <div class="mb-6 pb-6 border-b border-border">
-              <ReactionBreakdown reactions={filteredReactions()} />
-            </div>
-          </Show>
-
+          
           {/* POW Filter Toggle */}
           <div class="flex items-center gap-2 mb-4">
             <label class="flex items-center gap-2 text-sm cursor-pointer">
@@ -693,6 +698,7 @@ const NoteDetail: Component = () => {
               </p>
             </div>
           </Show>
+
         </div>
       </Show>
 

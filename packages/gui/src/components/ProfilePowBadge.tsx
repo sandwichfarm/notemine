@@ -35,7 +35,7 @@ export const ProfilePowBadge: Component<ProfilePowBadgeProps> = (props) => {
     const diff = difficulty();
     if (props.style === 'inline') {
       // Compact: just emoji + number
-      return `💎${diff}`;
+      return `💎 ${diff}`;
     }
     // Full: emoji + number + label
     return `💎 ${diff} bits`;

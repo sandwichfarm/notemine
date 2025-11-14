@@ -30,7 +30,6 @@ export const NaddrEmbed: Component<NaddrEmbedProps> = (props) => {
   };
 
   const seenIds = props.seenEventIds ?? new Set<string>();
-  const currentDepth = props.embedDepth ?? 0;
 
   onMount(async () => {
     const data = naddrData();

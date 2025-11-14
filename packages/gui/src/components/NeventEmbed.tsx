@@ -27,7 +27,6 @@ export const NeventEmbed: Component<NeventEmbedProps> = (props) => {
 
   const eventId = () => getEventId(props.entity);
   const seenIds = props.seenEventIds ?? new Set<string>();
-  const currentDepth = props.embedDepth ?? 0;
 
   // Recursion guard: check for cycles
   if (eventId() && seenIds.has(eventId()!)) {

@@ -38,6 +38,7 @@ export const PROFILE_RELAYS = [
 import { createSignal } from 'solid-js';
 import { debug } from '../lib/debug';
 import { getCachedEventsByFilters } from './cache';
+import { RelayConnectionManager } from './relay-connection-manager';
 
 // NIP-66 POW relays (from svelte demo)
 const [powRelays, setPowRelaysSignal] = createSignal<string[]>([]);
@@ -48,8 +49,12 @@ export const getPowRelays = powRelays;
 // Set POW relays from NIP-66 discovery
 export function setPowRelays(relays: string[]) {
   setPowRelaysSignal(relays);
-  // Connect to newly discovered relays immediately
-  connectToRelays(relays);
+  // Update baseline relays with POW relays
+  relayConnectionManager.setBaselineRelays([
+    DEFAULT_POW_RELAY,
+    ...PROFILE_RELAYS,
+    ...relays,
+  ]);
 }
 
 // NIP-65 User relays (inbox/outbox)
@@ -65,9 +70,14 @@ export function setUserRelays(inbox: string[], outbox: string[]) {
   debug('[NIP-65] Setting user relays - inbox:', inbox, 'outbox:', outbox);
   setUserInboxRelaysSignal(inbox);
   setUserOutboxRelaysSignal(outbox);
-  // Connect to user's relays immediately
+  // Update baseline to include user's own relays (for their own publishing/reading)
   const allUserRelays = [...new Set([...inbox, ...outbox])];
-  connectToRelays(allUserRelays);
+  relayConnectionManager.setBaselineRelays([
+    DEFAULT_POW_RELAY,
+    ...PROFILE_RELAYS,
+    ...powRelays(),
+    ...allUserRelays,
+  ]);
 }
 
 // Create loaders with EventStore integration
@@ -344,3 +354,56 @@ export async function getUserFollows(pubkey: string): Promise<string[]> {
     }, 2000);
   });
 }
+
+// Create singleton RelayConnectionManager
+// Will be initialized after preferences are loaded
+let _relayConnectionManager: RelayConnectionManager | null = null;
+
+/**
+ * Initialize the relay connection manager with user preferences
+ * Called from PreferencesProvider after preferences are loaded
+ */
+export function initializeRelayConnectionManager(
+  maxConnections: number,
+  maxRelaysPerUser: number,
+  debugMode: boolean
+): void {
+  if (!_relayConnectionManager) {
+    _relayConnectionManager = new RelayConnectionManager(relayPool, {
+      maxConnections,
+      maxRelaysPerUser,
+      debugMode,
+    });
+
+    // Initialize baseline relays
+    _relayConnectionManager.setBaselineRelays([
+      DEFAULT_POW_RELAY,
+      ...PROFILE_RELAYS,
+    ]);
+
+    debug('[RelayConnectionManager] Initialized with config:', { maxConnections, maxRelaysPerUser, debugMode });
+  } else {
+    // Update existing manager config
+    _relayConnectionManager.updateConfig({ maxConnections, maxRelaysPerUser, debugMode });
+  }
+}
+
+/**
+ * Get the relay connection manager instance
+ * Throws if not initialized
+ */
+export function getRelayConnectionManager(): RelayConnectionManager {
+  if (!_relayConnectionManager) {
+    // Create with defaults if not initialized yet
+    _relayConnectionManager = new RelayConnectionManager(relayPool, {
+      maxConnections: 10,
+      maxRelaysPerUser: 3,
+      debugMode: import.meta.env.DEV,
+    });
+    _relayConnectionManager.setBaselineRelays([DEFAULT_POW_RELAY, ...PROFILE_RELAYS]);
+  }
+  return _relayConnectionManager;
+}
+
+// Export convenience getter
+export const relayConnectionManager = getRelayConnectionManager();

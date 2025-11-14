@@ -3,6 +3,7 @@ import { createLocalStore } from '../lib/localStorage';
 import { setDebugEnabled } from '../lib/debug';
 import type { QueueOrderingStrategy } from '../lib/queue-ordering';
 import { setDeblurCacheSize } from '../lib/image-deblur-cache';
+import { initializeRelayConnectionManager } from '../lib/applesauce';
 
 /**
  * User preferences with all configurable magic numbers
@@ -51,6 +52,8 @@ export interface UserPreferences {
   enabledRelays: {
     [relayUrl: string]: boolean;
   };
+  maxActiveRelays: number; // Maximum simultaneous relay connections (smart connection management)
+  maxRelaysPerUser: number; // Maximum relays to use per user in optimal selection
 
   // Mining settings
   // Preferred number of workers to use for mining. Clamped to device capabilities.
@@ -124,6 +127,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
   // Relay defaults (empty initially, will be populated when relays are discovered)
   enabledRelays: {},
+  maxActiveRelays: 10, // Default to 10 simultaneous connections
+  maxRelaysPerUser: 3, // Default to 3 relays per user in optimal selection
 
   // Mining defaults
   minerNumberOfWorkers: Math.max(1, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4) - 1),
@@ -246,6 +251,15 @@ export const PreferencesProvider: Component<{ children: JSX.Element }> = (props)
   // Sync deblur cache size when preference changes
   createEffect(() => {
     setDeblurCacheSize(preferences().deblurCacheSize);
+  });
+
+  // Sync relay connection manager config when preferences change
+  createEffect(() => {
+    initializeRelayConnectionManager(
+      preferences().maxActiveRelays,
+      preferences().maxRelaysPerUser,
+      preferences().debugMode
+    );
   });
 
   return (

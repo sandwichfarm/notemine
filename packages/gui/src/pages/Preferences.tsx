@@ -659,6 +659,60 @@ export const Preferences: Component = () => {
           </div>
         </div>
       </section>
+
+      {/* Relay Connection Management */}
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-text-secondary opacity-70">Relay Connection Management</h2>
+        <p class="text-sm text-text-tertiary mb-4 opacity-75">
+          Smart connection management prevents browser crashes by limiting simultaneous connections
+          and intelligently selecting relays based on user coverage.
+        </p>
+
+        <div class="space-y-4">
+          {/* Max Active Relays */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Max Active Connections: {preferences().maxActiveRelays}
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="30"
+              step="1"
+              value={preferences().maxActiveRelays}
+              onInput={(e) => updatePreference('maxActiveRelays', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Maximum simultaneous relay connections (default: 10). Lower values improve stability but may reduce coverage.
+            </p>
+            <Show when={preferences().maxActiveRelays > 15}>
+              <p class="text-xs text-orange-500 mt-2">
+                ⚠️ High connection counts may impact browser performance
+              </p>
+            </Show>
+          </div>
+
+          {/* Max Relays Per User */}
+          <div class="card">
+            <label class="block text-sm font-medium text-text-secondary mb-2">
+              Max Relays Per User: {preferences().maxRelaysPerUser}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              step="1"
+              value={preferences().maxRelaysPerUser}
+              onInput={(e) => updatePreference('maxRelaysPerUser', Number(e.currentTarget.value))}
+              class="w-full"
+            />
+            <p class="text-xs text-text-tertiary mt-1 opacity-50">
+              Maximum relays to use per user when computing optimal coverage (default: 3). Lower values prioritize shared relays.
+            </p>
+          </div>
+        </div>
+      </section>
       </Show>
 
       {/* Mining Tab */}

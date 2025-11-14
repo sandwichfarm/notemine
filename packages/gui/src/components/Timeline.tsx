@@ -1,6 +1,6 @@
 import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, getActiveRelays, relayPool, eventStore } from '../lib/applesauce';
+import { createTimelineStream, relayPool, eventStore, relayConnectionManager } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { AlgorithmControls } from './AlgorithmControls';
@@ -45,9 +45,11 @@ export const Timeline: Component<TimelineProps> = (props) => {
     let oldestTimestamp = Math.floor(Date.now() / 1000);
 
     try {
-      const relays = getActiveRelays();
+      // Use relay connection manager's connected relays (limited and optimized)
+      const relays = relayConnectionManager.getConnectedRelays();
       relaysCache = relays; // Store for lazy loading
       debug('[Timeline] Loading from relays:', relays);
+      debug('[Timeline] Connection stats:', relayConnectionManager.getStats());
 
       if (relays.length === 0) {
         setError('No relays connected');

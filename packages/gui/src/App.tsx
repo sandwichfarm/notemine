@@ -24,7 +24,7 @@ import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
 import { Preferences } from './pages/Preferences';
 import { fetchNip66PowRelays } from './lib/nip66';
-import { setPowRelays, connectToRelays, getActiveRelays, eventStore } from './lib/applesauce';
+import { setPowRelays, eventStore } from './lib/applesauce';
 import {
   initializeCache,
   loadCachedEvents,
@@ -91,11 +91,8 @@ const AppInit: ParentComponent = (props) => {
     try {
       const relays = await fetchNip66PowRelays();
       setPowRelays(relays);
-
-      // Connect to relays
-      const activeRelays = getActiveRelays();
-      connectToRelays(activeRelays);
-      debug('[App] Connected to relays:', activeRelays);
+      // Relay connections are now managed automatically by RelayConnectionManager
+      debug('[App] POW relays discovered:', relays);
     } catch (error) {
       console.error('[App] Failed to fetch NIP-66 relays:', error);
     }

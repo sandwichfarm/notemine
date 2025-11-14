@@ -5,6 +5,7 @@ import {
   DEFAULT_POW_RELAY,
   getUserInboxRelaysSignal,
   getUserOutboxRelaysSignal,
+  relayConnectionManager,
 } from '../lib/applesauce';
 import { relayStatsTracker } from '../lib/relay-stats';
 import {
@@ -157,6 +158,8 @@ const Relays: Component = () => {
 
   const totalCount = () => relayStatuses().length;
 
+  const connectionStats = () => relayConnectionManager.getStats();
+
   return (
     <div class="space-y-6">
       {/* Header */}
@@ -167,6 +170,29 @@ const Relays: Component = () => {
         <p class="text-text-secondary">
           Manage your POW relay connections and preferences
         </p>
+      </div>
+
+      {/* Connection Manager Banner */}
+      <div class="card p-4 bg-gradient-to-r from-accent/10 to-cyber-400/10 border border-accent/30">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-accent mb-1">Smart Connection Management Active</h3>
+            <p class="text-sm text-text-secondary">
+              Connected to <span class="text-accent font-bold">{connectionStats().connected}</span> of{' '}
+              <span class="font-bold">{connectionStats().totalCandidates}</span> relays (capped for performance)
+            </p>
+            <Show when={connectionStats().coverage.totalUsers > 0}>
+              <p class="text-sm text-text-secondary mt-1">
+                Coverage: <span class="text-cyber-400 font-bold">{connectionStats().coverage.coveredUsers}</span> of{' '}
+                <span class="font-bold">{connectionStats().coverage.totalUsers}</span> users ({connectionStats().coverage.percentage}%)
+              </p>
+            </Show>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-text-secondary mb-1">Baseline</div>
+            <div class="text-2xl font-bold text-accent">{connectionStats().baselineRelays}</div>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}

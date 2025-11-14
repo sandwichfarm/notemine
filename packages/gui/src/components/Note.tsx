@@ -14,6 +14,8 @@ import { ReactionBreakdown } from './ReactionBreakdown';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useTooltip } from '../providers/TooltipProvider';
 import type { PreparedNote } from '../types/FeedTypes';
+import { getVisibilityObserver } from '../services/VisibilityObserver';
+import { getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 
 interface NoteProps {
   event: NostrEvent;
@@ -179,30 +181,42 @@ export const Note: Component<NoteProps> = (props) => {
     return `/e/${nevent}`;
   };
 
-  // Set up intersection observer for lazy loading
+  // Phase 2: Set up global visibility observer for lazy loading with dwell time
   onMount(() => {
+    const { preferences } = usePreferences();
+
     if (noteRef && props.onVisible) {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              props.onVisible?.(props.event.id);
-              observer.disconnect(); // Only trigger once
-            }
-          });
+      const visibilityObserver = getVisibilityObserver();
+      const coordinator = getInteractionsCoordinator();
+      let triggered = false; // Ensure one-time trigger
+
+      visibilityObserver.register({
+        element: noteRef,
+        onVisible: () => {
+          if (!triggered) {
+            triggered = true;
+            props.onVisible?.(props.event.id);
+            // Keep observer registered to detect scroll-away
+          }
         },
-        {
-          rootMargin: '200px', // Start loading 200px before entering viewport
-        }
-      );
+        onLeave: () => {
+          if (triggered) {
+            // Interactions may be in-flight or queued - cancel them when scrolling away
+            coordinator.cancel(props.event.id);
+          }
+        },
+      });
 
-      observer.observe(noteRef);
-
-      onCleanup(() => observer.disconnect());
+      onCleanup(() => {
+        visibilityObserver.unregister(noteRef);
+        // Final cleanup: cancel any remaining in-flight or queued interactions
+        coordinator.cancel(props.event.id);
+      });
     }
 
     // Phase 2: ResizeObserver to assert heights don't shrink (stable rendering)
-    if (noteRef && props.preparedNote) {
+    // Only enabled when feedDebugMode is on
+    if (noteRef && props.preparedNote && preferences().feedDebugMode) {
       let maxHeight = 0;
       const resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {

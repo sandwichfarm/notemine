@@ -52,6 +52,22 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
       overlapRatio: 0.15,
       overfetch: 2.0,
       skewMarginMinutes: 15,
+      hydrationLimit: 50,
+      cacheWidenMultiplier: 2,
+      cacheWidenCap: 50,
+      visibilityDwellMs: 300,
+      visibilityRootMarginPx: 300,
+      interactionsMaxConcurrent: 3,
+      interactionsQueueMax: 24,
+      anchorPreserveDelayMs: 50,
+      topThresholdPx: 100,
+      infiniteRootMarginPx: 300,
+      infiniteTriggerPct: 0.8,
+      batchClampMin: 5,
+      batchClampMax: 20,
+      preloaderTimeoutMs: 1500,
+      maxMediaHeightPx: 900,
+      logThrottleMs: 2000,
     };
     updatePreference('feedParams', defaults);
     setAppliedParams(defaults);

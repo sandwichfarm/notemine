@@ -98,16 +98,23 @@ type TimelineFilters = Parameters<typeof createTimelineLoader>[2];
 export function createTimelineStream(
   relays: string[],
   filters: TimelineFilters,
-  options: TimelineLoaderOptions & { since?: number } = {},
+  options: TimelineLoaderOptions & {
+    since?: number;
+    cacheWidenMultiplier?: number; // Phase 1: Multiplier for cache widen (default 2)
+    cacheWidenCap?: number; // Phase 1: Hard cap for cache widen (default 50)
+  } = {},
 ) {
-  const { since, ...loaderOptions } = options;
+  const { since, cacheWidenMultiplier = 2, cacheWidenCap = 50, ...loaderOptions } = options;
   // Wrap cache to ensure we hydrate enough items for UI filtering (e.g., skip replies)
   const cacheRequest = async (f: any[]) => {
     try {
-      // Increase limit for cache path only to improve chance of root notes present
+      // Phase 1: Increase limit for cache path with configurable multiplier and cap
       const widened = (Array.isArray(f) ? f : [f]).map((flt) => ({
         ...flt,
-        limit: Math.max(flt.limit ?? 0, (loaderOptions.limit ?? 10) * 25),
+        limit: Math.min(
+          Math.max(flt.limit ?? 0, (loaderOptions.limit ?? 10) * cacheWidenMultiplier),
+          cacheWidenCap
+        ),
       }));
       const res = await getCachedEventsByFilters(widened);
       debug('[TimelineLoader cache]', { requested: f, widenedLimit: widened[0]?.limit, returned: res?.length ?? 0 });

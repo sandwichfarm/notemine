@@ -9,6 +9,10 @@ import type { ParsedEntity } from '../lib/content-parser';
 
 interface NaddrEmbedProps {
   entity: ParsedEntity;
+  /** Recursion guard: current embed depth */
+  embedDepth?: number;
+  /** Recursion guard: set of event IDs in the embed chain */
+  seenEventIds?: Set<string>;
 }
 
 /**
@@ -24,6 +28,9 @@ export const NaddrEmbed: Component<NaddrEmbedProps> = (props) => {
     if (props.entity.type !== 'naddr') return null;
     return props.entity.data as { kind: number; pubkey: string; identifier: string; relays?: string[] };
   };
+
+  const seenIds = props.seenEventIds ?? new Set<string>();
+  const currentDepth = props.embedDepth ?? 0;
 
   onMount(async () => {
     const data = naddrData();
@@ -50,6 +57,14 @@ export const NaddrEmbed: Component<NaddrEmbedProps> = (props) => {
       next: (response) => {
         if (response !== 'EOSE' && response.kind === data.kind) {
           const evt = response as NostrEvent;
+
+          // Recursion guard: check for cycle
+          if (seenIds.has(evt.id)) {
+            setError(true);
+            setLoading(false);
+            return;
+          }
+
           setEvent(evt);
           eventStore.add(evt);
           setLoading(false);

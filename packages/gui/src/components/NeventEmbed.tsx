@@ -10,6 +10,10 @@ import type { ParsedEntity } from '../lib/content-parser';
 
 interface NeventEmbedProps {
   entity: ParsedEntity;
+  /** Recursion guard: current embed depth */
+  embedDepth?: number;
+  /** Recursion guard: set of event IDs in the embed chain */
+  seenEventIds?: Set<string>;
 }
 
 /**
@@ -22,6 +26,19 @@ export const NeventEmbed: Component<NeventEmbedProps> = (props) => {
   const [error, setError] = createSignal(false);
 
   const eventId = () => getEventId(props.entity);
+  const seenIds = props.seenEventIds ?? new Set<string>();
+  const currentDepth = props.embedDepth ?? 0;
+
+  // Recursion guard: check for cycles
+  if (eventId() && seenIds.has(eventId()!)) {
+    return (
+      <div class="my-3 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 rounded-r p-3">
+        <div class="text-sm text-yellow-700 dark:text-yellow-300 italic">
+          [Circular reference detected - note embeds itself]
+        </div>
+      </div>
+    );
+  }
 
   onMount(async () => {
     const id = eventId();

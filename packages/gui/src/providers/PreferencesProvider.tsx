@@ -82,6 +82,32 @@ export interface UserPreferences {
     overlapRatio: number;
     overfetch: number;
     skewMarginMinutes: number; // Clock skew tolerance in minutes
+
+    // Phase 1: Cache hydration limits
+    hydrationLimit: number; // Max root notes to show from cache on initial load
+    cacheWidenMultiplier: number; // Multiplier for cache query (e.g. 2x desiredCount)
+    cacheWidenCap: number; // Absolute max for cache widen (hard cap)
+
+    // Phase 2: Visibility and lazy loading
+    visibilityDwellMs: number; // Milliseconds to wait before triggering lazy load
+    visibilityRootMarginPx: number; // Root margin in pixels for intersection observer
+    interactionsMaxConcurrent: number; // Max concurrent interactions fetches
+    interactionsQueueMax: number; // Max queued interactions requests
+
+    // Phase 3: Anchor preservation
+    anchorPreserveDelayMs: number; // Delay before measuring anchor for preservation
+    topThresholdPx: number; // Scroll position threshold for "at top"
+
+    // Phase 4: Infinite scroll
+    infiniteRootMarginPx: number; // Root margin for infinite scroll sentinel
+    infiniteTriggerPct: number; // Trigger percentage (0.0-1.0) for loading more
+    batchClampMin: number; // Minimum batch size for pagination
+    batchClampMax: number; // Maximum batch size for pagination
+
+    // Phase 6: Diagnostics
+    preloaderTimeoutMs: number; // Timeout for media preloader
+    maxMediaHeightPx: number; // Max height for media elements
+    logThrottleMs: number; // Throttle interval for debug logging
   };
 }
 
@@ -151,6 +177,32 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     overlapRatio: 0.15,
     overfetch: 2.0,
     skewMarginMinutes: 15, // 15 minutes clock skew tolerance
+
+    // Phase 1: Cache hydration limits
+    hydrationLimit: 50, // Show up to 50 cached notes immediately
+    cacheWidenMultiplier: 2, // Query 2x desiredCount from cache
+    cacheWidenCap: 50, // Hard cap on cache widen
+
+    // Phase 2: Visibility and lazy loading
+    visibilityDwellMs: 300, // 300ms dwell before triggering lazy load
+    visibilityRootMarginPx: 300, // 300px pre-heating margin
+    interactionsMaxConcurrent: 3, // Max 3 concurrent interactions fetches
+    interactionsQueueMax: 24, // Max 24 queued requests
+
+    // Phase 3: Anchor preservation
+    anchorPreserveDelayMs: 50, // 50ms delay before anchor measurement
+    topThresholdPx: 100, // Consider "at top" when scrollY < 100px
+
+    // Phase 4: Infinite scroll
+    infiniteRootMarginPx: 300, // 300px margin for infinite scroll trigger
+    infiniteTriggerPct: 0.8, // Trigger at 80% of scroll
+    batchClampMin: 5, // Min 5 notes per batch
+    batchClampMax: 20, // Max 20 notes per batch
+
+    // Phase 6: Diagnostics
+    preloaderTimeoutMs: 1500, // 1.5s timeout for media preloading
+    maxMediaHeightPx: 900, // Max 900px height for media
+    logThrottleMs: 2000, // Throttle debug logs to every 2s
   },
 };
 
@@ -173,8 +225,16 @@ const PreferencesContext = createContext<PreferencesContextType>();
 export const PreferencesProvider: Component<{ children: JSX.Element }> = (props) => {
   // Load preferences and merge with defaults to handle new fields
   const stored = localStorage.getItem('notemine:preferences');
-  const storedPreferences = stored ? JSON.parse(stored) : {};
-  const mergedPreferences = { ...DEFAULT_PREFERENCES, ...storedPreferences };
+  const storedPreferences = stored ? JSON.parse(stored) : {} as Partial<UserPreferences>;
+  // Deep-merge nested objects (notably feedParams) so new keys get defaults
+  const mergedPreferences: UserPreferences = {
+    ...DEFAULT_PREFERENCES,
+    ...storedPreferences,
+    feedParams: {
+      ...DEFAULT_PREFERENCES.feedParams,
+      ...(storedPreferences as any)?.feedParams,
+    },
+  };
 
   // Ensure localStorage contains merged defaults so new fields get initialized
   try {

@@ -13,6 +13,8 @@ import { loadWoTFeed, type RelayMap } from '../services/AdaptiveFeedService';
 import { IntakePrioritizer } from '../services/IntakePrioritizer';
 import { MediaPreloader } from '../services/MediaPreloader';
 import type { PreparedNote } from '../types/FeedTypes';
+import { configureVisibilityObserver, getVisibilityObserver } from '../services/VisibilityObserver';
+import { configureInteractionsCoordinator, getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 
 interface WoTTimelineProps {
   userPubkey: string;
@@ -57,10 +59,13 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   let loadMoreObserver: IntersectionObserver | null = null;
   let liveSinceTimestamp = Math.floor(Date.now() / 1000);
 
-  // Services for Phase 1 & 2 (initialized with debug mode based on preferences)
+  // Services for Phase 1 & 2 (initialized with debug mode and config from preferences)
   const initDebug = () => preferences().feedDebugMode || false;
   const prioritizer = new IntakePrioritizer();
-  const preloader = new MediaPreloader({}, initDebug());
+  const preloader = new MediaPreloader({
+    timeoutMs: preferences().feedParams.preloaderTimeoutMs,
+    maxMediaHeight: preferences().feedParams.maxMediaHeightPx,
+  }, initDebug());
 
   // Fun loading messages
   const funMessages = [
@@ -80,12 +85,13 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     return funMessages[Math.floor(Math.random() * funMessages.length)];
   };
 
-  // Phase 3: Scroll detection to determine if user is at top
+  // Phase 3: Scroll detection to determine if user is at top (with configurable threshold)
   const checkScrollPosition = () => {
     if (!feedContainerRef) return;
 
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
-    const threshold = 100; // Consider "at top" if within 100px of top
+    const prefs = preferences();
+    const threshold = prefs.feedParams.topThresholdPx; // Configurable threshold (default 100px)
 
     setIsAtTop(scrollTop < threshold);
   };
@@ -101,61 +107,107 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     checkScrollPosition();
   };
 
-  // Phase 3: Flush pending notes to main feed with anchor preservation
+  // Phase 3: Flush pending notes to main feed with below-fold insertion and enhanced anchor preservation
   const flushPendingNotes = () => {
     const pending = pendingNotes();
     if (pending.length === 0) return;
 
-    console.log('[WoTTimeline] Flushing', pending.length, 'pending notes');
+    const prefs = preferences();
+    const anchorDelayMs = prefs.feedParams.anchorPreserveDelayMs;
 
-    // Find the note currently at the top of viewport for anchor
+    if (prefs.feedDebugMode) {
+      console.log(`[WoTTimeline] Flushing ${pending.length} pending notes with below-fold insertion`);
+    }
+
+    // Phase 3: Find first visible element for anchor (not first in viewport, but first fully visible)
     let anchorElement: Element | null = null;
     let anchorOffset = 0;
+    let anchorId: string | null = null;
 
     const noteElements = document.querySelectorAll('[data-note-id]');
     for (const element of noteElements) {
       const rect = element.getBoundingClientRect();
       if (rect.top >= 0 && rect.top < window.innerHeight) {
-        // This note is visible in viewport
+        // This note is visible in viewport - use as anchor
         anchorElement = element;
         anchorOffset = rect.top;
+        anchorId = element.getAttribute('data-note-id');
         break;
       }
     }
 
-    // Prepend pending notes to main feed (they're newer)
-    setNotes(prev => [...pending, ...prev]);
+    // Phase 3: Find last visible note for below-fold insertion
+    let lastVisibleIndex = -1;
+    const currentNotes = notes();
+
+    for (let i = 0; i < noteElements.length; i++) {
+      const element = noteElements[i];
+      const rect = element.getBoundingClientRect();
+
+      // Note is below the fold (rect.top > viewport height)
+      if (rect.top > window.innerHeight) {
+        break; // Found first below-fold note, so previous was last visible
+      }
+
+      // This note is visible or above fold
+      const noteId = element.getAttribute('data-note-id');
+      if (noteId) {
+        // Find this note's index in our notes array
+        const idx = currentNotes.findIndex(n => n.event.id === noteId);
+        if (idx > lastVisibleIndex) {
+          lastVisibleIndex = idx;
+        }
+      }
+    }
+
+    // Phase 3: Insert pending notes after last visible (below fold), not at top
+    setNotes(prev => {
+      if (lastVisibleIndex === -1 || lastVisibleIndex >= prev.length - 1) {
+        // No visible notes or last visible is at end - append
+        return [...prev, ...pending];
+      } else {
+        // Insert after last visible note
+        const before = prev.slice(0, lastVisibleIndex + 1);
+        const after = prev.slice(lastVisibleIndex + 1);
+        return [...before, ...pending, ...after];
+      }
+    });
 
     // Clear pending queue
     setPendingNotes([]);
 
-    // Restore scroll position after DOM updates
+    // Phase 3: Enhanced anchor preservation with configurable delay and ±2px target accuracy
     setTimeout(() => {
-      if (anchorElement) {
-        const anchorId = anchorElement.getAttribute('data-note-id');
-        if (anchorId) {
-          // Find the same note in the updated DOM
-          const updatedElement = document.querySelector(`[data-note-id="${anchorId}"]`);
-          if (updatedElement) {
-            const rect = updatedElement.getBoundingClientRect();
-            const currentTop = rect.top;
-            const scrollAdjustment = currentTop - anchorOffset;
+      if (anchorElement && anchorId) {
+        // Find the same note in the updated DOM
+        const updatedElement = document.querySelector(`[data-note-id="${anchorId}"]`);
+        if (updatedElement) {
+          const rect = updatedElement.getBoundingClientRect();
+          const currentTop = rect.top;
+          const scrollAdjustment = currentTop - anchorOffset;
 
-            // Scroll to maintain the same visual position
+          // Only adjust if shift is >2px (avoid sub-pixel jitter)
+          if (Math.abs(scrollAdjustment) > 2) {
             window.scrollBy(0, scrollAdjustment);
-            console.log('[WoTTimeline] Anchor preserved, adjusted scroll by', scrollAdjustment, 'px');
+            if (prefs.feedDebugMode) {
+              console.log(`[WoTTimeline] Anchor preserved, adjusted scroll by ${scrollAdjustment}px (target: ±2px)`);
+            }
+          } else if (prefs.feedDebugMode) {
+            console.log(`[WoTTimeline] Anchor preserved within target (shift: ${scrollAdjustment}px)`);
           }
         }
       }
-    }, 50); // Small delay for DOM to update
+    }, anchorDelayMs);
   };
 
-  // Phase 4: Infinite scroll (older items) loader
+  // Phase 4: Infinite scroll (older items) loader with batch size clamping
   const loadMoreOlder = async () => {
     if (loadingMore() || !hasMore()) return;
     if (!currentAuthors || currentAuthors.length === 0) return;
 
     setLoadingMore(true);
+
+    const prefs = preferences();
 
     // Build target relay set from author outbox relays; fallback to active relays
     const relaySet = new Set<string>();
@@ -163,13 +215,28 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     let relays = Array.from(relaySet);
     if (relays.length === 0) relays = getActiveRelays();
 
-    const LOAD_MORE_BATCH = Math.max(5, Math.min(20, (preferences().feedParams?.initialLimit ?? 10)));
+    // Phase 4: Batch size clamping with configurable min/max
+    const rawBatchSize = prefs.feedParams?.initialLimit ?? 10;
+    const LOAD_MORE_BATCH = Math.max(
+      prefs.feedParams.batchClampMin,
+      Math.min(prefs.feedParams.batchClampMax, rawBatchSize)
+    );
+
     const since = oldestTimestamp - 1;
+
+    if (prefs.feedDebugMode) {
+      console.log(`[WoTTimeline] Loading more: batch=${LOAD_MORE_BATCH}, since=${new Date(since * 1000).toISOString()}, relays=${relays.length}`);
+    }
 
     const more$ = createTimelineStream(
       relays,
       [{ kinds: [1], authors: currentAuthors, limit: LOAD_MORE_BATCH }],
-      { limit: LOAD_MORE_BATCH, since }
+      {
+        limit: LOAD_MORE_BATCH,
+        since,
+        cacheWidenMultiplier: prefs.feedParams.cacheWidenMultiplier,
+        cacheWidenCap: prefs.feedParams.cacheWidenCap,
+      }
     );
 
     const collected: NostrEvent[] = [];
@@ -193,28 +260,40 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       },
       complete: async () => {
         try {
-          // Advance pagination cursor based on any events seen (even if replies)
+          const prefs = preferences();
+
+          // Phase 4: Advance pagination cursor based on any events seen (even if replies)
           if (seenAny && minSeenTs < oldestTimestamp) {
             oldestTimestamp = minSeenTs;
           }
 
           if (collected.length === 0) {
             if (!seenAny) {
-              // Truly exhausted
+              // Truly exhausted - no events at all
+              if (prefs.feedDebugMode) {
+                console.log('[WoTTimeline] Load more exhausted (no events found)');
+              }
               setHasMore(false);
               setLoadingMore(false);
               return;
             } else {
-              // Saw only replies/dupes; step again immediately
+              // Phase 4: Saw only replies/dupes; advance cursor and retry immediately
+              if (prefs.feedDebugMode) {
+                console.log('[WoTTimeline] Load more got only replies/dupes, retrying immediately (cursor advanced)');
+              }
               setLoadingMore(false);
               setTimeout(() => { void loadMoreOlder(); }, 0);
               return;
             }
           }
 
+          if (prefs.feedDebugMode) {
+            console.log(`[WoTTimeline] Load more collected ${collected.length} root notes`);
+          }
+
           // Prepare notes with media preloading
           const prioritized = collected.map((e) => ({ event: e, id: e.id, author: e.pubkey, created_at: e.created_at } as any));
-          const prepared = await preloader.prepareBatch(prioritized, 1500);
+          const prepared = await preloader.prepareBatch(prioritized, prefs.feedParams.preloaderTimeoutMs);
 
           const appended: typeof prepared = [];
           for (const prep of prepared) {
@@ -301,6 +380,19 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     setPendingNotes([]);
     setIsAtTop(true);
 
+    // Phase 2: Configure global visibility observer and interactions coordinator
+    const prefs = preferences();
+    configureVisibilityObserver(
+      prefs.feedParams.visibilityDwellMs,
+      prefs.feedParams.visibilityRootMarginPx,
+      prefs.feedDebugMode
+    );
+    configureInteractionsCoordinator(
+      prefs.feedParams.interactionsMaxConcurrent,
+      prefs.feedParams.interactionsQueueMax,
+      prefs.feedDebugMode
+    );
+
     console.log('[WoTTimeline] Loading WoT feed for', userPubkey.slice(0, 8));
 
     // Async function to load WoT timeline with adaptive fetch
@@ -320,9 +412,11 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
         }
 
         // Phase 0: Cache-first hydration of root notes from follows
+        const hydrationLimit = preferences().feedParams.hydrationLimit;
+        const cacheStartTime = Date.now();
         try {
           const cached = await getCachedEventsByFilters([
-            { kinds: [1], authors: follows, limit: 200 }
+            { kinds: [1], authors: follows, limit: hydrationLimit }
           ]);
           let added = 0;
           for (const evt of cached) {
@@ -330,7 +424,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
             if (Array.isArray(evt.tags) && evt.tags.some((t: string[]) => t[0] === 'e')) continue;
             if (eventCache.has(evt.id)) continue;
             eventCache.set(evt.id, evt);
-            eventStore.add(evt, true);
+            eventStore.add(evt);
             if (!reactionsCache.has(evt.id)) reactionsCache.set(evt.id, []);
             if (!repliesCache.has(evt.id)) repliesCache.set(evt.id, []);
             if (evt.created_at > liveSinceTimestamp) liveSinceTimestamp = evt.created_at;
@@ -353,9 +447,14 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
             added++;
           }
+          const cacheHydrateTime = Date.now() - cacheStartTime;
           if (added > 0) {
             setLoading(false);
             setLoadingStatus(`✨ Showing ${added} cached notes...`);
+          }
+          // Phase 1: Debug logging for cache performance
+          if (preferences().feedDebugMode) {
+            console.log(`[WoTTimeline] Cache hydrated ${added}/${hydrationLimit} notes in ${cacheHydrateTime}ms`);
           }
         } catch (e) {
           // Keep going on cache failures
@@ -423,7 +522,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
               console.log('[WoTTimeline] Trimmed from', prioritized.length, 'to', trimmed.length, 'notes');
 
               // Prepare notes with media preloading
-              const prepared = await preloader.prepareBatch(trimmed, 1500);
+              const prepared = await preloader.prepareBatch(trimmed, preferences().feedParams.preloaderTimeoutMs);
 
               // Add to cache and render in intake order
               for (const prep of prepared) {
@@ -467,7 +566,11 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
                   insertionOrder: insertionCounter++,
                 });
               }
+
+              // Phase 6: Log debug stats after processing batch
+              logDebugStats();
             } else if (event.type === 'complete') {
+              const prefs = preferences();
               console.log('[WoTTimeline] Feed load complete:', event.total, 'notes', event.exhausted ? '(exhausted)' : '');
               setLoading(false);
               setLoadingStatus(event.total > 0 ? `🎉 Feed ready! (${event.total} notes)` : '');
@@ -475,19 +578,28 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
               // Phase 3: Set up scroll listener after initial load
               setTimeout(() => setupScrollListener(), 100);
 
-              // Set up infinite scroll sentinel after initial load
+              // Phase 4: Set up infinite scroll sentinel ONLY after initial load complete
+              // This prevents race conditions with the initial fetch
               setTimeout(() => {
                 if (bottomSentinelRef && !loadMoreObserver) {
+                  const rootMargin = prefs.feedParams.infiniteRootMarginPx;
+
                   loadMoreObserver = new IntersectionObserver(
                     (entries) => {
                       if (entries[0].isIntersecting && hasMore() && !loadingMore()) {
-                        console.log('[WoTTimeline] Bottom sentinel visible, loading more...');
+                        if (prefs.feedDebugMode) {
+                          console.log('[WoTTimeline] Bottom sentinel visible, loading more (rootMargin: ' + rootMargin + 'px)...');
+                        }
                         void loadMoreOlder();
                       }
                     },
-                    { rootMargin: '300px' }
+                    { rootMargin: `${rootMargin}px` }
                   );
                   loadMoreObserver.observe(bottomSentinelRef);
+
+                  if (prefs.feedDebugMode) {
+                    console.log(`[WoTTimeline] Infinite scroll sentinel activated (rootMargin: ${rootMargin}px)`);
+                  }
                 }
               }, 150);
 
@@ -498,6 +610,9 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
               if (event.total > 0) {
                 setTimeout(() => setLoadingStatus(''), 2000);
               }
+
+              // Phase 6: Log debug stats after initial load complete
+              logDebugStats();
             }
           },
           error: (err) => {
@@ -533,7 +648,12 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     const live$ = createTimelineStream(
       liveRelays,
       [{ kinds: [1], authors: currentAuthors }],
-      { limit: 50, since: Math.max(liveSinceTimestamp, Math.floor(Date.now() / 1000) - 30) }
+      {
+        limit: 50,
+        since: Math.max(liveSinceTimestamp, Math.floor(Date.now() / 1000) - 30),
+        cacheWidenMultiplier: preferences().feedParams.cacheWidenMultiplier,
+        cacheWidenCap: preferences().feedParams.cacheWidenCap,
+      }
     );
 
     const sub = live$.subscribe({
@@ -569,7 +689,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     subscriptions.push(sub);
   };
 
-  // Lazy loading handler for reactions/replies (defined outside createEffect so it's stable)
+  // Phase 2: Lazy loading handler using InteractionsCoordinator (defined outside createEffect so it's stable)
   const handleNoteVisible = (eventId: string) => {
     // Don't fetch if already tracked
     if (trackedEventIds.has(eventId)) {
@@ -583,53 +703,76 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       return;
     }
 
-    console.log('[WoTTimeline] Note visible, fetching reactions/replies for', eventId.slice(0, 8));
+    const coordinator = getInteractionsCoordinator();
 
-    // Fetch reactions (kind 7)
-    const reactionsObs = relayPool.req(myInboxRelays, { kinds: [7], '#e': [eventId], limit: 100 });
-    const reactionsSub = reactionsObs.subscribe({
-      next: (response) => {
-        if (response !== 'EOSE' && response.kind === 7) {
-          const reaction = response as NostrEvent;
-          const existing = reactionsCache.get(eventId) || [];
-          if (!existing.find(r => r.id === reaction.id)) {
-            existing.push(reaction);
-            reactionsCache.set(eventId, existing);
-            // Persist to global EventStore for cache/state coherence across views
-            eventStore.add(reaction);
-            recalculateScoresImmediate();
-          }
+    // Phase 2: Request interactions fetch through coordinator (with concurrency limiting)
+    coordinator.request({
+      noteId: eventId,
+      fetcher: () => {
+        if (preferences().feedDebugMode) {
+          console.log('[WoTTimeline] Starting interactions fetch for', eventId.slice(0, 8));
         }
-      },
-      error: (err) => {
-        // Silently ignore relay errors
-        console.log('[WoTTimeline] Reaction fetch error (ignoring):', err);
-      },
-    });
-    subscriptions.push(reactionsSub);
 
-    // Fetch replies (kind 1 with e tag)
-    const repliesObs = relayPool.req(myInboxRelays, { kinds: [1], '#e': [eventId], limit: 50 });
-    const repliesSub = repliesObs.subscribe({
-      next: (response) => {
-        if (response !== 'EOSE' && response.kind === 1) {
-          const reply = response as NostrEvent;
-          const existing = repliesCache.get(eventId) || [];
-          if (!existing.find(r => r.id === reply.id)) {
-            existing.push(reply);
-            repliesCache.set(eventId, existing);
-            // Persist to global EventStore for cache/state coherence across views
-            eventStore.add(reply);
-            recalculateScoresImmediate();
-          }
-        }
+        // Fetch reactions (kind 7)
+        const reactionsObs = relayPool.req(myInboxRelays, { kinds: [7], '#e': [eventId], limit: 100 });
+        const reactionsSub = reactionsObs.subscribe({
+          next: (response) => {
+            if (response !== 'EOSE' && response.kind === 7) {
+              const reaction = response as NostrEvent;
+              const existing = reactionsCache.get(eventId) || [];
+              if (!existing.find(r => r.id === reaction.id)) {
+                existing.push(reaction);
+                reactionsCache.set(eventId, existing);
+                // Persist to global EventStore for cache/state coherence across views
+                eventStore.add(reaction);
+                recalculateScoresImmediate();
+              }
+            }
+          },
+          error: (err) => {
+            // Silently ignore relay errors
+            if (preferences().feedDebugMode) {
+              console.log('[WoTTimeline] Reaction fetch error (ignoring):', err);
+            }
+          },
+        });
+
+        // Fetch replies (kind 1 with e tag)
+        const repliesObs = relayPool.req(myInboxRelays, { kinds: [1], '#e': [eventId], limit: 50 });
+        const repliesSub = repliesObs.subscribe({
+          next: (response) => {
+            if (response !== 'EOSE' && response.kind === 1) {
+              const reply = response as NostrEvent;
+              const existing = repliesCache.get(eventId) || [];
+              if (!existing.find(r => r.id === reply.id)) {
+                existing.push(reply);
+                repliesCache.set(eventId, existing);
+                // Persist to global EventStore for cache/state coherence across views
+                eventStore.add(reply);
+                recalculateScoresImmediate();
+              }
+            }
+          },
+          error: (err) => {
+            // Silently ignore relay errors
+            if (preferences().feedDebugMode) {
+              console.log('[WoTTimeline] Reply fetch error (ignoring):', err);
+            }
+          },
+        });
+
+        // Create a combined subscription
+        const combined = new Subscription();
+        combined.add(reactionsSub);
+        combined.add(repliesSub);
+
+        // Track subscriptions for cleanup
+        subscriptions.push(combined);
+
+        return combined;
       },
-      error: (err) => {
-        // Silently ignore relay errors
-        console.log('[WoTTimeline] Reply fetch error (ignoring):', err);
-      },
+      priority: 0, // All notes have equal priority for now
     });
-    subscriptions.push(repliesSub);
   };
 
   // Helper function to recalculate scores without reordering
@@ -685,6 +828,37 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       loadMoreObserver = null;
     }
   });
+
+  // Phase 6: Debug stats logging (throttled)
+  let lastDebugLog = 0;
+  const logDebugStats = () => {
+    const prefs = preferences();
+    if (!prefs.feedDebugMode) return;
+
+    const now = Date.now();
+    const throttleMs = prefs.feedParams.logThrottleMs;
+    if (now - lastDebugLog < throttleMs) return;
+    lastDebugLog = now;
+
+    const visibilityObserver = getVisibilityObserver();
+    const interactionsCoordinator = getInteractionsCoordinator();
+
+    console.log('[WoTTimeline] Debug Stats:', {
+      notes: notes().length,
+      pendingNotes: pendingNotes().length,
+      cacheSize: eventCache.size,
+      reactionsCache: reactionsCache.size,
+      repliesCache: repliesCache.size,
+      subscriptions: subscriptions.length,
+      trackedInteractions: trackedEventIds.size,
+      isAtTop: isAtTop(),
+      hasMore: hasMore(),
+      loadingMore: loadingMore(),
+      oldestTimestamp: new Date(oldestTimestamp * 1000).toISOString(),
+      visibilityObserver: visibilityObserver.getStats(),
+      interactionsCoordinator: interactionsCoordinator.getStats(),
+    });
+  };
 
   // Reload feed when feed params change
   const handleFeedParamsUpdate = () => {
@@ -764,8 +938,3 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     </div>
   );
 };
-
-// Load more older WoT notes based on current authors and oldest timestamp
-async function loadMoreOlder(this: any) {
-  // 'this' is not used; defined outside component
-}

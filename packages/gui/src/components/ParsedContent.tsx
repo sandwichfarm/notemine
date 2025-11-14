@@ -23,6 +23,10 @@ interface ParsedContentProps {
   class?: string;
   /** Reserved heights for media items (keyed by media ID or URL) - Phase 2 */
   reservedHeights?: Record<string, number>;
+  /** Recursion guard: current embed depth (default 0, max 3) */
+  embedDepth?: number;
+  /** Recursion guard: set of event IDs already in the embed chain to detect cycles */
+  seenEventIds?: Set<string>;
 }
 
 /**
@@ -104,6 +108,17 @@ export const ParsedContent: Component<ParsedContentProps> = (props) => {
   const { registerEvent, unregisterEvent } = useEmojiRegistry();
   const segments = () => parseContent(props.content);
 
+  // Recursion guards: initialize depth and seen set
+  const currentDepth = props.embedDepth ?? 0;
+  const seenIds = props.seenEventIds ?? new Set<string>();
+  const MAX_EMBED_DEPTH = 3;
+
+  // Add current event to seen set to prevent self-embedding
+  const updatedSeenIds = new Set(seenIds);
+  if (props.event?.id) {
+    updatedSeenIds.add(props.event.id);
+  }
+
   // Register event emoji tags when event changes
   createEffect(() => {
     if (props.event) {
@@ -138,10 +153,18 @@ export const ParsedContent: Component<ParsedContentProps> = (props) => {
 
               case 'note':
               case 'nevent':
-                return <NeventEmbed entity={entity} />;
+                // Recursion guard: check depth limit
+                if (currentDepth >= MAX_EMBED_DEPTH) {
+                  return <div class="text-xs text-gray-500 italic">[Embed depth limit reached]</div>;
+                }
+                return <NeventEmbed entity={entity} embedDepth={currentDepth + 1} seenEventIds={updatedSeenIds} />;
 
               case 'naddr':
-                return <NaddrEmbed entity={entity} />;
+                // Recursion guard: check depth limit
+                if (currentDepth >= MAX_EMBED_DEPTH) {
+                  return <div class="text-xs text-gray-500 italic">[Embed depth limit reached]</div>;
+                }
+                return <NaddrEmbed entity={entity} embedDepth={currentDepth + 1} seenEventIds={updatedSeenIds} />;
 
               case 'image': {
                 // Lookup by URL (media IDs are now URLs for consistent lookup)

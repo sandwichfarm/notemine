@@ -1,4 +1,5 @@
 import { Component, JSX, Show, createEffect, onCleanup, onMount } from 'solid-js';
+import { debug } from '../lib/debug';
 
 interface VirtualizedNoteSlotProps {
   eventId: string;
@@ -6,6 +7,7 @@ interface VirtualizedNoteSlotProps {
   virtualHeight?: number;
   onVirtualize: (height: number) => void;
   onUnvirtualize: () => void;
+  canVirtualize: boolean;
   children: JSX.Element;
 }
 
@@ -18,6 +20,11 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
 
   createEffect(() => {
     currentVirtualized = props.isVirtualized;
+    if (!props.canVirtualize && currentVirtualized) {
+      debug('[VirtualizedNoteSlot] forcing hydration for', props.eventId);
+      props.onUnvirtualize();
+      currentVirtualized = false;
+    }
   });
 
   onMount(() => {
@@ -30,12 +37,17 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
 
         if (entry.isIntersecting) {
           if (currentVirtualized) {
+            debug('[VirtualizedNoteSlot] rehydrating', props.eventId);
             props.onUnvirtualize();
             currentVirtualized = false;
           }
         } else {
+          if (!props.canVirtualize) {
+            return;
+          }
           if (!currentVirtualized) {
             const measuredHeight = entry.boundingClientRect.height || containerRef?.offsetHeight || props.virtualHeight || 0;
+            debug('[VirtualizedNoteSlot] virtualizing', props.eventId, measuredHeight);
             props.onVirtualize(Math.max(1, measuredHeight));
             currentVirtualized = true;
           }
@@ -61,7 +73,7 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   return (
     <div ref={containerRef} data-note-id={props.eventId}>
       <Show
-        when={!props.isVirtualized}
+        when={!props.isVirtualized || !props.canVirtualize}
         fallback={
           <div
             class="virtual-note-placeholder mb-10 border border-dashed border-[var(--border-color)] rounded-md bg-[var(--bg-secondary)]/50"

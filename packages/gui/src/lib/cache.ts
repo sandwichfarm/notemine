@@ -6,13 +6,150 @@
 import { Database } from '@tursodatabase/database-wasm';
 import { TursoWasmEventDatabase } from 'applesauce-sqlite/turso-wasm';
 import { AsyncEventStore } from 'applesauce-core/event-store';
-import { persistEventsToCache } from 'applesauce-core/helpers';
+import type { IAsyncEventDatabase } from 'applesauce-core/event-store/interface';
+import { isFromCache, markFromCache } from 'applesauce-core/helpers';
+import type { Filter, NostrEvent } from 'applesauce-core/helpers';
+import { WorkerRelayInterface } from '@snort/worker-relay';
+import { nanoid } from 'nanoid';
+import { bufferTime, filter as rxFilter } from 'rxjs';
 import { debug } from '../lib/debug';
 
-let cacheDatabase: TursoWasmEventDatabase | null = null;
+type CacheBackend = 'worker-relay' | 'turso-wasm';
+
+let cacheDatabase: TursoWasmEventDatabase | WorkerRelayEventDatabase | null = null;
 let cacheEventStore: AsyncEventStore | null = null;
 let persistUnsubscribe: (() => void) | null = null;
 let flushEventsFunction: (() => Promise<void>) | null = null;
+
+class WorkerRelayEventDatabase implements IAsyncEventDatabase {
+  constructor(private readonly relay: WorkerRelayInterface) {}
+
+  private normalize(filters: Filter | Filter[]): Filter[] {
+    return Array.isArray(filters) ? filters : [filters];
+  }
+
+  private buildReq(filters: Filter[]): any {
+    return ['REQ', nanoid(), ...filters];
+  }
+
+  async add(event: NostrEvent): Promise<NostrEvent> {
+    await this.relay.event(event);
+    return event;
+  }
+
+  async remove(event: string | NostrEvent): Promise<boolean> {
+    const id = typeof event === 'string' ? event : event.id;
+    const deleted = await this.relay.delete(['REQ', `rm-${id}`, { ids: [id] }]);
+    return deleted.includes(id);
+  }
+
+  async removeByFilters(filters: Filter | Filter[]): Promise<number> {
+    const normalized = this.normalize(filters);
+    let removed = 0;
+    for (const filter of normalized) {
+      const deleted = await this.relay.delete(['REQ', `rm-${nanoid(6)}`, filter]);
+      removed += deleted.length;
+    }
+    return removed;
+  }
+
+  async hasEvent(event: string | NostrEvent): Promise<boolean> {
+    const id = typeof event === 'string' ? event : event.id;
+    const count = await this.relay.count(['REQ', `cnt-${id}`, { ids: [id] }]);
+    return count > 0;
+  }
+
+  async getEvent(event: string | NostrEvent): Promise<NostrEvent | undefined> {
+    const id = typeof event === 'string' ? event : event.id;
+    const result = await this.relay.query(['REQ', `get-${id}`, { ids: [id], limit: 1 }]);
+    return result[0];
+  }
+
+  async hasReplaceable(kind: number, pubkey: string, identifier?: string): Promise<boolean> {
+    const count = await this.relay.count([
+      'REQ',
+      `cnt-${pubkey}`,
+      { kinds: [kind], authors: [pubkey], identifiers: [identifier ?? ''] },
+    ]);
+    return count > 0;
+  }
+
+  async getReplaceable(kind: number, pubkey: string, identifier?: string): Promise<NostrEvent | undefined> {
+    const res = await this.relay.query([
+      'REQ',
+      `rep-${pubkey}`,
+      { kinds: [kind], authors: [pubkey], identifiers: [identifier ?? ''], limit: 1 },
+    ]);
+    return res[0];
+  }
+
+  async getReplaceableHistory(kind: number, pubkey: string, identifier?: string): Promise<NostrEvent[] | undefined> {
+    const res = await this.relay.query([
+      'REQ',
+      `hist-${pubkey}`,
+      { kinds: [kind], authors: [pubkey], identifiers: [identifier ?? ''] },
+    ]);
+    return res;
+  }
+
+  async getByFilters(filters: Filter | Filter[]): Promise<NostrEvent[]> {
+    const normalized = this.normalize(filters);
+    return this.relay.query(this.buildReq(normalized));
+  }
+
+  async getTimeline(filters: Filter | Filter[]): Promise<NostrEvent[]> {
+    const normalized = this.normalize(filters);
+    return this.relay.query(this.buildReq(normalized));
+  }
+
+  async close(): Promise<void> {
+    // Worker relay stays resident; nothing to close explicitly
+  }
+
+  async wipe(): Promise<void> {
+    await this.relay.wipe();
+  }
+}
+
+function normalizeBackend(value: string | null | undefined): CacheBackend | null {
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized === 'worker-relay' || normalized === 'worker') return 'worker-relay';
+  if (normalized === 'turso' || normalized === 'turso-wasm' || normalized === 'turso_sqlite') return 'turso-wasm';
+  return null;
+}
+
+function resolvePreferredBackend(): CacheBackend {
+  let stored: string | null = null;
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      stored = localStorage.getItem(CACHE_BACKEND_STORAGE_KEY);
+    } catch {}
+  }
+  const envPref = normalizeBackend((import.meta as any)?.env?.VITE_CACHE_BACKEND);
+  return normalizeBackend(stored) ?? envPref ?? DEFAULT_CACHE_BACKEND;
+}
+
+async function ensureWorkerRelayInterface(): Promise<WorkerRelayInterface> {
+  if (workerRelayInstance) return workerRelayInstance;
+  if (typeof window === 'undefined' || typeof Worker === 'undefined') {
+    throw new Error('Worker relay cache backend requires a browser environment with Worker support');
+  }
+
+  let workerScript: string | URL | Worker;
+  if (import.meta.env.DEV) {
+    workerScript = new URL('@snort/worker-relay/dist/esm/worker.mjs', import.meta.url);
+  } else {
+    const mod = await import('@snort/worker-relay/src/worker?worker');
+    const WorkerCtor = mod.default;
+    workerScript = new WorkerCtor();
+  }
+
+  const relay = new WorkerRelayInterface(workerScript);
+  await relay.init({ databasePath: WORKER_DB_PATH, insertBatchSize: 400 });
+  workerRelayInstance = relay;
+  return workerRelayInstance;
+}
 
 /**
  * Retention configuration for cache compaction
@@ -99,6 +236,13 @@ export interface CacheMetrics {
   avgFlushDurationMs: number;
 }
 
+const CACHE_BACKEND_STORAGE_KEY = 'notemine:cacheBackendPreference';
+const DEFAULT_CACHE_BACKEND: CacheBackend = 'worker-relay';
+const WORKER_DB_PATH = 'notemine-worker-cache.db';
+
+let activeCacheBackend: CacheBackend | null = null;
+let workerRelayInstance: WorkerRelayInterface | null = null;
+
 const cacheMetrics: CacheMetrics = {
   pendingQueueDepth: 0,
   totalEventsWritten: 0,
@@ -124,10 +268,10 @@ const MAX_FLUSH_HISTORY = 10;
 // Guard to avoid nested transactions between batch flush and add-hook writes
 let isBatchFlushInProgress = false;
 // Disable direct writes from add-hook in production to avoid nested transactions.
-// Batch persistence via persistEventsToCache is sufficient and safer.
-const ENABLE_ADD_HOOK_PERSIST = false;
+// The insert$ buffering pipeline handles most persistence work; this flag remains for emergencies.
+const ENABLE_ADD_HOOK_PERSIST = true;
 
-// De-duplication for recent event IDs to avoid double-writes (persist helper + add hook)
+// De-duplication for recent event IDs to avoid double-writes between the batch pipeline and add-hook
 const RECENT_ID_MAX = 10000;
 const recentIdQueue: string[] = [];
 const recentIdSet = new Set<string>();
@@ -403,18 +547,14 @@ export async function initializeCache(options?: {
 }): Promise<AsyncEventStore> {
   debug('[Cache] Initializing local cache...');
 
-  // Check if already disabled by circuit breaker
+  if (cacheEventStore) {
+    return cacheEventStore;
+  }
+
   if (cacheDisabled) {
     throw new Error('Cache disabled due to previous fatal error');
   }
 
-  // Phase 0: Force reset if requested
-  if (options?.forceReset) {
-    console.warn('[Cache] Force reset requested - deleting existing database');
-    await deleteOPFSDatabase('notemine-cache');
-  }
-
-  // Phase 0: Check OPFS support before attempting initialization
   const opfsSupported = isOPFSSupported();
 
   if (!opfsSupported) {
@@ -422,7 +562,6 @@ export async function initializeCache(options?: {
       ? 'Cross-Origin Isolation not enabled'
       : 'OPFS SyncAccessHandle API not supported';
 
-    // Phase 2: Offer memory fallback if allowed
     if (options?.allowMemoryFallback && window.crossOriginIsolated) {
       console.warn(`[Cache] ${reason} - using memory-only cache (session-only, no persistence)`);
       try {
@@ -431,6 +570,7 @@ export async function initializeCache(options?: {
         cacheDatabase = await TursoWasmEventDatabase.fromDatabase(db);
         cacheEventStore = new AsyncEventStore(cacheDatabase);
         debug('[Cache] Memory-only cache initialized successfully');
+        activeCacheBackend = 'turso-wasm';
         return cacheEventStore;
       } catch (error) {
         checkCircuitBreaker(error);
@@ -439,42 +579,74 @@ export async function initializeCache(options?: {
       }
     }
 
-    // No fallback - disable cache
     console.warn(`[Cache] Cache disabled: ${reason}`);
     cacheDisabled = true;
     throw new Error(`Cache unavailable: ${reason}`);
   }
 
+  const preferred = resolvePreferredBackend();
+  const backendOrder: CacheBackend[] = preferred === 'worker-relay'
+    ? ['worker-relay', 'turso-wasm']
+    : ['turso-wasm', 'worker-relay'];
+
+  let lastError: unknown = null;
+
+  for (const backend of backendOrder) {
+    try {
+      if (backend === 'worker-relay') {
+        await initializeWorkerRelayBackend(options);
+      } else {
+        await initializeTursoBackend(options);
+      }
+      activeCacheBackend = backend;
+      debug(`[Cache] Cache initialized with ${backend} backend`);
+      return cacheEventStore!;
+    } catch (error) {
+      lastError = error;
+      console.error(`[Cache] ${backend} backend failed to initialize:`, error);
+    }
+  }
+
+  checkCircuitBreaker(lastError);
+  logThrottledError('Failed to initialize cache', lastError);
+  throw (lastError instanceof Error ? lastError : new Error('Cache initialization failed'));
+}
+
+async function initializeWorkerRelayBackend(options?: { forceReset?: boolean }): Promise<void> {
+  const relay = await ensureWorkerRelayInterface();
+  if (options?.forceReset) {
+    console.warn('[Cache] Worker relay force reset requested - wiping database');
+    await relay.wipe().catch((err) => console.warn('[Cache] Worker relay wipe failed:', err));
+  }
+  const workerDb = new WorkerRelayEventDatabase(relay);
+  cacheDatabase = workerDb;
+  cacheEventStore = new AsyncEventStore(workerDb);
+}
+
+async function initializeTursoBackend(options?: { forceReset?: boolean }): Promise<void> {
+  if (options?.forceReset) {
+    console.warn('[Cache] Force reset requested - deleting existing Turso database');
+    await deleteOPFSDatabase('notemine-cache');
+  }
+
   try {
-    // Create database instance with OPFS backend
-    // Revert to original path - ':name:' is valid Turso WASM syntax for OPFS
-    // Use OPFS alias syntax (colon-wrapped) so Turso WASM persists to OPFS
     debug('[Cache] Creating database instance with path: :notemine-cache:');
     const db = new Database(':notemine-cache:');
-
-    // Connect to the database
     debug('[Cache] Connecting to database...');
     await db.connect();
     debug('[Cache] Database connected successfully');
 
-    // Initialize the event database
     debug('[Cache] Creating TursoWasmEventDatabase...');
     cacheDatabase = await TursoWasmEventDatabase.fromDatabase(db);
     debug('[Cache] TursoWasmEventDatabase created');
 
-    // Create AsyncEventStore with the database
     cacheEventStore = new AsyncEventStore(cacheDatabase);
-
     debug('[Cache] Local cache initialized successfully with OPFS persistence');
-
-    return cacheEventStore;
   } catch (error) {
-    // Enhanced error logging for debugging
-    console.error('[Cache] Failed to initialize cache:', error);
+    console.error('[Cache] Failed to initialize Turso cache backend:', error);
     console.error('[Cache] Error type:', error instanceof Error ? error.constructor.name : typeof error);
     console.error('[Cache] Error message:', error instanceof Error ? error.message : String(error));
 
-    // Check OPFS availability
     try {
       if (navigator.storage && navigator.storage.getDirectory) {
         const opfsRoot = await navigator.storage.getDirectory();
@@ -484,10 +656,9 @@ export async function initializeCache(options?: {
       console.error('[Cache] OPFS access failed:', opfsError);
     }
 
-    // Phase 0: Auto-recovery for "No modification allowed" errors
     const errorMsg = error instanceof Error ? error.message : String(error);
     if (errorMsg.includes('No modification allowed') && !options?.forceReset) {
-      console.warn('[Cache] Detected corrupted database - attempting automatic recovery...');
+      console.warn('[Cache] Detected corrupted Turso database - attempting automatic recovery...');
       try {
         await deleteOPFSDatabase('notemine-cache');
         console.warn('[Cache] Corrupted database deleted - please refresh the page to reinitialize');
@@ -497,9 +668,6 @@ export async function initializeCache(options?: {
       }
     }
 
-    // Phase 0: Check circuit breaker and throttle errors
-    checkCircuitBreaker(error);
-    logThrottledError('Failed to initialize cache', error);
     throw error;
   }
 }
@@ -508,12 +676,10 @@ export async function initializeCache(options?: {
  * Set up automatic persistence from the main EventStore to the cache
  *
  * Phase 1 improvements:
- * - Uses persistEventsToCache helper (known-working API)
- * - Tuned batching: 1000ms interval (down from 5000ms), maxBatchSize 1000 (up from 100)
+ * - Directly buffers eventStore.insert$ to persist recent events
+ * - Tuned batching: 750ms interval, max batch size 300 (keeps OPFS pressure low)
  * - Enhanced with metrics tracking and quota error handling
- * - Leader-only persistence: Only one tab writes to OPFS to prevent corruption
- *
- * Fix: Reverted from insert$ to persistEventsToCache for API safety
+ * - Leader-only persistence: Only one tab writes to cache storage to prevent corruption
  */
 // Allow late enablement when tab becomes leader after initial check
 let persistenceBootstrap: (() => void) | null = null;
@@ -568,8 +734,7 @@ export function setupCachePersistence(mainEventStore: any): void {
             if (event?.id && isRecentId(event.id)) {
               continue; // already handled recently
             }
-            // Phase 1: Use cacheDatabase.add() directly to avoid nested transactions
-            // (persistEventsToCache already wraps in a transaction via AsyncEventStore)
+            // Phase 1: Write directly to cache database in small bursts to avoid long transactions
             await cacheDatabase!.add(event);
             totalWritten++;
             if (event?.id) rememberEventId(event.id);
@@ -670,22 +835,27 @@ export function setupCachePersistence(mainEventStore: any): void {
     }
   };
 
-    // Use persistEventsToCache with our metrics-enhanced handler
-    persistUnsubscribe = persistEventsToCache(
-      mainEventStore,
-      async (events) => {
-        // Queue events for force flush capability
+    const batchTimeMs = 750;
+    const maxBatchSize = 300;
+
+    const insertSubscription = mainEventStore.insert$
+      .pipe(
+        rxFilter((event: any) => !isFromCache(event)),
+        bufferTime(batchTimeMs, undefined, maxBatchSize),
+        rxFilter((batch: any[]) => batch.length > 0)
+      )
+      .subscribe(async (events: any[]) => {
+        debug(`[Cache] ingress batch: ${events.length} events`);
         pendingFlush = events;
         await metricsFlushHandler(events);
-      },
-      {
-        // Smaller batches and slightly tighter cadence to reduce OPFS pressure
-        batchTime: 750,
-        maxBatchSize: 300,
-      }
-    );
+        pendingFlush = [];
+      });
 
-    debug('[Cache] Cache persistence enabled with persistEventsToCache helper (leader mode)');
+    persistUnsubscribe = () => {
+      insertSubscription.unsubscribe();
+    };
+
+    debug('[Cache] Cache persistence enabled with insert$ subscription');
 
     // Safety net: also monkey-patch eventStore.add to ensure we catch everything
   if (typeof mainEventStore.add === 'function') {
@@ -756,6 +926,15 @@ export function setupCachePersistence(mainEventStore: any): void {
 
   // Allow late enablement if we become leader later
   persistenceBootstrap = enablePersistence;
+
+  // If we're already the persistence leader, start immediately
+  if (isPersistenceLeader && !persistUnsubscribe && !cacheDisabled) {
+    try {
+      enablePersistence();
+    } catch (error) {
+      console.error('[Cache] Failed to start persistence immediately:', error);
+    }
+  }
 
   // Wait briefly for election to settle; if leader, enable now
   setTimeout(() => {
@@ -836,7 +1015,8 @@ export async function loadCachedEvents(mainEventStore: any): Promise<number> {
     let loadedCount = 0;
     for (const event of allEvents) {
       try {
-        // Mark event as from cache
+        // Mark event as from cache so persistence ignores it
+        markFromCache(event);
         mainEventStore.add(event, true);
         loadedCount++;
       } catch (error) {
@@ -1422,6 +1602,7 @@ export interface CacheHealthStatus {
     persistenceActive: boolean;
     isLeader: boolean;
     uptime: number;
+    backend: CacheBackend | null;
   };
 }
 
@@ -1447,6 +1628,7 @@ export function getCacheHealth(): CacheHealthStatus {
         persistenceActive: false,
         isLeader: false,
         uptime: 0,
+        backend: activeCacheBackend,
       },
     };
   }
@@ -1465,6 +1647,7 @@ export function getCacheHealth(): CacheHealthStatus {
         persistenceActive: false,
         isLeader: false,
         uptime: 0,
+        backend: activeCacheBackend,
       },
     };
   }
@@ -1483,6 +1666,7 @@ export function getCacheHealth(): CacheHealthStatus {
         persistenceActive: false,
         isLeader: false,
         uptime: 0,
+        backend: activeCacheBackend,
       },
     };
   }
@@ -1558,6 +1742,7 @@ export function getCacheHealth(): CacheHealthStatus {
       persistenceActive: !cacheMetrics.persistenceDisabled && isPersistenceLeader, // Phase 1: Include leadership
       isLeader: isPersistenceLeader, // Phase 1: Use persistence leader flag
       uptime,
+      backend: activeCacheBackend,
     },
   };
 }

@@ -71,6 +71,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   // Phase 3: Per-note tick to force reactive updates on interaction arrivals
   const [interactionTicks, setInteractionTicks] = createSignal<Record<string, number>>({});
   const prefetchedEventIds = new Set<string>(); // Track prefetched notes to avoid duplicate fetches
+  const hydratingNotes = new Set<string>();
+  const [hydratedNotes, setHydratedNotes] = createSignal<Record<string, boolean>>({});
   const [virtualizedNotes, setVirtualizedNotes] = createSignal<Record<string, number>>({});
   const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes visible without scrolling
 
@@ -539,7 +541,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
             // Phase 2: Set initial render count for cached notes
             const PAGE_SIZE = prefs.feedParams.initialLimit || 20;
-            setRenderCount(Math.min(allNotes().length, PAGE_SIZE));
+            setRenderCount(Math.min(cachedNotes.length, PAGE_SIZE));
+            recalculateScoresImmediate();
           }
           // Phase 1: Debug logging for cache performance
           if (prefs.feedDebugMode) {
@@ -937,6 +940,9 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
   // Phase 2: Lazy loading handler using InteractionsCoordinator (defined outside createEffect so it's stable)
   const handleNoteVisible = async (eventId: string) => {
+    if (hydratedNotes()[eventId]) return;
+    if (hydratingNotes.has(eventId)) return;
+    hydratingNotes.add(eventId);
 
     // Build a robust relay set for interactions:
     // CRITICAL: Interactions (replies/reactions) are addressed to the NOTE AUTHOR's inbox relays
@@ -979,6 +985,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     const interactionRelays = Array.from(relaySet);
     if (interactionRelays.length === 0) {
       console.warn('[WoTTimeline] No relays available for interactions fetch');
+      markHydrated(eventId);
       return;
     }
 
@@ -1006,6 +1013,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
           if (prefs.feedDebugMode) {
             console.log('[WoTTimeline] Interactions fetch complete for', eventId.slice(0, 8), `(${reason})`);
           }
+          markHydrated(eventId);
           combined.unsubscribe();
         };
 
@@ -1096,6 +1104,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     const feedPrefs = preferences();
     const prefetchCount = Math.max(0, feedPrefs.feedParams.prefetchInteractionsCount ?? 0);
     const currentNotes = notes();
+    const hydrationSnapshot = hydratedNotes();
     if (prefetchCount <= 0 || currentNotes.length === 0) return;
 
     const startIndex = Math.min(currentNotes.length, PREFETCH_VISIBLE_BUFFER);
@@ -1103,6 +1112,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
     for (let i = startIndex; i < endIndex; i++) {
       const eventId = currentNotes[i].event.id;
+      if (hydrationSnapshot[eventId]) continue;
+      if (hydratingNotes.has(eventId)) continue;
       if (prefetchedEventIds.has(eventId)) continue;
       prefetchedEventIds.add(eventId);
       queueMicrotask(() => {
@@ -1110,6 +1121,11 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       });
     }
   });
+
+  const markHydrated = (eventId: string) => {
+    setHydratedNotes(prev => (prev[eventId] ? prev : { ...prev, [eventId]: true }));
+    hydratingNotes.delete(eventId);
+  };
 
   const markVirtualized = (eventId: string, height: number) => {
     setVirtualizedNotes((prev) => {
@@ -1141,6 +1157,31 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       return mutated ? next : prev;
     });
   });
+
+  createEffect(() => {
+    const currentIds = new Set(notes().map((n) => n.event.id));
+    setHydratedNotes((prev) => {
+      let mutated = false;
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        if (!currentIds.has(id)) {
+          delete next[id];
+          mutated = true;
+        }
+      }
+      return mutated ? next : prev;
+    });
+  });
+
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    createEffect(() => {
+      (window as any).__NOTEMINE_DEBUG = {
+        ...(window as any).__NOTEMINE_DEBUG,
+        wotVirtualized: virtualizedNotes(),
+        wotHydrated: hydratedNotes(),
+      };
+    });
+  }
 
   // Helper function to recalculate scores without reordering
   // CRITICAL: Scores are updated for badges, but notes stay in insertion order
@@ -1298,6 +1339,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
                   eventId={noteId}
                   isVirtualized={virtualHeight !== undefined}
                   virtualHeight={virtualHeight}
+                  canVirtualize={!!hydratedNotes()[noteId]}
                   onVirtualize={(height) => markVirtualized(noteId, height)}
                   onUnvirtualize={() => unvirtualize(noteId)}
                 >

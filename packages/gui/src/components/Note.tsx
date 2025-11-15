@@ -17,6 +17,7 @@ import type { PreparedNote } from '../types/FeedTypes';
 import { getVisibilityObserver } from '../services/VisibilityObserver';
 import { getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 import { buildRelayHintsForEvent } from '../lib/relayHints';
+import { extractNoteTopics } from '../utils/topics';
 
 interface NoteProps {
   event: NostrEvent;
@@ -87,6 +88,9 @@ export const Note: Component<NoteProps> = (props) => {
 
   const hasReactionPills = createMemo(() => reactionsList().length > 0);
   const relayHints = createMemo(() => buildRelayHintsForEvent(props.event));
+  const topicData = createMemo(() => extractNoteTopics(props.event));
+  const noteContent = () => topicData().sanitizedContent;
+  const topics = () => topicData().topics;
 
   const contentClass = () =>
     [
@@ -191,12 +195,6 @@ export const Note: Component<NoteProps> = (props) => {
   };
 
   // Extract topic tags (#t tags)
-  const topics = () => {
-    return props.event.tags
-      .filter(tag => tag[0] === 't' && tag[1])
-      .map(tag => tag[1]);
-  };
-
   const noteLink = () => {
     const nevent = nip19.neventEncode({
       id: props.event.id,
@@ -373,7 +371,7 @@ export const Note: Component<NoteProps> = (props) => {
       <div class="my-6">
       {/* Content - HIGH CONTRAST, the focus */}
       <ParsedContent
-        content={props.event.content}
+        content={noteContent()}
         event={props.event}
         class={contentClass()}
         reservedHeights={props.preparedNote?.reservedHeights}

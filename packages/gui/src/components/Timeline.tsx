@@ -37,16 +37,17 @@ export const Timeline: Component<TimelineProps> = (props) => {
   const eventCache = new Map<string, NostrEvent>();
   const reactionsCache = new Map<string, NostrEvent[]>();
   const repliesCache = new Map<string, NostrEvent[]>();
-  const trackedEventIds = new Set<string>(); // Track which events have reactions/replies loaded
   const prefetchedEventIds = new Set<string>(); // Track which notes we've proactively prefetched
+  const hydratingNotes = new Set<string>();
+  const [hydratedNotes, setHydratedNotes] = createSignal<Record<string, boolean>>({});
   const [virtualizedNotes, setVirtualizedNotes] = createSignal<Record<string, number>>({});
   const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes above the fold
   let relaysCache: string[] = [];
   let recalculateTimer: number | null = null; // Debounce timer
 
   onMount(() => {
-    const INITIAL_LOAD = 10; // Start with just 10 notes
-    const LOAD_MORE_BATCH = 5; // Load 5 more at a time
+    const INITIAL_LOAD = 15; // Slightly larger initial batch for faster first paint
+    const LOAD_MORE_BATCH = 8; // Load more per batch for smoother scrolling
     const maxEvents = props.limit ?? 100;
     let oldestTimestamp = Math.floor(Date.now() / 1000);
 
@@ -172,7 +173,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
                 loadMore();
               }
             },
-            { rootMargin: '200px' }
+            { rootMargin: '400px' }
           );
           loadMoreObserver.observe(sentinelRef);
         }
@@ -193,9 +194,16 @@ export const Timeline: Component<TimelineProps> = (props) => {
   });
 
   // Lazy loading handler for reactions/replies (outside onMount so it can access caches)
+  const markHydrated = (eventId: string) => {
+    setHydratedNotes(prev => (prev[eventId] ? prev : { ...prev, [eventId]: true }));
+    hydratingNotes.delete(eventId);
+  };
+
   const handleNoteVisible = async (eventId: string) => {
-    if (trackedEventIds.has(eventId) || relaysCache.length === 0) return;
-    trackedEventIds.add(eventId);
+    if (relaysCache.length === 0) return;
+    if (hydratedNotes()[eventId]) return;
+    if (hydratingNotes.has(eventId)) return;
+    hydratingNotes.add(eventId);
 
     debug('[Timeline] Note visible, fetching reactions/replies for', eventId.slice(0, 8));
 
@@ -220,13 +228,35 @@ export const Timeline: Component<TimelineProps> = (props) => {
     } catch {}
 
     const interactionRelays = Array.from(relaySet);
-    if (interactionRelays.length === 0) return;
+    if (interactionRelays.length === 0) {
+      markHydrated(eventId);
+      return;
+    }
 
     // Fetch reactions
+    let reactionsDone = false;
+    let repliesDone = false;
+    let finished = false;
+    const finishHydration = () => {
+      if (finished) return;
+      finished = true;
+      markHydrated(eventId);
+    };
+    const maybeFinish = () => {
+      if (reactionsDone && repliesDone) {
+        finishHydration();
+      }
+    };
+
     const reactionsObs = relayPool.req(interactionRelays, { kinds: [7], '#e': [eventId], limit: 1000 });
-    reactionsObs.subscribe({
+    const reactionsSub = reactionsObs.subscribe({
       next: (response) => {
-        if (response !== 'EOSE' && response.kind === 7) {
+        if (response === 'EOSE') {
+          reactionsDone = true;
+          maybeFinish();
+          return;
+        }
+        if (response.kind === 7) {
           const reaction = response as NostrEvent;
           const existing = reactionsCache.get(eventId) || [];
           if (!existing.find(r => r.id === reaction.id)) {
@@ -244,14 +274,25 @@ export const Timeline: Component<TimelineProps> = (props) => {
       error: (err) => {
         // Silently ignore relay errors
         debug('[Timeline] Reaction fetch error (ignoring):', err);
+        reactionsDone = true;
+        maybeFinish();
+      },
+      complete: () => {
+        reactionsDone = true;
+        maybeFinish();
       },
     });
 
     // Fetch replies
     const repliesObs = relayPool.req(interactionRelays, { kinds: [1], '#e': [eventId], limit: 1000 });
-    repliesObs.subscribe({
+    const repliesSub = repliesObs.subscribe({
       next: (response) => {
-        if (response !== 'EOSE' && response.kind === 1) {
+        if (response === 'EOSE') {
+          repliesDone = true;
+          maybeFinish();
+          return;
+        }
+        if (response.kind === 1) {
           const reply = response as NostrEvent;
           const existing = repliesCache.get(eventId) || [];
           if (!existing.find(r => r.id === reply.id)) {
@@ -269,8 +310,22 @@ export const Timeline: Component<TimelineProps> = (props) => {
       error: (err) => {
         // Silently ignore relay errors
         debug('[Timeline] Reply fetch error (ignoring):', err);
+        repliesDone = true;
+        maybeFinish();
+      },
+      complete: () => {
+        repliesDone = true;
+        maybeFinish();
       },
     });
+
+    setTimeout(() => {
+      if (!finished) {
+        reactionsSub.unsubscribe();
+        repliesSub.unsubscribe();
+        finishHydration();
+      }
+    }, 6000);
   };
 
   // Prefetch interactions for notes just below the fold so they feel instant when scrolling
@@ -278,6 +333,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
     const feedPrefs = preferences();
     const prefetchCount = Math.max(0, feedPrefs.feedParams.prefetchInteractionsCount ?? 0);
     const currentNotes = notes();
+    const hydratedSnapshot = hydratedNotes();
     if (prefetchCount <= 0 || currentNotes.length === 0) return;
 
     const startIndex = Math.min(currentNotes.length, PREFETCH_VISIBLE_BUFFER);
@@ -285,6 +341,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
 
     for (let i = startIndex; i < endIndex; i++) {
       const eventId = currentNotes[i].event.id;
+      if (hydratedSnapshot[eventId]) continue;
+      if (hydratingNotes.has(eventId)) continue;
       if (prefetchedEventIds.has(eventId)) continue;
       prefetchedEventIds.add(eventId);
       queueMicrotask(() => {
@@ -324,6 +382,31 @@ export const Timeline: Component<TimelineProps> = (props) => {
       return mutated ? next : prev;
     });
   });
+
+  createEffect(() => {
+    const currentIds = new Set(notes().map((n) => n.event.id));
+    setHydratedNotes((prev) => {
+      let mutated = false;
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        if (!currentIds.has(id)) {
+          delete next[id];
+          mutated = true;
+        }
+      }
+      return mutated ? next : prev;
+    });
+  });
+
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    createEffect(() => {
+      (window as any).__NOTEMINE_DEBUG = {
+        ...(window as any).__NOTEMINE_DEBUG,
+        timelineVirtualized: virtualizedNotes(),
+        timelineHydrated: hydratedNotes(),
+      };
+    });
+  }
 
   // Helper function to recalculate scores immediately (for when loading completes)
   const recalculateScoresImmediate = () => {
@@ -411,6 +494,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
                   eventId={noteId}
                   isVirtualized={virtualHeight !== undefined}
                   virtualHeight={virtualHeight}
+                  canVirtualize={!!hydratedNotes()[noteId]}
                   onVirtualize={(height) => markVirtualized(noteId, height)}
                   onUnvirtualize={() => unvirtualize(noteId)}
                 >
@@ -436,6 +520,12 @@ export const Timeline: Component<TimelineProps> = (props) => {
             <div class="card p-4 text-center">
               <div class="inline-block animate-spin rounded-full h-6 w-6 border-4 border-accent border-t-transparent"></div>
               <p class="mt-2 text-sm text-text-secondary">Loading more...</p>
+            </div>
+          </Show>
+
+          <Show when={hasMore() && !loadingMore()}>
+            <div class="text-center text-xs text-text-tertiary">
+              Scroll to load more…
             </div>
           </Show>
 

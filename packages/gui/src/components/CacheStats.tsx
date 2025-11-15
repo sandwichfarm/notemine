@@ -290,6 +290,12 @@ export const CacheStats: Component = () => {
                       <span>Cross-Origin Isolation enabled</span>
                     </div>
                   </Show>
+                  <Show when={health()!.info.backend}>
+                    <div class="flex items-center gap-2 text-xs">
+                      <span class="text-text-secondary">Backend</span>
+                      <span class="font-mono">{health()!.info.backend}</span>
+                    </div>
+                  </Show>
                   <Show when={!health()!.info.coiEnabled}>
                     <div class="flex items-center gap-2 text-xs">
                       <span class="text-red-500">✗</span>

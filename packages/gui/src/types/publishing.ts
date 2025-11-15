@@ -42,7 +42,7 @@ export interface PublishJobMeta {
   sourceQueueItemId?: string;  // Reference to original mining queue item
   kind: number;                // Nostr event kind
   difficulty: number;          // PoW difficulty target
-  type: 'note' | 'reply' | 'reaction' | 'profile' | 'report' | 'repost';
+  type: 'note' | 'reply' | 'reaction' | 'profile' | 'report' | 'repost' | 'contacts';
   relayDiscoveryWarning?: string;  // Warning if relay discovery encountered issues
 }
 

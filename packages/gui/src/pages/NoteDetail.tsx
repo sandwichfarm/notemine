@@ -12,6 +12,7 @@ import { ParsedContent } from '../components/ParsedContent';
 import { ReactionPicker } from '../components/ReactionPicker';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { ProfilePowBadge } from '../components/ProfilePowBadge';
+import { FollowButton } from '../components/FollowButton';
 import { useProfile } from '../hooks/useProfile';
 
 // Minimum POW threshold for replies/reactions
@@ -645,6 +646,7 @@ const NoteDetail: Component = () => {
                         style="inline"
                       />
                     </Show>
+                    <FollowButton pubkey={note()!.pubkey} size="sm" variant="solid" />
                   </div>
                   <Show when={authorProfile().metadata?.about}>
                     <p class="text-sm text-text-secondary mt-1 line-clamp-2">

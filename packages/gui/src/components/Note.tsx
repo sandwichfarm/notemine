@@ -9,6 +9,7 @@ import { ReplyComposer } from './ReplyComposer';
 import { ReportModal } from './ReportModal';
 import { RepostConfirmDialog } from './RepostConfirmDialog';
 import { ProfileName } from './ProfileName';
+import { FollowButton } from './FollowButton';
 import { ParsedContent } from './ParsedContent';
 import { ReactionBreakdown } from './ReactionBreakdown';
 import { usePreferences } from '../providers/PreferencesProvider';
@@ -341,7 +342,7 @@ export const Note: Component<NoteProps> = (props) => {
       ref={noteRef}
       data-note-id={props.event.id}
       data-interaction-tick={props.interactionTick ?? 0}
-      class="!mb-10 note relative"
+      class="!mb-10 note relative group"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
         'border-l-gray-500/30 bg-bg-secondary dark:bg-bg-tertiary': !hasPow(),
@@ -356,7 +357,13 @@ export const Note: Component<NoteProps> = (props) => {
       <div class="flex items-start justify-between mb-2">
         <div class="flex items-center gap-2 min-w-0 flex-1 opacity-60">
           <ProfileName pubkey={props.event.pubkey} asLink={true} showAvatar={true} />
-          <div class="text-xs text-text-tertiary">{timestamp()}</div>
+          <FollowButton
+            pubkey={props.event.pubkey}
+            size="xs"
+            variant="ghost"
+            class="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+          />
+          <div class="ml-auto text-xs text-text-tertiary pr-2">{timestamp()}</div>
         </div>
 
         <div class="flex items-center gap-2">

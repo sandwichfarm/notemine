@@ -9,6 +9,7 @@ import { TooltipProvider } from './providers/TooltipProvider';
 import { QueueProvider } from './providers/QueueProvider';
 import { QueueProcessor } from './components/QueueProcessor';
 import { PublishingProvider } from './providers/PublishingProvider';
+import { FollowsProvider } from './providers/FollowsProvider';
 import { PublishingProcessor } from './components/PublishingProcessor';
 import { EmojiProvider } from './providers/EmojiProvider';
 import { EmojiSetsProvider } from './providers/EmojiSetsProvider';
@@ -248,22 +249,24 @@ const App: Component = () => {
                   <MiningProvider>
                     <QueueProvider>
                       <PublishingProvider>
-                        <QueueProcessor />
-                        <PublishingProcessor />
-                        <AppInit>
-                        <Router root={Layout}>
-                          <Route path="/" component={Home} />
-                          <Route path="/feed" component={Feed} />
-                          <Route path="/about" component={About} />
-                          <Route path="/relays" component={Relays} />
-                          <Route path="/diagnostics" component={Diagnostics} />
-                          <Route path="/stats" component={Stats} />
-                          <Route path="/preferences" component={Preferences} />
-                          <Route path="/n/:id" component={NoteDetail} />
-                          <Route path="/e/:id" component={NoteDetail} />
-                          <Route path="/p/:identifier" component={ProfileDetail} />
-                        </Router>
-                      </AppInit>
+                        <FollowsProvider>
+                          <QueueProcessor />
+                          <PublishingProcessor />
+                          <AppInit>
+                            <Router root={Layout}>
+                              <Route path="/" component={Home} />
+                              <Route path="/feed" component={Feed} />
+                              <Route path="/about" component={About} />
+                              <Route path="/relays" component={Relays} />
+                              <Route path="/diagnostics" component={Diagnostics} />
+                              <Route path="/stats" component={Stats} />
+                              <Route path="/preferences" component={Preferences} />
+                              <Route path="/n/:id" component={NoteDetail} />
+                              <Route path="/e/:id" component={NoteDetail} />
+                              <Route path="/p/:identifier" component={ProfileDetail} />
+                            </Router>
+                          </AppInit>
+                        </FollowsProvider>
                       </PublishingProvider>
                     </QueueProvider>
                   </MiningProvider>

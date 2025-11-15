@@ -8,6 +8,7 @@ import { usePreferences } from '../providers/PreferencesProvider';
 import { Note } from '../components/Note';
 import { ReportModal } from '../components/ReportModal';
 import { ProfilePowBadge } from '../components/ProfilePowBadge';
+import { FollowButton } from '../components/FollowButton';
 import { hasValidPow } from '../lib/pow';
 import { debug } from '../lib/debug';
 import { useNip05Validation } from '../lib/nip05-validator';
@@ -446,12 +447,15 @@ const ProfileDetail: Component = () => {
               {/* Info */}
               <div class="flex-1 mt-4">
                 {/* Name with PoW Badge */}
-                <div class="flex items-center gap-3 mb-2">
+                <div class="flex items-center gap-3 flex-wrap mb-2">
                   <h1 class="text-3xl font-bold text-text-primary">
                     {profile().metadata?.display_name || profile().metadata?.name || 'Anonymous'}
                   </h1>
                   <Show when={profile().event?.id}>
                     <ProfilePowBadge profileEventId={profile().event!.id} style="full" />
+                  </Show>
+                  <Show when={pubkey()}>
+                    <FollowButton pubkey={pubkey()!} size="md" variant="solid" />
                   </Show>
                 </div>
 

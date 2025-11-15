@@ -7,6 +7,7 @@ import { AlgorithmControls } from './AlgorithmControls';
 import { Subscription } from 'rxjs';
 import { debug } from '../lib/debug';
 import { usePreferences } from '../providers/PreferencesProvider';
+import { VirtualizedNoteSlot } from './VirtualizedNoteSlot';
 
 interface TimelineProps {
   limit?: number;
@@ -38,6 +39,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
   const repliesCache = new Map<string, NostrEvent[]>();
   const trackedEventIds = new Set<string>(); // Track which events have reactions/replies loaded
   const prefetchedEventIds = new Set<string>(); // Track which notes we've proactively prefetched
+  const [virtualizedNotes, setVirtualizedNotes] = createSignal<Record<string, number>>({});
   const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes above the fold
   let relaysCache: string[] = [];
   let recalculateTimer: number | null = null; // Debounce timer
@@ -291,6 +293,38 @@ export const Timeline: Component<TimelineProps> = (props) => {
     }
   });
 
+  // Helper to virtualize/unvirtualize notes and prune stale entries
+  const markVirtualized = (eventId: string, height: number) => {
+    setVirtualizedNotes((prev) => {
+      if (prev[eventId]) return prev;
+      return { ...prev, [eventId]: height };
+    });
+  };
+
+  const unvirtualize = (eventId: string) => {
+    setVirtualizedNotes((prev) => {
+      if (!prev[eventId]) return prev;
+      const next = { ...prev };
+      delete next[eventId];
+      return next;
+    });
+  };
+
+  createEffect(() => {
+    const currentIds = new Set(notes().map((n) => n.event.id));
+    setVirtualizedNotes((prev) => {
+      let mutated = false;
+      const next = { ...prev };
+      for (const id of Object.keys(prev)) {
+        if (!currentIds.has(id)) {
+          delete next[id];
+          mutated = true;
+        }
+      }
+      return mutated ? next : prev;
+    });
+  });
+
   // Helper function to recalculate scores immediately (for when loading completes)
   const recalculateScoresImmediate = () => {
     const prefs = preferences();
@@ -367,17 +401,31 @@ export const Timeline: Component<TimelineProps> = (props) => {
             {notes().length} notes • sorted by POW score
           </div>
           <For each={notes()}>
-            {(scoredNote) => (
-              <Note
-                event={scoredNote.event}
-                score={scoredNote.score}
-                reactions={reactionsCache.get(scoredNote.event.id) || []}
-                replies={repliesCache.get(scoredNote.event.id) || []}
-                showScore={props.showScores ?? true}
-                onVisible={handleNoteVisible}
-                interactionTick={(interactionTicks()[scoredNote.event.id] || 0)}
-              />
-            )}
+            {(scoredNote) => {
+              const noteId = scoredNote.event.id;
+              const virtualizationMap = virtualizedNotes();
+              const virtualHeight = virtualizationMap[noteId];
+
+              return (
+                <VirtualizedNoteSlot
+                  eventId={noteId}
+                  isVirtualized={virtualHeight !== undefined}
+                  virtualHeight={virtualHeight}
+                  onVirtualize={(height) => markVirtualized(noteId, height)}
+                  onUnvirtualize={() => unvirtualize(noteId)}
+                >
+                  <Note
+                    event={scoredNote.event}
+                    score={scoredNote.score}
+                    reactions={reactionsCache.get(noteId) || []}
+                    replies={repliesCache.get(noteId) || []}
+                    showScore={props.showScores ?? true}
+                    onVisible={handleNoteVisible}
+                    interactionTick={interactionTicks()[noteId] || 0}
+                  />
+                </VirtualizedNoteSlot>
+              );
+            }}
           </For>
 
           {/* Infinite scroll sentinel */}

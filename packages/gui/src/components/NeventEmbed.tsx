@@ -110,9 +110,11 @@ export const NeventEmbed: Component<NeventEmbedProps> = (props) => {
   };
 
   return (
-    <div class="my-3 border-l-4 border-accent bg-bg-secondary dark:bg-bg-tertiary rounded-r p-3">
+    <div class="my-3 border-l-4 border-accent bg-bg-secondary dark:bg-bg-tertiary rounded-r p-3 min-h-[150px] flex flex-col justify-between">
       <Show when={loading()}>
-        <div class="text-sm text-text-secondary italic">Loading quoted note...</div>
+        <div class="h-full w-full rounded bg-gradient-to-r from-white/10 via-white/5 to-white/10 dark:from-black/30 dark:via-black/20 dark:to-black/30 animate-pulse flex items-center justify-center text-xs text-text-tertiary">
+          Loading quoted note…
+        </div>
       </Show>
 
       <Show when={error()}>

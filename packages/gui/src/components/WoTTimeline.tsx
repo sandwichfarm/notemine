@@ -1352,6 +1352,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
                     onVisible={handleNoteVisible}
                     preparedNote={scoredNote.preparedNote}
                     interactionTick={interactionTicks()[noteId] || 0}
+                    isHydrated={!!hydratedNotes()[noteId]}
                   />
                 </VirtualizedNoteSlot>
               );
@@ -1360,6 +1361,29 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
 
           {/* Infinite scroll sentinel */}
           <div ref={bottomSentinelRef} class="h-6" />
+
+          {/* Loading more indicator */}
+          <Show when={loadingMore()}>
+            <div class="card p-4 text-center">
+              <div class="inline-block animate-spin rounded-full h-6 w-6 border-4 border-accent border-t-transparent"></div>
+              <p class="mt-2 text-sm text-text-secondary">Loading more...</p>
+            </div>
+          </Show>
+
+          {/* Scroll affordance */}
+          <Show when={hasMore()}>
+            <div class="text-center text-xs text-text-tertiary flex items-center justify-center gap-2 py-3">
+              <span class="inline-block h-2 w-2 rounded-full bg-text-tertiary animate-pulse" />
+              <span>{loadingMore() ? 'Fetching more notes…' : 'Scroll to load more notes'}</span>
+            </div>
+          </Show>
+
+          {/* End of feed */}
+          <Show when={!hasMore() && !loadingMore()}>
+            <div class="card p-4 text-center">
+              <p class="text-sm text-text-tertiary">You've reached the end</p>
+            </div>
+          </Show>
         </div>
       </Show>
     </div>

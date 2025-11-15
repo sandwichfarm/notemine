@@ -503,17 +503,18 @@ export const Timeline: Component<TimelineProps> = (props) => {
                     score={scoredNote.score}
                     reactions={reactionsCache.get(noteId) || []}
                     replies={repliesCache.get(noteId) || []}
-                    showScore={props.showScores ?? true}
-                    onVisible={handleNoteVisible}
-                    interactionTick={interactionTicks()[noteId] || 0}
-                  />
-                </VirtualizedNoteSlot>
+                  showScore={props.showScores ?? true}
+                  onVisible={handleNoteVisible}
+                  interactionTick={interactionTicks()[noteId] || 0}
+                  isHydrated={!!hydratedNotes()[noteId]}
+                />
+              </VirtualizedNoteSlot>
               );
             }}
           </For>
 
           {/* Infinite scroll sentinel */}
-          <div ref={sentinelRef} class="h-4" />
+          <div ref={sentinelRef} class="h-6" />
 
           {/* Loading more indicator */}
           <Show when={loadingMore()}>
@@ -523,9 +524,10 @@ export const Timeline: Component<TimelineProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={hasMore() && !loadingMore()}>
-            <div class="text-center text-xs text-text-tertiary">
-              Scroll to load more…
+          <Show when={hasMore()}>
+            <div class="text-center text-xs text-text-tertiary flex items-center justify-center gap-2 py-3">
+              <span class="inline-block h-2 w-2 rounded-full bg-text-tertiary animate-pulse" />
+              <span>{loadingMore() ? 'Fetching more notes…' : 'Scroll to load more notes'}</span>
             </div>
           </Show>
 

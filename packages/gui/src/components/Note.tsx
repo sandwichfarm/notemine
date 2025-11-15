@@ -52,6 +52,9 @@ export const Note: Component<NoteProps> = (props) => {
   // Calculate stats directly from props (single source of truth with Timeline)
   const stats = () => {
     const prefs = preferences();
+    // Read interactionTick to ensure reactivity when interactions arrive
+    // This creates a dependency so dynamic text that uses stats() updates on new interactions
+    const __tick = props.interactionTick ?? 0; // eslint-disable-line @typescript-eslint/no-unused-vars
     return calculatePowScore(
       props.event,
       props.reactions || [],
@@ -191,30 +194,42 @@ export const Note: Component<NoteProps> = (props) => {
       const coordinator = getInteractionsCoordinator();
       let cancelTimer: number | null = null;
 
-      visibilityObserver.register({
-        element: noteRef,
-        onVisible: () => {
-          // Clear any pending cancel and trigger fetch (coordinator dedupes internally)
-          if (cancelTimer !== null) {
-            clearTimeout(cancelTimer);
-            cancelTimer = null;
-          }
-          props.onVisible?.(props.event.id);
-        },
-        onLeave: () => {
-          // Delay cancel to avoid transient unobserve jitter; only cancel queued
-          if (cancelTimer !== null) {
-            clearTimeout(cancelTimer);
-          }
-          cancelTimer = window.setTimeout(() => {
-            coordinator.cancelQueued(props.event.id);
-            cancelTimer = null;
-          }, 2000);
-        },
+      const registerWithObserver = () => {
+        // Ensure prior registration is cleared before re-registering
+        visibilityObserver.unregister(noteRef!);
+        visibilityObserver.register({
+          element: noteRef!,
+          onVisible: () => {
+            // Clear any pending cancel and trigger fetch (coordinator dedupes internally)
+            if (cancelTimer !== null) {
+              clearTimeout(cancelTimer);
+              cancelTimer = null;
+            }
+            props.onVisible?.(props.event.id);
+          },
+          onLeave: () => {
+            // Do not cancel queued interactions on leave; allow queue to proceed
+            // This prevents starvation where only the first N (maxConcurrent) notes ever load
+            if (cancelTimer !== null) {
+              clearTimeout(cancelTimer);
+              cancelTimer = null;
+            }
+          },
+        });
+      };
+
+      // Initial registration
+      registerWithObserver();
+
+      // Re-register if this DOM node is reused for a different event (due to re-sorting)
+      createEffect(() => {
+        const id = props.event.id;
+        // Re-register to force a fresh visibility evaluation for the new event id
+        registerWithObserver();
       });
 
       onCleanup(() => {
-        visibilityObserver.unregister(noteRef);
+        visibilityObserver.unregister(noteRef!);
         // Do not cancel in-flight fetches on cleanup; allow them to complete
         if (cancelTimer !== null) {
           clearTimeout(cancelTimer);

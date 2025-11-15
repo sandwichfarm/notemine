@@ -25,6 +25,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
   const [loadingMore, setLoadingMore] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [hasMore, setHasMore] = createSignal(true);
+  // Per-note tick to ensure Note reacts to interaction arrivals
+  const [interactionTicks, setInteractionTicks] = createSignal<Record<string, number>>({});
 
   let subscription: Subscription | null = null;
   let loadMoreObserver: IntersectionObserver | null = null;
@@ -224,12 +226,14 @@ export const Timeline: Component<TimelineProps> = (props) => {
           const reaction = response as NostrEvent;
           const existing = reactionsCache.get(eventId) || [];
           if (!existing.find(r => r.id === reaction.id)) {
-            existing.push(reaction);
-            reactionsCache.set(eventId, existing);
+            // Immutable update to trigger Solid reactivity downstream
+            reactionsCache.set(eventId, [...existing, reaction]);
             // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
             eventStore.add(reaction);
             // Show updates as they arrive (no debounce)
             recalculateScoresImmediate();
+            // Bump interaction tick for this note to propagate prop change
+            setInteractionTicks(prev => ({ ...prev, [eventId]: (prev[eventId] || 0) + 1 }));
           }
         }
       },
@@ -247,12 +251,14 @@ export const Timeline: Component<TimelineProps> = (props) => {
           const reply = response as NostrEvent;
           const existing = repliesCache.get(eventId) || [];
           if (!existing.find(r => r.id === reply.id)) {
-            existing.push(reply);
-            repliesCache.set(eventId, existing);
+            // Immutable update to trigger Solid reactivity downstream
+            repliesCache.set(eventId, [...existing, reply]);
             // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
             eventStore.add(reply);
             // Show updates as they arrive (no debounce)
             recalculateScoresImmediate();
+            // Bump interaction tick for this note to propagate prop change
+            setInteractionTicks(prev => ({ ...prev, [eventId]: (prev[eventId] || 0) + 1 }));
           }
         }
       },
@@ -347,6 +353,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
                 replies={repliesCache.get(scoredNote.event.id) || []}
                 showScore={props.showScores ?? true}
                 onVisible={handleNoteVisible}
+                interactionTick={(interactionTicks()[scoredNote.event.id] || 0)}
               />
             )}
           </For>

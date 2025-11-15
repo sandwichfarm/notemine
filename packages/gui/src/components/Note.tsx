@@ -16,6 +16,7 @@ import { useTooltip } from '../providers/TooltipProvider';
 import type { PreparedNote } from '../types/FeedTypes';
 import { getVisibilityObserver } from '../services/VisibilityObserver';
 import { getInteractionsCoordinator } from '../services/InteractionsCoordinator';
+import { buildRelayHintsForEvent } from '../lib/relayHints';
 
 interface NoteProps {
   event: NostrEvent;
@@ -85,6 +86,7 @@ export const Note: Component<NoteProps> = (props) => {
   });
 
   const hasReactionPills = createMemo(() => reactionsList().length > 0);
+  const relayHints = createMemo(() => buildRelayHintsForEvent(props.event));
 
   const contentClass = () =>
     [
@@ -199,6 +201,7 @@ export const Note: Component<NoteProps> = (props) => {
     const nevent = nip19.neventEncode({
       id: props.event.id,
       author: props.event.pubkey,
+      relays: relayHints() || undefined,
     });
     return `/e/${nevent}`;
   };
@@ -209,7 +212,7 @@ export const Note: Component<NoteProps> = (props) => {
 
     if (noteRef && props.onVisible) {
       const visibilityObserver = getVisibilityObserver();
-      const coordinator = getInteractionsCoordinator();
+      getInteractionsCoordinator();
       let cancelTimer: number | null = null;
 
       const registerWithObserver = () => {
@@ -241,7 +244,8 @@ export const Note: Component<NoteProps> = (props) => {
 
       // Re-register if this DOM node is reused for a different event (due to re-sorting)
       createEffect(() => {
-        const id = props.event.id;
+        // Track the current note id so Solid re-runs when props.event changes
+        void props.event.id;
         // Re-register to force a fresh visibility evaluation for the new event id
         registerWithObserver();
       });

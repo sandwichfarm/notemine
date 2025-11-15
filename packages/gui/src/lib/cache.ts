@@ -5,8 +5,7 @@
 
 import { Database } from '@tursodatabase/database-wasm';
 import { TursoWasmEventDatabase } from 'applesauce-sqlite/turso-wasm';
-import { AsyncEventStore } from 'applesauce-core/event-store';
-import type { IAsyncEventDatabase } from 'applesauce-core/event-store/interface';
+import { AsyncEventStore, type IAsyncEventDatabase } from 'applesauce-core/event-store';
 import { isFromCache, markFromCache } from 'applesauce-core/helpers';
 import type { Filter, NostrEvent } from 'applesauce-core/helpers';
 import { WorkerRelayInterface } from '@snort/worker-relay';
@@ -237,7 +236,7 @@ export interface CacheMetrics {
 }
 
 const CACHE_BACKEND_STORAGE_KEY = 'notemine:cacheBackendPreference';
-const DEFAULT_CACHE_BACKEND: CacheBackend = 'worker-relay';
+const DEFAULT_CACHE_BACKEND: CacheBackend = 'turso-wasm';
 const WORKER_DB_PATH = 'notemine-worker-cache.db';
 
 let activeCacheBackend: CacheBackend | null = null;
@@ -585,9 +584,10 @@ export async function initializeCache(options?: {
   }
 
   const preferred = resolvePreferredBackend();
-  const backendOrder: CacheBackend[] = preferred === 'worker-relay'
-    ? ['worker-relay', 'turso-wasm']
-    : ['turso-wasm', 'worker-relay'];
+  if (preferred === 'worker-relay') {
+    console.warn('[Cache] Worker relay backend temporarily disabled due to stability issues. Falling back to Turso WASM.');
+  }
+  const backendOrder: CacheBackend[] = ['turso-wasm'];
 
   let lastError: unknown = null;
 

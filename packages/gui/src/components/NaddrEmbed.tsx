@@ -5,6 +5,7 @@ import { nip19 } from 'nostr-tools';
 import { relayPool, eventStore, getActiveRelays } from '../lib/applesauce';
 import { ProfileName } from './ProfileName';
 import { getRelayHints } from '../lib/content-parser';
+import { buildRelayHintsForEvent } from '../lib/relayHints';
 import type { ParsedEntity } from '../lib/content-parser';
 
 interface NaddrEmbedProps {
@@ -102,11 +103,12 @@ export const NaddrEmbed: Component<NaddrEmbedProps> = (props) => {
     const data = naddrData();
     if (!data) return '#';
 
+    const relays = buildRelayHintsForEvent(event(), data.relays);
     const naddr = nip19.naddrEncode({
       kind: data.kind,
       pubkey: data.pubkey,
       identifier: data.identifier,
-      relays: data.relays,
+      relays: relays || data.relays,
     });
     return `/n/${naddr}`;
   };

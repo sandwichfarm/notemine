@@ -6,6 +6,7 @@ import { relayPool, eventStore, getActiveRelays } from '../lib/applesauce';
 import { getPowDifficulty } from '../lib/pow';
 import { ProfileName } from './ProfileName';
 import { getEventId, getRelayHints } from '../lib/content-parser';
+import { buildRelayHintsForEvent } from '../lib/relayHints';
 import type { ParsedEntity } from '../lib/content-parser';
 
 interface NeventEmbedProps {
@@ -93,11 +94,23 @@ export const NeventEmbed: Component<NeventEmbedProps> = (props) => {
     }, 100);
   });
 
+  const entityRelayHints = () => getRelayHints(props.entity);
+
   const noteLink = () => {
     const id = eventId();
     if (!id) return '#';
 
-    const nevent = nip19.neventEncode({ id });
+    const relays = buildRelayHintsForEvent(event() ?? id, entityRelayHints());
+    const embeddedAuthor =
+      event()?.pubkey ||
+      (props.entity.type === 'nevent' && (props.entity.data as { author?: string }).author) ||
+      undefined;
+
+    const nevent = nip19.neventEncode({
+      id,
+      author: embeddedAuthor,
+      relays: relays || undefined,
+    });
     return `/e/${nevent}`;
   };
 

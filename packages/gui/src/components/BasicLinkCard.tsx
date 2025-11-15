@@ -1,4 +1,4 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component } from 'solid-js';
 
 interface BasicLinkCardProps {
   url: string;

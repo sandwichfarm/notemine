@@ -16,7 +16,26 @@ const VIRTUALIZATION_MARGIN_PX = 1800; // Distance from viewport before virtuali
 export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) => {
   let containerRef: HTMLDivElement | undefined;
   let observer: IntersectionObserver | null = null;
+  let virtualizeTimer: number | null = null;
   let currentVirtualized = props.isVirtualized;
+
+  const cancelPendingVirtualize = () => {
+    if (virtualizeTimer !== null) {
+      clearTimeout(virtualizeTimer);
+      virtualizeTimer = null;
+    }
+  };
+
+  const scheduleVirtualize = (height: number) => {
+    if (virtualizeTimer !== null) return;
+    virtualizeTimer = window.setTimeout(() => {
+      virtualizeTimer = null;
+      if (!props.canVirtualize || currentVirtualized) return;
+      debug('[VirtualizedNoteSlot] virtualizing', props.eventId, height);
+      props.onVirtualize(Math.max(1, height));
+      currentVirtualized = true;
+    }, 120);
+  };
 
   createEffect(() => {
     currentVirtualized = props.isVirtualized;
@@ -24,6 +43,9 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
       debug('[VirtualizedNoteSlot] forcing hydration for', props.eventId);
       props.onUnvirtualize();
       currentVirtualized = false;
+    }
+    if (!props.canVirtualize) {
+      cancelPendingVirtualize();
     }
   });
 
@@ -36,6 +58,7 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
         if (!entry) return;
 
         if (entry.isIntersecting) {
+          cancelPendingVirtualize();
           if (currentVirtualized) {
             debug('[VirtualizedNoteSlot] rehydrating', props.eventId);
             props.onUnvirtualize();
@@ -43,13 +66,12 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
           }
         } else {
           if (!props.canVirtualize) {
+            cancelPendingVirtualize();
             return;
           }
           if (!currentVirtualized) {
             const measuredHeight = entry.boundingClientRect.height || containerRef?.offsetHeight || props.virtualHeight || 0;
-            debug('[VirtualizedNoteSlot] virtualizing', props.eventId, measuredHeight);
-            props.onVirtualize(Math.max(1, measuredHeight));
-            currentVirtualized = true;
+            scheduleVirtualize(measuredHeight);
           }
         }
       },
@@ -68,6 +90,7 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   onCleanup(() => {
     observer?.disconnect();
     observer = null;
+    cancelPendingVirtualize();
   });
 
   return (

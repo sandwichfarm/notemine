@@ -61,6 +61,10 @@
     @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded p-4;
   }
 
+  .button {
+        @apply mb-6 bg-gray-300/30 dark:bg-black/30 rounded-none border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)];
+  }
+
   .note {
     @apply mb-6 bg-gray-300/30 dark:bg-black/30 rounded-none border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)];
   }

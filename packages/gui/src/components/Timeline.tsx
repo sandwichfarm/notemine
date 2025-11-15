@@ -442,7 +442,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
     });
 
     scoredNotes.sort((a, b) => b.score - a.score);
-    setNotes(scoredNotes);
+    reconcileNotes(scoredNotes);
     setLoading(false);
   };
 
@@ -455,6 +455,53 @@ export const Timeline: Component<TimelineProps> = (props) => {
       recalculateScoresImmediate();
       recalculateTimer = null;
     }, 300); // Wait 300ms after last event before recalculating
+  };
+
+  const reconcileNotes = (sortedNotes: ScoredNote[]) => {
+    setNotes((prevNotes) => {
+      if (sortedNotes.length === 0) {
+        return sortedNotes;
+      }
+      if (prevNotes.length === 0) {
+        return sortedNotes;
+      }
+
+      const prevById = new Map<string, ScoredNote>();
+      for (const note of prevNotes) {
+        prevById.set(note.event.id, note);
+      }
+
+      let mutated = prevNotes.length !== sortedNotes.length;
+      const next: ScoredNote[] = new Array(sortedNotes.length);
+
+      for (let i = 0; i < sortedNotes.length; i++) {
+        const current = sortedNotes[i];
+        const existing = prevById.get(current.event.id);
+
+        if (!existing) {
+          mutated = true;
+          next[i] = current;
+          continue;
+        }
+
+        if (existing.score !== current.score) {
+          mutated = true;
+          next[i] = { ...existing, score: current.score };
+          continue;
+        }
+
+        next[i] = existing;
+        if (!mutated && prevNotes[i] !== existing) {
+          mutated = true;
+        }
+      }
+
+      if (!mutated) {
+        return prevNotes;
+      }
+
+      return next;
+    });
   };
 
   return (

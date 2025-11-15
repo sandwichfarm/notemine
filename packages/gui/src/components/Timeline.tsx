@@ -9,6 +9,8 @@ import { debug } from '../lib/debug';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { VirtualizedNoteSlot } from './VirtualizedNoteSlot';
 import { getInteractionsCoordinator } from '../services/InteractionsCoordinator';
+import { FeedViewMenu } from './FeedViewMenu';
+import { getFeedWidthClass } from '../lib/feedViewOptions';
 
 interface TimelineProps {
   limit?: number;
@@ -504,8 +506,13 @@ export const Timeline: Component<TimelineProps> = (props) => {
     });
   };
 
+  const feedViewWidthClass = () => getFeedWidthClass(preferences().feedView?.widthPreset);
+
   return (
-    <div class="w-full max-w-2xl mx-auto space-y-4">
+    <div class={`w-full ${feedViewWidthClass()} mx-auto space-y-4`}>
+      <div class="flex justify-end">
+        <FeedViewMenu />
+      </div>
       {/* Algorithm Controls */}
       <Show when={!loading() && notes().length > 0}>
         <AlgorithmControls onUpdate={recalculateScoresImmediate} />

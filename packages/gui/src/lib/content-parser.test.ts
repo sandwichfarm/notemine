@@ -186,4 +186,27 @@ describe('content-parser', () => {
       expect(linkSegment?.entity?.data.url).toBe('https://example.com/page#section');
     });
   });
+
+  describe('payment detection', () => {
+    const lightningInvoice =
+      'lnbc130n1p5q08qqpp5xn384rg7pjh4j3vmuv6pgag8u3vkk2x2cyq07h0hgkp8ss9rwtysdq8w3jhxaqcqzzsxqrrs0sp59rsv99zrpaw9elumdkxk4z79nquear05qt8uc2rpxhw52s6x932s9qxpqysgqa27a3gkal6pqt8m49edd0gx75jdw66vryy4e4q79kvs3eqf05yx822yw9gepy8cndj7pmlwsjj5k09dq273k9xu6q9zne96x8pa6pfqqwjm9ex';
+
+    it('should parse lightning invoice at start of content', () => {
+      const segments = parseContent(lightningInvoice);
+
+      expect(segments.length).toBe(1);
+      expect(segments[0].type).toBe('entity');
+      expect(segments[0].entity?.type).toBe('lightning');
+      expect(segments[0].entity?.raw).toBe(lightningInvoice);
+    });
+
+    it('should parse lightning invoice that follows descriptive text', () => {
+      const content = `pay this invoice: ${lightningInvoice}`;
+      const segments = parseContent(content);
+      const entitySegment = segments.find(s => s.entity?.type === 'lightning');
+
+      expect(entitySegment).toBeDefined();
+      expect(entitySegment?.entity?.raw).toBe(lightningInvoice);
+    });
+  });
 });

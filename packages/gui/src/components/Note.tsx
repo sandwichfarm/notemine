@@ -43,6 +43,8 @@ export const Note: Component<NoteProps> = (props) => {
   const [showScoreTooltip, setShowScoreTooltip] = createSignal(false);
   const { preferences } = usePreferences();
   const { activeTooltip, setActiveTooltip, setTooltipContent, closeAllPanels } = useTooltip();
+  const [isExpanded, setIsExpanded] = createSignal(false);
+  const [contentOverflows, setContentOverflows] = createSignal(false);
 
   // Ref for intersection observer
   let noteRef: HTMLDivElement | undefined;
@@ -93,6 +95,22 @@ export const Note: Component<NoteProps> = (props) => {
 
   const noteContent = () => topicData().sanitizedContent;
   const topics = () => topicData().topics;
+  const viewOptions = () => preferences().feedView;
+  const maxNoteHeight = () => Math.max(0, viewOptions()?.maxNoteHeightPx ?? 0);
+  const showInteractionDetails = () => viewOptions()?.showInteractionCounts ?? true;
+  const clampActive = () => maxNoteHeight() > 0 && !isExpanded() && contentOverflows();
+
+  const scheduleOverflowCheck = () => {
+    if (!noteRef) return;
+    requestAnimationFrame(() => {
+      if (!noteRef) return;
+      if (maxNoteHeight() <= 0) {
+        setContentOverflows(false);
+        return;
+      }
+      setContentOverflows(noteRef.scrollHeight > maxNoteHeight());
+    });
+  };
 
   const contentClass = () =>
     [
@@ -206,8 +224,31 @@ export const Note: Component<NoteProps> = (props) => {
     return `/e/${nevent}`;
   };
 
+  createEffect(() => {
+    const height = maxNoteHeight();
+    if (height <= 0) {
+      setIsExpanded(false);
+      setContentOverflows(false);
+      return;
+    }
+    setIsExpanded(false);
+    scheduleOverflowCheck();
+  });
+
+  createEffect(() => {
+    void props.interactionTick;
+    scheduleOverflowCheck();
+  });
+
+  createEffect(() => {
+    void props.event.id;
+    setIsExpanded(false);
+    scheduleOverflowCheck();
+  });
+
   // Phase 2: Set up global visibility observer for lazy loading with dwell time
   onMount(() => {
+    scheduleOverflowCheck();
     const { preferences } = usePreferences();
 
     if (noteRef && props.onVisible) {
@@ -300,11 +341,16 @@ export const Note: Component<NoteProps> = (props) => {
       ref={noteRef}
       data-note-id={props.event.id}
       data-interaction-tick={props.interactionTick ?? 0}
-      class="!mb-10 note"
+      class="!mb-10 note relative"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),
         'border-l-gray-500/30 bg-bg-secondary dark:bg-bg-tertiary': !hasPow(),
       }}
+      style={
+        maxNoteHeight() > 0 && !isExpanded()
+          ? { 'max-height': `${maxNoteHeight()}px`, overflow: 'hidden' }
+          : undefined
+      }
     >
       {/* Header - Low contrast metadata */}
       <div class="flex items-start justify-between mb-2">
@@ -395,48 +441,52 @@ export const Note: Component<NoteProps> = (props) => {
 
       
 
-      <div class="mb-3 text-xs font-mono text-black/60 dark:text-white/60 min-h-[24px] flex items-center">
-        <Show when={interactionSummaryReady()}>
-          <div>
-            <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
-              <span
-                class="text-text-secondary cursor-help"
-                title="Contributed Work: Total raw POW from reactions and replies combined"
-              >
-                💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
-              </span>
-            </Show>
-            <Show when={repliesList().length > 0}>
-              {repliesList().length} replies
-            </Show>
-            <Show when={repliesList().length > 0 && reactionsList().length > 0}>
-              {' & '}
-            </Show>
-            <Show when={reactionsList().length > 0}>
-              {reactionsList().length} reactions
-            </Show>
-          </div>
-        </Show>
-        <Show when={!interactionSummaryReady() && !hydrated()}>
-          <div class="h-4 w-32" />
-        </Show>
-      </div>
+      <Show when={showInteractionDetails()}>
+        <div class="mb-3 text-xs font-mono text-black/60 dark:text-white/60 min-h-[24px] flex items-center">
+          <Show when={interactionSummaryReady()}>
+            <div>
+              <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
+                <span
+                  class="text-text-secondary cursor-help"
+                  title="Contributed Work: Total raw POW from reactions and replies combined"
+                >
+                  💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
+                </span>
+              </Show>
+              <Show when={repliesList().length > 0}>
+                {repliesList().length} replies
+              </Show>
+              <Show when={repliesList().length > 0 && reactionsList().length > 0}>
+                {' & '}
+              </Show>
+              <Show when={reactionsList().length > 0}>
+                {reactionsList().length} reactions
+              </Show>
+            </div>
+          </Show>
+          <Show when={!interactionSummaryReady() && !hydrated()}>
+            <div class="h-4 w-32" />
+          </Show>
+        </div>
+      </Show>
 
 
 
       {/* Reactions Bar - Visual breakdown of reactions */}
-      <div class="mb-3 min-h-[32px]">
-        <Show when={hasReactionPills()}>
-          <ReactionBreakdown
-            reactions={reactionsList()}
-            eventId={props.event.id}
-            eventAuthor={props.event.pubkey}
-          />
-        </Show>
-        <Show when={!hasReactionPills() && !hydrated()}>
-          <div class="h-7" />
-        </Show>
-      </div>
+      <Show when={showInteractionDetails()}>
+        <div class="mb-3 min-h-[32px]">
+          <Show when={hasReactionPills()}>
+            <ReactionBreakdown
+              reactions={reactionsList()}
+              eventId={props.event.id}
+              eventAuthor={props.event.pubkey}
+            />
+          </Show>
+          <Show when={!hasReactionPills() && !hydrated()}>
+            <div class="h-7" />
+          </Show>
+        </div>
+      </Show>
 
       
       
@@ -549,6 +599,21 @@ export const Note: Component<NoteProps> = (props) => {
           />
         </Show>
       </Portal>
+      <Show when={clampActive()}>
+        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[var(--bg-primary)] dark:to-[var(--bg-secondary)]" />
+        <div class="absolute bottom-4 left-0 right-0 flex justify-center">
+          <button
+            type="button"
+            class="px-4 py-1 text-xs font-semibold border border-[var(--border-color)] rounded bg-[var(--bg-primary)]/80 backdrop-blur hover:border-[var(--accent)] transition-colors"
+            onClick={() => {
+              setIsExpanded(true);
+              requestAnimationFrame(() => setContentOverflows(false));
+            }}
+          >
+            Expand note
+          </button>
+        </div>
+      </Show>
     </div>
   );
 };

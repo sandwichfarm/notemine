@@ -8,6 +8,12 @@ import { initializeRelayConnectionManager } from '../lib/applesauce';
 /**
  * User preferences with all configurable magic numbers
  */
+export interface FeedViewPreferences {
+  widthPreset: 'compact' | 'default' | 'wide' | 'full';
+  maxNoteHeightPx: number;
+  showInteractionCounts: boolean;
+}
+
 export interface UserPreferences {
   // POW Difficulty settings (defaults for composing)
   powDifficultyRootNote: number;
@@ -43,6 +49,7 @@ export interface UserPreferences {
   threadedRepliesCollapseDepth: number;
   autoDeblurImages: boolean; // Auto-deblur all images without user interaction
   deblurCacheSize: number; // Max number of deblurred image hashes to remember (1-5000)
+  feedView: FeedViewPreferences;
 
   // Debug settings
   debugMode: boolean;
@@ -150,6 +157,11 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   threadedRepliesCollapseDepth: 2,
   autoDeblurImages: false,
   deblurCacheSize: 500,
+  feedView: {
+    widthPreset: 'default',
+    maxNoteHeightPx: 0,
+    showInteractionCounts: true,
+  },
 
   // Debug defaults
   debugMode: false,
@@ -241,6 +253,10 @@ export const PreferencesProvider: Component<{ children: JSX.Element }> = (props)
     feedParams: {
       ...DEFAULT_PREFERENCES.feedParams,
       ...(storedPreferences as any)?.feedParams,
+    },
+    feedView: {
+      ...DEFAULT_PREFERENCES.feedView,
+      ...(storedPreferences as any)?.feedView,
     },
   };
 

@@ -533,7 +533,7 @@ function findPaymentEntities(content: string): ParsedEntity[] {
   const addMatches = (regex: RegExp, type: EntityType) => {
     const matches = content.matchAll(regex);
     for (const match of matches) {
-      if (!match.index) continue;
+      if (match.index === undefined) continue;
       entities.push({
         type,
         data: { value: match[0] },

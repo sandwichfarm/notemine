@@ -16,6 +16,8 @@ import type { PreparedNote } from '../types/FeedTypes';
 import { configureVisibilityObserver, getVisibilityObserver } from '../services/VisibilityObserver';
 import { configureInteractionsCoordinator, getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 import { VirtualizedNoteSlot } from './VirtualizedNoteSlot';
+import { FeedViewMenu } from './FeedViewMenu';
+import { getFeedWidthClass } from '../lib/feedViewOptions';
 
 interface WoTTimelineProps {
   userPubkey: string;
@@ -1306,12 +1308,15 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     setReloadTrigger(prev => prev + 1);
   };
 
+  const feedWidthClass = () => getFeedWidthClass(preferences().feedView?.widthPreset);
+
   return (
-    <div ref={feedContainerRef} class="w-full max-w-2xl mx-auto space-y-4">
+    <div ref={feedContainerRef} class={`w-full ${feedWidthClass()} mx-auto space-y-4`}>
       {/* Feed Settings and Algorithm Controls - Inline */}
       <Show when={!loading()}>
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3">
           <FeedControls onUpdate={handleFeedParamsUpdate} />
+          <FeedViewMenu />
           <Show when={notes().length > 0}>
             <AlgorithmControls onUpdate={recalculateScoresImmediate} />
           </Show>

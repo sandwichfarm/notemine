@@ -416,6 +416,101 @@ export const Preferences: Component = () => {
                 Fetch extra notes for better prioritization (default: 2.0). Higher = more notes to choose from.
               </p>
             </div>
+
+            {/* Prefetch Interactions */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Prefetch Interactions: {preferences().feedParams.prefetchInteractionsCount}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="1"
+                value={preferences().feedParams.prefetchInteractionsCount}
+                onInput={(e) => updateFeedParam('prefetchInteractionsCount', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Number of notes below the fold to prefetch replies/reactions for (default: 3). Set to 0 to disable.
+              </p>
+            </div>
+
+            {/* Interaction Concurrency */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Interaction Slots: {preferences().feedParams.interactionsMaxConcurrent}
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value={preferences().feedParams.interactionsMaxConcurrent}
+                onInput={(e) => updateFeedParam('interactionsMaxConcurrent', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Maximum number of interaction fetches that run in parallel (default: 3). Higher = faster but heavier.
+              </p>
+            </div>
+
+            {/* Interaction Queue Size */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Interaction Queue Size: {preferences().feedParams.interactionsQueueMax}
+              </label>
+              <input
+                type="range"
+                min="6"
+                max="60"
+                step="2"
+                value={preferences().feedParams.interactionsQueueMax}
+                onInput={(e) => updateFeedParam('interactionsQueueMax', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Limits how many off-screen notes queue for reactions (default: 24). Larger queues = faster but more work.
+              </p>
+            </div>
+
+            {/* Visibility Dwell */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Visibility Dwell: {preferences().feedParams.visibilityDwellMs} ms
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1000"
+                step="50"
+                value={preferences().feedParams.visibilityDwellMs}
+                onInput={(e) => updateFeedParam('visibilityDwellMs', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Delay before an on-screen note starts fetching interactions (default: 300ms). Lower = faster.
+              </p>
+            </div>
+
+            {/* Visibility Root Margin */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Visibility Margin: {preferences().feedParams.visibilityRootMarginPx} px
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="600"
+                step="25"
+                value={preferences().feedParams.visibilityRootMarginPx}
+                onInput={(e) => updateFeedParam('visibilityRootMarginPx', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                How far outside the viewport to begin fetching interactions (default: 300px).
+              </p>
+            </div>
           </div>
         </section>
 

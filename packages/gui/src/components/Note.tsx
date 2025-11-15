@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, For, onMount, onCleanup, createEffect } from 'solid-js';
+import { Component, Show, createSignal, For, onMount, onCleanup, createEffect, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { A } from '@solidjs/router';
 import type { NostrEvent } from 'nostr-tools/core';
@@ -50,15 +50,23 @@ export const Note: Component<NoteProps> = (props) => {
   const formattedPow = () => formatPowDifficulty(powDifficulty());
 
   // Calculate stats directly from props (single source of truth with Timeline)
-  const stats = () => {
+  const reactionsList = createMemo(() => {
+    // Depend on interactionTick so updates stream in immediately
+    void (props.interactionTick ?? 0);
+    return props.reactions || [];
+  });
+
+  const repliesList = createMemo(() => {
+    void (props.interactionTick ?? 0);
+    return props.replies || [];
+  });
+
+  const stats = createMemo(() => {
     const prefs = preferences();
-    // Read interactionTick to ensure reactivity when interactions arrive
-    // This creates a dependency so dynamic text that uses stats() updates on new interactions
-    const __tick = props.interactionTick ?? 0; // eslint-disable-line @typescript-eslint/no-unused-vars
     return calculatePowScore(
       props.event,
-      props.reactions || [],
-      props.replies || [],
+      reactionsList(),
+      repliesList(),
       {
         reactionPowWeight: prefs.reactionPowWeight,
         replyPowWeight: prefs.replyPowWeight,
@@ -68,7 +76,7 @@ export const Note: Component<NoteProps> = (props) => {
         powInteractionThreshold: prefs.powInteractionThreshold,
       }
     );
-  };
+  });
 
   const contentClass = () =>
     [
@@ -382,24 +390,24 @@ export const Note: Component<NoteProps> = (props) => {
           💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
         </span>
       </Show>
-        <Show when={props.replies?.length && props.replies.length > 0}>
-            {props.replies?.length} replies
+        <Show when={repliesList().length > 0}>
+            {repliesList().length} replies
         </Show>
-        <Show when={props.replies?.length && props.replies.length > 0 && props.reactions?.length && props.reactions.length > 0}>
+        <Show when={repliesList().length > 0 && reactionsList().length > 0}>
             {' & '}
         </Show>
-        <Show when={props.reactions?.length && props.reactions.length > 0}>
-            {props.reactions?.length} reactions
+        <Show when={reactionsList().length > 0}>
+            {reactionsList().length} reactions
         </Show>
       </div>
 
 
 
       {/* Reactions Bar - Visual breakdown of reactions */}
-      <Show when={props.reactions && props.reactions.length > 0}>
+      <Show when={reactionsList().length > 0}>
         <div class="mb-3">
           <ReactionBreakdown
-            reactions={props.reactions!}
+            reactions={reactionsList()}
             eventId={props.event.id}
             eventAuthor={props.event.pubkey}
           />

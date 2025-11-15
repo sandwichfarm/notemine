@@ -93,6 +93,7 @@ export interface UserPreferences {
     visibilityRootMarginPx: number; // Root margin in pixels for intersection observer
     interactionsMaxConcurrent: number; // Max concurrent interactions fetches
     interactionsQueueMax: number; // Max queued interactions requests
+    prefetchInteractionsCount: number; // Number of notes below fold to prefetch interactions for
 
     // Phase 3: Anchor preservation
     anchorPreserveDelayMs: number; // Delay before measuring anchor for preservation
@@ -189,6 +190,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     visibilityRootMarginPx: 300, // 300px pre-heating margin
     interactionsMaxConcurrent: 3, // Max 3 concurrent interactions fetches
     interactionsQueueMax: 24, // Max 24 queued requests
+    prefetchInteractionsCount: 3, // Prefetch interactions for 3 notes below the fold
 
     // Phase 3: Anchor preservation
     anchorPreserveDelayMs: 50, // 50ms delay before anchor measurement

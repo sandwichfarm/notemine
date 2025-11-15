@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+import { Component, createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
 import { createTimelineStream, relayPool, eventStore, relayConnectionManager, getActiveRelays, PROFILE_RELAYS, getUserInboxRelays } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
@@ -37,6 +37,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
   const reactionsCache = new Map<string, NostrEvent[]>();
   const repliesCache = new Map<string, NostrEvent[]>();
   const trackedEventIds = new Set<string>(); // Track which events have reactions/replies loaded
+  const prefetchedEventIds = new Set<string>(); // Track which notes we've proactively prefetched
+  const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes above the fold
   let relaysCache: string[] = [];
   let recalculateTimer: number | null = null; // Debounce timer
 
@@ -268,6 +270,26 @@ export const Timeline: Component<TimelineProps> = (props) => {
       },
     });
   };
+
+  // Prefetch interactions for notes just below the fold so they feel instant when scrolling
+  createEffect(() => {
+    const feedPrefs = preferences();
+    const prefetchCount = Math.max(0, feedPrefs.feedParams.prefetchInteractionsCount ?? 0);
+    const currentNotes = notes();
+    if (prefetchCount <= 0 || currentNotes.length === 0) return;
+
+    const startIndex = Math.min(currentNotes.length, PREFETCH_VISIBLE_BUFFER);
+    const endIndex = Math.min(currentNotes.length, startIndex + prefetchCount);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const eventId = currentNotes[i].event.id;
+      if (prefetchedEventIds.has(eventId)) continue;
+      prefetchedEventIds.add(eventId);
+      queueMicrotask(() => {
+        void handleNoteVisible(eventId);
+      });
+    }
+  });
 
   // Helper function to recalculate scores immediately (for when loading completes)
   const recalculateScoresImmediate = () => {

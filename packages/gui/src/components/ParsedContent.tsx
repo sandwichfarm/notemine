@@ -14,6 +14,7 @@ import { XEmbed } from './XEmbed';
 import { FacebookEmbed } from './FacebookEmbed';
 import { SubstackEmbed } from './SubstackEmbed';
 import { MediumEmbed } from './MediumEmbed';
+import { BasicLinkCard } from './BasicLinkCard';
 
 interface ParsedContentProps {
   content: string;
@@ -204,6 +205,9 @@ export const ParsedContent: Component<ParsedContentProps> = (props) => {
 
               case 'medium':
                 return <MediumEmbed {...entity.data} />;
+
+              case 'link':
+                return <BasicLinkCard url={entity.data.url} />;
 
               case 'nsec':
                 // Don't render nsec (private key) - just show warning

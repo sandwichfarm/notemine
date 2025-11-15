@@ -59,6 +59,7 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
       visibilityRootMarginPx: 300,
       interactionsMaxConcurrent: 3,
       interactionsQueueMax: 24,
+      prefetchInteractionsCount: 3,
       anchorPreserveDelayMs: 50,
       topThresholdPx: 100,
       infiniteRootMarginPx: 300,
@@ -86,6 +87,11 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
     overlapRatio: 0.15,
     overfetch: 2.0,
     skewMarginMinutes: 15,
+    visibilityDwellMs: 300,
+    visibilityRootMarginPx: 300,
+    interactionsMaxConcurrent: 3,
+    interactionsQueueMax: 24,
+    prefetchInteractionsCount: 3,
   };
 
   return (
@@ -260,6 +266,96 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
               class="w-full h-1"
             />
             <div class="text-xs opacity-50">Prevents missed notes between windows</div>
+          </div>
+
+          {/* Prefetch Interactions */}
+          <div class="space-y-1">
+            <label class="flex justify-between text-xs text-text-secondary">
+              <span title="Number of notes below the fold to prefetch interactions for">⚡ Prefetch Interactions</span>
+              <span class="font-mono">{prefs().prefetchInteractionsCount}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="1"
+              value={prefs().prefetchInteractionsCount}
+              onInput={(e) => handleUpdate('prefetchInteractionsCount', Number(e.currentTarget.value))}
+              class="w-full h-1"
+            />
+            <div class="text-xs opacity-50">Prefetch replies/reactions this many notes ahead of the fold</div>
+          </div>
+
+          {/* Interactions Concurrency */}
+          <div class="space-y-1">
+            <label class="flex justify-between text-xs text-text-secondary">
+              <span title="Max number of interaction fetches to run at once">🧵 Interaction Slots</span>
+              <span class="font-mono">{prefs().interactionsMaxConcurrent}</span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              step="1"
+              value={prefs().interactionsMaxConcurrent}
+              onInput={(e) => handleUpdate('interactionsMaxConcurrent', Number(e.currentTarget.value))}
+              class="w-full h-1"
+            />
+            <div class="text-xs opacity-50">Higher values fetch more replies simultaneously (heavier on relays)</div>
+          </div>
+
+          {/* Interactions Queue Size */}
+          <div class="space-y-1">
+            <label class="flex justify-between text-xs text-text-secondary">
+              <span title="Max notes waiting for interactions to load">📥 Interaction Queue</span>
+              <span class="font-mono">{prefs().interactionsQueueMax}</span>
+            </label>
+            <input
+              type="range"
+              min="6"
+              max="48"
+              step="2"
+              value={prefs().interactionsQueueMax}
+              onInput={(e) => handleUpdate('interactionsQueueMax', Number(e.currentTarget.value))}
+              class="w-full h-1"
+            />
+            <div class="text-xs opacity-50">Controls how many off-screen notes queue for reactions</div>
+          </div>
+
+          {/* Visibility dwell time */}
+          <div class="space-y-1">
+            <label class="flex justify-between text-xs text-text-secondary">
+              <span title="Delay before a visible note triggers lazy loading">⏱️ Visibility Dwell</span>
+              <span class="font-mono">{prefs().visibilityDwellMs}ms</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1000"
+              step="50"
+              value={prefs().visibilityDwellMs}
+              onInput={(e) => handleUpdate('visibilityDwellMs', Number(e.currentTarget.value))}
+              class="w-full h-1"
+            />
+            <div class="text-xs opacity-50">Lower values trigger interaction fetches sooner</div>
+          </div>
+
+          {/* Visibility root margin */}
+          <div class="space-y-1">
+            <label class="flex justify-between text-xs text-text-secondary">
+              <span title="Viewport buffer for the visibility observer">🪟 Visibility Margin</span>
+              <span class="font-mono">{prefs().visibilityRootMarginPx}px</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="600"
+              step="50"
+              value={prefs().visibilityRootMarginPx}
+              onInput={(e) => handleUpdate('visibilityRootMarginPx', Number(e.currentTarget.value))}
+              class="w-full h-1"
+            />
+            <div class="text-xs opacity-50">Bigger margin starts fetching before notes enter the viewport</div>
           </div>
 
           {/* Apply Changes Button */}

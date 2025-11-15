@@ -69,6 +69,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   let initialStreamActive = false;
   // Phase 3: Per-note tick to force reactive updates on interaction arrivals
   const [interactionTicks, setInteractionTicks] = createSignal<Record<string, number>>({});
+  const prefetchedEventIds = new Set<string>(); // Track prefetched notes to avoid duplicate fetches
+  const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes visible without scrolling
 
   const bumpInteractionTick = (id: string) => {
     setInteractionTicks(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
@@ -1086,6 +1088,26 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       priority: 0, // All notes have equal priority for now
     });
   };
+
+  // Prefetch interactions for notes just below the fold so they feel instant when scrolling
+  createEffect(() => {
+    const feedPrefs = preferences();
+    const prefetchCount = Math.max(0, feedPrefs.feedParams.prefetchInteractionsCount ?? 0);
+    const currentNotes = notes();
+    if (prefetchCount <= 0 || currentNotes.length === 0) return;
+
+    const startIndex = Math.min(currentNotes.length, PREFETCH_VISIBLE_BUFFER);
+    const endIndex = Math.min(currentNotes.length, startIndex + prefetchCount);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const eventId = currentNotes[i].event.id;
+      if (prefetchedEventIds.has(eventId)) continue;
+      prefetchedEventIds.add(eventId);
+      queueMicrotask(() => {
+        void handleNoteVisible(eventId);
+      });
+    }
+  });
 
   // Helper function to recalculate scores without reordering
   // CRITICAL: Scores are updated for badges, but notes stay in insertion order

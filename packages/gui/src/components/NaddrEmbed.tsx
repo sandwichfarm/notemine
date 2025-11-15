@@ -112,9 +112,13 @@ export const NaddrEmbed: Component<NaddrEmbedProps> = (props) => {
   };
 
   return (
-    <div class="my-3 border border-border bg-bg-secondary dark:bg-bg-tertiary rounded p-4">
+    <div class="my-3 border border-border bg-bg-secondary dark:bg-bg-tertiary rounded p-4 min-h-[160px] flex flex-col justify-between">
       <Show when={loading()}>
-        <div class="text-sm text-text-secondary italic">Loading article...</div>
+        <div class="space-y-3 animate-pulse">
+          <div class="h-4 bg-white/10 dark:bg-black/20 rounded w-32" />
+          <div class="h-5 bg-white/5 dark:bg-black/10 rounded w-full" />
+          <div class="h-5 bg-white/5 dark:bg-black/10 rounded w-5/6" />
+        </div>
       </Show>
 
       <Show when={error()}>

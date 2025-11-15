@@ -26,6 +26,7 @@ interface NoteProps {
   onVisible?: (eventId: string) => void; // Callback when note becomes visible
   preparedNote?: PreparedNote; // Reserved heights for stable rendering (Phase 2)
   interactionTick?: number; // Forces reactive updates on interaction arrivals
+  isHydrated?: boolean;
 }
 
 // Global signal to track which note's tooltip is open (must be reactive)
@@ -85,6 +86,8 @@ export const Note: Component<NoteProps> = (props) => {
     ]
       .filter(Boolean)
       .join(' ');
+
+  const hydrated = () => props.isHydrated ?? true;
 
   // Unique ID for this note's tooltip
   const tooltipId = `tooltip-${props.event.id}`;
@@ -381,38 +384,48 @@ export const Note: Component<NoteProps> = (props) => {
 
       
 
-      <div class="mb-3 text-xs font-mono text-black/60 dark:text-white/60">
-        <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
-        <span
-          class="text-text-secondary cursor-help"
-          title="Contributed Work: Total raw POW from reactions and replies combined"
+      <div class="mb-3 text-xs font-mono text-black/60 dark:text-white/60 min-h-[24px] flex items-center">
+        <Show
+          when={hydrated()}
+          fallback={<div class="h-4 w-32" />}
         >
-          💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
-        </span>
-      </Show>
-        <Show when={repliesList().length > 0}>
-            {repliesList().length} replies
-        </Show>
-        <Show when={repliesList().length > 0 && reactionsList().length > 0}>
-            {' & '}
-        </Show>
-        <Show when={reactionsList().length > 0}>
-            {reactionsList().length} reactions
+          <div>
+            <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
+              <span
+                class="text-text-secondary cursor-help"
+                title="Contributed Work: Total raw POW from reactions and replies combined"
+              >
+                💎 <strong class="text-white">{(stats().reactionsPowTotal + stats().repliesPowTotal).toFixed(1)} work delegated</strong> via{' '}
+              </span>
+            </Show>
+            <Show when={repliesList().length > 0}>
+              {repliesList().length} replies
+            </Show>
+            <Show when={repliesList().length > 0 && reactionsList().length > 0}>
+              {' & '}
+            </Show>
+            <Show when={reactionsList().length > 0}>
+              {reactionsList().length} reactions
+            </Show>
+          </div>
         </Show>
       </div>
 
 
 
       {/* Reactions Bar - Visual breakdown of reactions */}
-      <Show when={reactionsList().length > 0}>
-        <div class="mb-3">
+      <div class="mb-3 min-h-[32px]">
+        <Show
+          when={hydrated() && reactionsList().length > 0}
+          fallback={<div class="h-7" />}
+        >
           <ReactionBreakdown
             reactions={reactionsList()}
             eventId={props.event.id}
             eventAuthor={props.event.pubkey}
           />
-        </div>
-      </Show>
+        </Show>
+      </div>
 
       
       
@@ -528,3 +541,4 @@ export const Note: Component<NoteProps> = (props) => {
     </div>
   );
 };
+  const hydrated = () => props.isHydrated ?? true;

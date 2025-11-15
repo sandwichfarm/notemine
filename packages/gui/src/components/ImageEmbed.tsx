@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount } from 'solid-js';
+import { Component, createSignal, onCleanup, onMount } from 'solid-js';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { isImageDeblurred, markImageDeblurred } from '../lib/image-deblur-cache';
 
@@ -8,35 +8,49 @@ interface ImageEmbedProps {
   reservedHeight?: number;
 }
 
+const blurStateCache = new Map<string, boolean>();
+
 export const ImageEmbed: Component<ImageEmbedProps> = (props) => {
   const { preferences } = usePreferences();
-  const [blurred, setBlurred] = createSignal(true);
+  const initialBlurState = blurStateCache.has(props.url) ? blurStateCache.get(props.url)! : true;
+  const [blurred, setBlurred] = createSignal(initialBlurState);
+  let isMounted = false;
 
   // Check preferences and cache on mount to determine initial blur state
   onMount(async () => {
+    isMounted = true;
     const prefs = preferences();
 
     // If auto-deblur is enabled globally, start unblurred
     if (prefs.autoDeblurImages) {
       setBlurred(false);
+      blurStateCache.set(props.url, false);
       return;
     }
 
     // Otherwise, check if this specific image was previously deblurred
     try {
-      const wasDeblurred = await isImageDeblurred(props.url);
-      if (wasDeblurred) {
-        setBlurred(false);
+      if (!blurStateCache.has(props.url)) {
+        const wasDeblurred = await isImageDeblurred(props.url);
+        if (wasDeblurred && isMounted) {
+          setBlurred(false);
+          blurStateCache.set(props.url, false);
+        }
       }
     } catch (error) {
       console.warn('Failed to check deblur cache:', error);
     }
   });
 
+  onCleanup(() => {
+    isMounted = false;
+  });
+
   // Handle manual blur toggle
   const handleClick = async () => {
     const newBlurState = !blurred();
     setBlurred(newBlurState);
+    blurStateCache.set(props.url, newBlurState);
 
     // If user manually deblurred the image, save to cache
     // (Don't cache re-blurring, only deblurring)

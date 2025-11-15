@@ -79,4 +79,13 @@
     0%, 100% { transform: rotate(0deg); }
     50% { transform: rotate(-45deg); }
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

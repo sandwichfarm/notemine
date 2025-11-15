@@ -65,6 +65,7 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
       infiniteTriggerPct: 0.8,
       batchClampMin: 5,
       batchClampMax: 20,
+      overscan: 5,
       preloaderTimeoutMs: 1500,
       maxMediaHeightPx: 900,
       logThrottleMs: 2000,

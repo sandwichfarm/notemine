@@ -1,6 +1,6 @@
 import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, relayPool, eventStore, relayConnectionManager } from '../lib/applesauce';
+import { createTimelineStream, relayPool, eventStore, relayConnectionManager, getActiveRelays, PROFILE_RELAYS, getUserInboxRelays } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { AlgorithmControls } from './AlgorithmControls';
@@ -187,14 +187,37 @@ export const Timeline: Component<TimelineProps> = (props) => {
   });
 
   // Lazy loading handler for reactions/replies (outside onMount so it can access caches)
-  const handleNoteVisible = (eventId: string) => {
+  const handleNoteVisible = async (eventId: string) => {
     if (trackedEventIds.has(eventId) || relaysCache.length === 0) return;
     trackedEventIds.add(eventId);
 
     debug('[Timeline] Note visible, fetching reactions/replies for', eventId.slice(0, 8));
 
+    // Build a robust relay set for interactions similar to NoteDetail/WoTTimeline
+    // - Author inbox relays (primary destination for interactions)
+    // - Currently connected relays (optimized pool)
+    // - Active baseline relays and profile relays (fallbacks)
+    const evt = eventCache.get(eventId);
+    const author = evt?.pubkey;
+    const relaySet = new Set<string>();
+    // Connected relays from manager
+    relaysCache.forEach(r => relaySet.add(r));
+    // Baseline/active relays
+    getActiveRelays().forEach(r => relaySet.add(r));
+    PROFILE_RELAYS.forEach(r => relaySet.add(r));
+    // Author inbox relays (await but safe if fails)
+    try {
+      if (author) {
+        const inbox = await getUserInboxRelays(author);
+        inbox.forEach(r => relaySet.add(r));
+      }
+    } catch {}
+
+    const interactionRelays = Array.from(relaySet);
+    if (interactionRelays.length === 0) return;
+
     // Fetch reactions
-    const reactionsObs = relayPool.req(relaysCache, { kinds: [7], '#e': [eventId], limit: 100 });
+    const reactionsObs = relayPool.req(interactionRelays, { kinds: [7], '#e': [eventId], limit: 1000 });
     reactionsObs.subscribe({
       next: (response) => {
         if (response !== 'EOSE' && response.kind === 7) {
@@ -205,7 +228,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
             reactionsCache.set(eventId, existing);
             // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
             eventStore.add(reaction);
-            recalculateScores();
+            // Show updates as they arrive (no debounce)
+            recalculateScoresImmediate();
           }
         }
       },
@@ -216,7 +240,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
     });
 
     // Fetch replies
-    const repliesObs = relayPool.req(relaysCache, { kinds: [1], '#e': [eventId], limit: 50 });
+    const repliesObs = relayPool.req(interactionRelays, { kinds: [1], '#e': [eventId], limit: 1000 });
     repliesObs.subscribe({
       next: (response) => {
         if (response !== 'EOSE' && response.kind === 1) {
@@ -227,7 +251,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
             repliesCache.set(eventId, existing);
             // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
             eventStore.add(reply);
-            recalculateScores();
+            // Show updates as they arrive (no debounce)
+            recalculateScoresImmediate();
           }
         }
       },

@@ -448,8 +448,9 @@ export async function initializeCache(options?: {
   try {
     // Create database instance with OPFS backend
     // Revert to original path - ':name:' is valid Turso WASM syntax for OPFS
-    debug('[Cache] Creating database instance with path: notemine-cache.db');
-    const db = new Database('notemine-cache.db');
+    // Use OPFS alias syntax (colon-wrapped) so Turso WASM persists to OPFS
+    debug('[Cache] Creating database instance with path: :notemine-cache:');
+    const db = new Database(':notemine-cache:');
 
     // Connect to the database
     debug('[Cache] Connecting to database...');
@@ -1610,7 +1611,8 @@ function initializeLeaderElection(): void {
 
   // Wait briefly, then claim leadership if no one responds
   setTimeout(() => {
-    if (Date.now() - lastLeaderHeartbeat > LEADER_TIMEOUT_MS) {
+    // Fast-path election: if no heartbeat within this short window, assume single-tab and claim
+    if (Date.now() - lastLeaderHeartbeat > 400) {
       isCompactionLeader = true;
       isPersistenceLeader = true; // Phase 1: Claim persistence leadership
       debug('[Cache] Elected as leader (compaction + persistence)');

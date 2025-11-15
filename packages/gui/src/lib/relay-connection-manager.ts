@@ -223,6 +223,27 @@ export class RelayConnectionManager {
   }
 
   /**
+   * Get relays prioritized for timeline fetching (optimal set or baseline fallback)
+   */
+  getTimelineRelays(limit?: number): string[] {
+    const source =
+      this.currentOptimalRelays.length > 0
+        ? this.currentOptimalRelays
+        : this.currentAuthors.length > 0
+          ? Array.from(new Set(this.currentAuthors.flatMap(a => a.relays || []))).filter(Boolean)
+          : Array.from(this.baselineRelays);
+
+    if (source.length === 0) {
+      return limit ? Array.from(this.connections.keys()).slice(0, limit) : Array.from(this.connections.keys());
+    }
+
+    if (limit && source.length > limit) {
+      return source.slice(0, limit);
+    }
+    return source;
+  }
+
+  /**
    * Get relays for a specific purpose
    */
   getRelaysForPurpose(purposeId: string): string[] {

@@ -46,21 +46,6 @@ export interface FeedParams {
   relays?: string[];
 }
 
-/**
- * Default feed parameters (optimized for faster initial load)
- */
-export const DEFAULT_FEED_PARAMS: Omit<FeedParams, 'authors' | 'relays'> = {
-  desiredCount: 20,
-  initialLimit: 20,
-  maxLimit: 500,
-  initialHorizonMs: 12 * 60 * 60 * 1000, // 12 hours
-  maxHorizonMs: 14 * 24 * 60 * 60 * 1000, // 14 days
-  growthFast: 3.0,
-  growthSlow: 1.6,
-  overlapRatio: 0.15,
-  overfetch: 2.0,
-  skewMarginMs: 15 * 60 * 1000, // 15 minutes (clock skew tolerance)
-};
 
 /**
  * Detected media reference in note content
@@ -174,14 +159,6 @@ export interface PriorityConfig {
   recencyHalfLifeMs: number;
 }
 
-/**
- * Default prioritization config
- */
-export const DEFAULT_PRIORITY_CONFIG: PriorityConfig = {
-  powCoefficient: 0.7,
-  freshnessCoefficient: 0.3,
-  recencyHalfLifeMs: 36 * 60 * 60 * 1000, // 36 hours
-};
 
 /**
  * Media preload configuration
@@ -200,12 +177,8 @@ export interface MediaPreloadConfig {
   maxMediaHeight: number;
 }
 
-/**
- * Default media preload config
- */
-export const DEFAULT_MEDIA_PRELOAD_CONFIG: MediaPreloadConfig = {
-  timeoutMs: 1500,
-  enabled: true,
-  defaultAspectRatio: 16 / 9,
-  maxMediaHeight: 800,
-};
+export {
+  DEFAULT_FEED_PARAMS,
+  DEFAULT_MEDIA_PRELOAD_CONFIG,
+  DEFAULT_PRIORITY_CONFIG,
+} from '../config/defaults';

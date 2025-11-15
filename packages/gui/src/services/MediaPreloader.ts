@@ -5,7 +5,7 @@
  */
 
 import type { FeedNote, PreparedNote, MediaPreloadConfig, MediaRef } from '../types/FeedTypes';
-import { DEFAULT_MEDIA_PRELOAD_CONFIG } from '../types/FeedTypes';
+import { DEFAULT_MEDIA_PRELOAD_CONFIG } from '../config/defaults';
 
 /**
  * Result of a single media preload attempt

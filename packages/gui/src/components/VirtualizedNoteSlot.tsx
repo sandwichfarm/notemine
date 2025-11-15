@@ -18,6 +18,32 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   let observer: IntersectionObserver | null = null;
   let virtualizeTimer: number | null = null;
   let currentVirtualized = props.isVirtualized;
+  let frameScheduled = false;
+
+  const isWithinViewport = () => {
+    if (!containerRef) return false;
+    const rect = containerRef.getBoundingClientRect();
+    return rect.bottom >= -200 && rect.top <= window.innerHeight + 200;
+  };
+
+  const forceRehydrateIfVisible = () => {
+    if (!currentVirtualized || !props.canVirtualize) return;
+    if (!containerRef) return;
+    const rect = containerRef.getBoundingClientRect();
+    const placeholderHeight = rect.height;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const visiblePortion = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+    const visibilityRatio = placeholderHeight > 0 ? visiblePortion / placeholderHeight : 0;
+    if (visibilityRatio < 0.25) return;
+    if (isWithinViewport()) {
+      cancelPendingVirtualize();
+      if (currentVirtualized) {
+        debug('[VirtualizedNoteSlot] forcing rehydrate (visibility check)', props.eventId);
+        props.onUnvirtualize();
+        currentVirtualized = false;
+      }
+    }
+  };
 
   const cancelPendingVirtualize = () => {
     if (virtualizeTimer !== null) {
@@ -38,14 +64,22 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   };
 
   createEffect(() => {
-    currentVirtualized = props.isVirtualized;
-    if (!props.canVirtualize && currentVirtualized) {
+    const previousVirtualized = currentVirtualized;
+    const nextVirtualized = props.isVirtualized;
+    currentVirtualized = nextVirtualized;
+
+    if (!props.canVirtualize && nextVirtualized) {
       debug('[VirtualizedNoteSlot] forcing hydration for', props.eventId);
       props.onUnvirtualize();
       currentVirtualized = false;
     }
     if (!props.canVirtualize) {
       cancelPendingVirtualize();
+    }
+
+    if (nextVirtualized && !previousVirtualized) {
+      // Parent reconstructed virtualization state; ensure we hydrate immediately if needed.
+      queueMicrotask(() => forceRehydrateIfVisible());
     }
   });
 
@@ -85,6 +119,22 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
     if (containerRef) {
       observer.observe(containerRef);
     }
+
+    const scheduleCheck = () => {
+      if (frameScheduled) return;
+      frameScheduled = true;
+      requestAnimationFrame(() => {
+        frameScheduled = false;
+        forceRehydrateIfVisible();
+      });
+    };
+
+    window.addEventListener('scroll', scheduleCheck, { passive: true });
+    window.addEventListener('resize', scheduleCheck);
+    onCleanup(() => {
+      window.removeEventListener('scroll', scheduleCheck);
+      window.removeEventListener('resize', scheduleCheck);
+    });
   });
 
   onCleanup(() => {
@@ -94,7 +144,10 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   });
 
   return (
-    <div ref={containerRef} data-note-id={props.eventId}>
+    <div
+      ref={containerRef}
+      data-note-id={props.eventId}
+    >
       <Show
         when={!props.isVirtualized || !props.canVirtualize}
         fallback={

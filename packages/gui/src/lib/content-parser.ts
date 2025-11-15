@@ -1,6 +1,7 @@
 import { nip19 } from 'nostr-tools';
+import type { NostrEvent } from 'nostr-tools/core';
 
-export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium' | 'link';
+export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium' | 'link' | 'bitcoin' | 'lightning' | 'lnurl' | 'cashu';
 
 export interface ParsedEntity {
   type: EntityType;
@@ -99,6 +100,68 @@ const MEDIUM_REGEX = /https?:\/\/(?:www\.)?medium\.com\/(?:@([a-zA-Z0-9_-]+)|([a
  * Matches any http:// or https:// URL
  */
 const GENERIC_URL_REGEX = /https?:\/\/[^\s<>]+/gi;
+
+const INLINE_HASHTAG_REGEX = /(^|[\s\t\r\n.,!?;:])#([\p{L}\p{N}_-]+)/giu;
+
+export interface ContentTopicsResult {
+  sanitizedContent: string;
+  topics: string[];
+}
+
+function addTopic(normalizedTopics: string[], topicSet: Set<string>, topic?: string) {
+  if (!topic) return;
+  const trimmed = topic.trim();
+  if (!trimmed) return;
+  const lower = trimmed.toLowerCase();
+  if (topicSet.has(lower)) return;
+  topicSet.add(lower);
+  normalizedTopics.push(lower);
+}
+
+export function extractTopicsFromEvent(event: NostrEvent): ContentTopicsResult {
+  const content = event.content ?? '';
+  const tags = event.tags ?? [];
+
+  const normalizedTopics: string[] = [];
+  const topicSet = new Set<string>();
+
+  for (const tag of tags) {
+    if (tag[0] !== 't') continue;
+    addTopic(normalizedTopics, topicSet, tag[1]);
+  }
+
+  const inlineRegex = new RegExp(INLINE_HASHTAG_REGEX.source, INLINE_HASHTAG_REGEX.flags);
+  for (const match of content.matchAll(inlineRegex)) {
+    const topic = match[2];
+    if (!topic) continue;
+    addTopic(normalizedTopics, topicSet, topic);
+  }
+
+  if (topicSet.size === 0) {
+    return {
+      sanitizedContent: content,
+      topics: normalizedTopics,
+    };
+  }
+
+  const removalRegex = new RegExp(INLINE_HASHTAG_REGEX.source, INLINE_HASHTAG_REGEX.flags);
+  let sanitizedContent = content.replace(
+    removalRegex,
+    (fullMatch, leading: string, topic: string) => {
+      if (!topic || !topicSet.has(topic.toLowerCase())) {
+        return fullMatch;
+      }
+      return leading ?? '';
+    }
+  );
+
+  sanitizedContent = sanitizedContent.replace(/[ \t]{2,}/g, ' ');
+
+  return {
+    sanitizedContent,
+    topics: normalizedTopics,
+  };
+}
 
 /**
  * Parse a string to find all nostr: entity references
@@ -373,7 +436,8 @@ export function parseContent(content: string): ContentSegment[] {
     }
   }
 
-  const allEntities = [...combinedNostr, ...mediaEntities].sort((a, b) => a.start - b.start);
+  const paymentEntities = findPaymentEntities(content);
+  const allEntities = [...combinedNostr, ...mediaEntities, ...paymentEntities].sort((a, b) => a.start - b.start);
 
   if (allEntities.length === 0) {
     return [{ type: 'text', content }];
@@ -454,4 +518,36 @@ export function getRelayHints(entity: ParsedEntity): string[] {
     return entity.data.relays;
   }
   return [];
+}
+
+const BITCOIN_BASE58_REGEX = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g;
+const BITCOIN_BECH32_REGEX = /\bbc1[ac-hj-np-z02-9]{11,71}\b/gi;
+const LIGHTNING_INVOICE_REGEX = /\bln(bc|tb|sb|bcrt)[0-9][a-z0-9]+\b/gi;
+const LNURL_REGEX = /\blnurl[a-z0-9]+\b/gi;
+const CASHU_REGEX = /\bcashu[a-zA-Z0-9]{20,}\b/g;
+
+function findPaymentEntities(content: string): ParsedEntity[] {
+  const entities: ParsedEntity[] = [];
+
+  const addMatches = (regex: RegExp, type: EntityType) => {
+    const matches = content.matchAll(regex);
+    for (const match of matches) {
+      if (match.index === undefined) continue;
+      entities.push({
+        type,
+        data: { value: match[0] },
+        start: match.index,
+        end: match.index + match[0].length,
+        raw: match[0],
+      });
+    }
+  };
+
+  addMatches(BITCOIN_BASE58_REGEX, 'bitcoin');
+  addMatches(BITCOIN_BECH32_REGEX, 'bitcoin');
+  addMatches(LIGHTNING_INVOICE_REGEX, 'lightning');
+  addMatches(LNURL_REGEX, 'lnurl');
+  addMatches(CASHU_REGEX, 'cashu');
+
+  return entities;
 }

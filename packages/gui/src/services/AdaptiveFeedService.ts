@@ -10,7 +10,7 @@ import { relayPool, eventStore } from '../lib/applesauce';
 import { getPowDifficultyFromId } from '../lib/pow';
 import { detectMedia } from '../utils/mediaDetection';
 import type { FeedParams, FeedNote, FeedEvent } from '../types/FeedTypes';
-import { DEFAULT_FEED_PARAMS } from '../types/FeedTypes';
+import { DEFAULT_FEED_PARAMS } from '../config/defaults';
 
 /**
  * Relay map for author-specific relay targeting

@@ -3,6 +3,9 @@
  */
 
 const STORAGE_KEY = 'notemine:anonKey';
+const AUTH_MODE_KEY = 'notemine:authMode';
+
+export type PersistedAuthMode = 'anon' | 'private';
 
 /**
  * Save anonymous secret key to localStorage
@@ -18,6 +21,22 @@ export function saveAnonKey(secret: Uint8Array): void {
   } catch (error) {
     console.error('[AnonStorage] Failed to save anon key:', error);
   }
+}
+
+export function setPersistedAuthMode(mode: PersistedAuthMode): void {
+  try {
+    localStorage.setItem(AUTH_MODE_KEY, mode);
+  } catch (error) {
+    console.error('[AnonStorage] Failed to set auth mode:', error);
+  }
+}
+
+export function getPersistedAuthMode(): PersistedAuthMode | null {
+  const mode = localStorage.getItem(AUTH_MODE_KEY);
+  if (mode === 'anon' || mode === 'private') {
+    return mode;
+  }
+  return null;
 }
 
 /**
@@ -56,6 +75,7 @@ export function hasPersistedAnonKey(): boolean {
 export function clearAnonKey(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(AUTH_MODE_KEY);
   } catch (error) {
     console.error('[AnonStorage] Failed to clear anon key:', error);
   }

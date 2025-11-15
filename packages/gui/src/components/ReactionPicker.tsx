@@ -3,7 +3,7 @@ import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { useQueue } from '../providers/QueueProvider';
 import { useEmojiSets, type EmojiSet } from '../providers/EmojiSetsProvider';
-import type { Emoji } from '../providers/EmojiProvider';
+import type { Emoji } from '../types/emoji';
 import { debug } from '../lib/debug';
 
 interface ReactionPickerProps {

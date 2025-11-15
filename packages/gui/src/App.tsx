@@ -1,21 +1,23 @@
-import { Component, ParentComponent, onMount, createSignal, createEffect, Show } from 'solid-js';
+import { Component, ParentComponent, onMount, createSignal, createEffect, Show, untrack } from 'solid-js';
 import { Router, Route } from '@solidjs/router';
 import { EventStoreProvider } from './providers/EventStoreProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { UserProvider } from './providers/UserProvider';
 import { MiningProvider } from './providers/MiningProvider';
-import { PreferencesProvider } from './providers/PreferencesProvider';
+import { PreferencesProvider, usePreferences } from './providers/PreferencesProvider';
 import { TooltipProvider } from './providers/TooltipProvider';
 import { QueueProvider } from './providers/QueueProvider';
 import { QueueProcessor } from './components/QueueProcessor';
 import { PublishingProvider } from './providers/PublishingProvider';
+import { FollowsProvider } from './providers/FollowsProvider';
 import { PublishingProcessor } from './components/PublishingProcessor';
 import { EmojiProvider } from './providers/EmojiProvider';
 import { EmojiSetsProvider } from './providers/EmojiSetsProvider';
 import { useUser } from './providers/UserProvider';
 import Layout from './components/Layout';
-import Home from './pages/Home';
 import Feed from './pages/Feed';
+import Landing from './pages/Landing';
+import TimelineGlobalRedirect from './pages/TimelineGlobalRedirect';
 import About from './pages/About';
 import Stats from './pages/Stats';
 import Relays from './pages/Relays';
@@ -23,6 +25,7 @@ import Diagnostics from './pages/Diagnostics';
 import NoteDetail from './pages/NoteDetail';
 import ProfileDetail from './pages/ProfileDetail';
 import { Preferences } from './pages/Preferences';
+import { TimelineProvider } from './providers/TimelineProvider';
 import { fetchNip66PowRelays } from './lib/nip66';
 import { setPowRelays, eventStore } from './lib/applesauce';
 import {
@@ -33,15 +36,38 @@ import {
   startCompactionScheduler,
 } from './lib/cache';
 import { debug } from './lib/debug';
+import { hasPersistedAnonKey, getPersistedAuthMode } from './lib/anon-storage';
+import Onboarding from './pages/Onboarding';
 
 // App initialization component
 const AppInit: ParentComponent = (props) => {
-  const { user, authAnon, loadPersistedAnonKey, restoreSession, fetchUserData } = useUser();
+  const { user, authAnon, authWithSecretKey, loadPersistedAnonKey, restoreSession, fetchUserData } = useUser();
+  const { preferences } = usePreferences();
+  const computeAllowMinimalBoot = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const path = window.location.pathname;
+      const onLandingRoute = path === '/' || path === '/landing';
+      if (!onLandingRoute) return false;
+
+      const anonSeed = !!untrack(() => preferences().anonWotPreference);
+      const persistedAnonKey = hasPersistedAnonKey();
+      const hasSessionState = ['extension', 'nostrconnect', 'bunker'].some(
+        (method) => window.localStorage.getItem(`notemine:session:${method}`) !== null
+      );
+      return !(anonSeed || persistedAnonKey || hasSessionState);
+    } catch {
+      return false;
+    }
+  };
+  const [allowMinimalBoot, setAllowMinimalBoot] = createSignal(computeAllowMinimalBoot());
   const [relaysReady, setRelaysReady] = createSignal(false);
   const [coiError, setCoiError] = createSignal<string | null>(null);
   const [sessionRestoreError, setSessionRestoreError] = createSignal<string | null>(null);
+  const [cacheReady, setCacheReady] = createSignal(false);
 
   onMount(async () => {
+    setAllowMinimalBoot(computeAllowMinimalBoot());
     // NOTE: COI (Cross-Origin Isolation) is REQUIRED for both:
     // - WASM threading (cache with Turso SQLite)
     // - WebSocket relay connections
@@ -60,31 +86,39 @@ const AppInit: ParentComponent = (props) => {
       return; // Block further initialization
     }
 
-    // Initialize local cache (COI confirmed available)
-    try {
-      await initializeCache({ allowMemoryFallback: true });
-      console.log('[CACHE-IMPL] Cache initialized');
+    const cachePreference = untrack(() => preferences().cacheBackendPreference);
+    const cacheDisabledByPreference = cachePreference === 'off';
 
-      // Load cached events into event store
-      const cachedCount = await loadCachedEvents(eventStore);
-      console.log(`[CACHE-IMPL] Loaded ${cachedCount} events from cache`);
+    if (cacheDisabledByPreference) {
+      console.warn('[CACHE-IMPL] Cache disabled via user preferences. Skipping cache initialization.');
+    } else {
+      // Initialize local cache (COI confirmed available)
+      try {
+        await initializeCache({ allowMemoryFallback: true });
+        console.log('[CACHE-IMPL] Cache initialized');
 
-      // Set up automatic cache persistence
-      setupCachePersistence(eventStore);
-      console.log('[CACHE-IMPL] Cache persistence enabled');
+        // Load cached events into event store
+        const cachedCount = await loadCachedEvents(eventStore);
+        console.log(`[CACHE-IMPL] Loaded ${cachedCount} events from cache`);
 
-      // Phase 2: Configure retention with default budgets
-      configureCacheRetention({
-        maxTotalEvents: 100_000,
-      });
-      console.log('[CACHE-IMPL] Retention policy configured');
+        // Set up automatic cache persistence
+        setupCachePersistence(eventStore);
+        console.log('[CACHE-IMPL] Cache persistence enabled');
 
-      // Phase 2: Start compaction scheduler (runs every 15 minutes)
-      startCompactionScheduler(15);
-      console.log('[CACHE-IMPL] Compaction scheduler started');
-    } catch (error) {
-      console.error('[CACHE-IMPL] Cache initialization failed:', error);
-      // Continue without cache
+        // Phase 2: Configure retention with default budgets
+        configureCacheRetention({
+          maxTotalEvents: 100_000,
+        });
+        console.log('[CACHE-IMPL] Retention policy configured');
+
+        // Phase 2: Start compaction scheduler (runs every 15 minutes)
+        startCompactionScheduler(15);
+        console.log('[CACHE-IMPL] Compaction scheduler started');
+        setCacheReady(true);
+      } catch (error) {
+        console.error('[CACHE-IMPL] Cache initialization failed:', error);
+        // Continue without cache
+      }
     }
 
     // Fetch NIP-66 POW relays BEFORE mounting children
@@ -111,9 +145,15 @@ const AppInit: ParentComponent = (props) => {
 
         // Fall back to anonymous user
         const persistedKey = loadPersistedAnonKey();
+        const persistedMode = getPersistedAuthMode();
         if (persistedKey) {
-          debug('[App] Loading persisted anonymous key as fallback');
-          authAnon(persistedKey, true);
+          if (persistedMode === 'private') {
+            debug('[App] Loading persisted mined key as fallback');
+            authWithSecretKey(persistedKey, true);
+          } else {
+            debug('[App] Loading persisted anonymous key as fallback');
+            authAnon(persistedKey, true);
+          }
         } else {
           debug('[App] Creating new ephemeral anonymous key as fallback');
           authAnon();
@@ -122,9 +162,15 @@ const AppInit: ParentComponent = (props) => {
     } else {
       // No persisted session - initialize with anonymous user
       const persistedKey = loadPersistedAnonKey();
+      const persistedMode = getPersistedAuthMode();
       if (persistedKey) {
-        debug('[App] Loading persisted anonymous key');
-        authAnon(persistedKey, true);
+        if (persistedMode === 'private') {
+          debug('[App] Loading persisted mined key');
+          authWithSecretKey(persistedKey, true);
+        } else {
+          debug('[App] Loading persisted anonymous key');
+          authAnon(persistedKey, true);
+        }
       } else {
         debug('[App] Creating new ephemeral anonymous key');
         authAnon();
@@ -151,6 +197,7 @@ const AppInit: ParentComponent = (props) => {
 
   // Phase 2: Update cache retention config when user changes (to pin their events)
   createEffect(() => {
+    if (!cacheReady()) return;
     const currentUser = user();
     if (currentUser && !currentUser.isAnon && window.crossOriginIsolated) {
       debug('[App] Updating cache retention config for user:', currentUser.pubkey);
@@ -193,7 +240,7 @@ const AppInit: ParentComponent = (props) => {
       }
     >
       <Show
-        when={relaysReady()}
+        when={relaysReady() || allowMinimalBoot()}
         fallback={
           <div class="fixed inset-0 flex items-center justify-center bg-bg-primary dark:bg-bg-secondary">
             <div class="text-center">
@@ -248,22 +295,29 @@ const App: Component = () => {
                   <MiningProvider>
                     <QueueProvider>
                       <PublishingProvider>
-                        <QueueProcessor />
-                        <PublishingProcessor />
-                        <AppInit>
-                        <Router root={Layout}>
-                          <Route path="/" component={Home} />
-                          <Route path="/feed" component={Feed} />
-                          <Route path="/about" component={About} />
-                          <Route path="/relays" component={Relays} />
-                          <Route path="/diagnostics" component={Diagnostics} />
-                          <Route path="/stats" component={Stats} />
-                          <Route path="/preferences" component={Preferences} />
-                          <Route path="/n/:id" component={NoteDetail} />
-                          <Route path="/e/:id" component={NoteDetail} />
-                          <Route path="/p/:identifier" component={ProfileDetail} />
-                        </Router>
-                      </AppInit>
+                        <FollowsProvider>
+                          <TimelineProvider>
+                            <QueueProcessor />
+                            <PublishingProcessor />
+                            <AppInit>
+                              <Router root={Layout}>
+                                <Route path="/" component={Landing} />
+                                <Route path="/landing" component={Landing} />
+                                <Route path="/onboarding" component={Onboarding} />
+                                <Route path="/feed" component={Feed} />
+                                <Route path="/timeline/global" component={TimelineGlobalRedirect} />
+                                <Route path="/about" component={About} />
+                                <Route path="/relays" component={Relays} />
+                                <Route path="/diagnostics" component={Diagnostics} />
+                                <Route path="/stats" component={Stats} />
+                                <Route path="/preferences" component={Preferences} />
+                                <Route path="/n/:id" component={NoteDetail} />
+                                <Route path="/e/:id" component={NoteDetail} />
+                                <Route path="/p/:identifier" component={ProfileDetail} />
+                              </Router>
+                            </AppInit>
+                          </TimelineProvider>
+                        </FollowsProvider>
                       </PublishingProvider>
                     </QueueProvider>
                   </MiningProvider>

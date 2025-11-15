@@ -4,6 +4,7 @@ import { getPowDifficulty, hasValidPow } from '../lib/pow';
 import { ProfileName } from './ProfileName';
 import { ReplyComposer } from './ReplyComposer';
 import { ParsedContent } from './ParsedContent';
+import { FollowButton } from './FollowButton';
 
 interface ThreadedRepliesProps {
   replies: NostrEvent[];
@@ -49,6 +50,7 @@ const ThreadedReply: Component<{
       <div class="flex items-start justify-between mb-2">
         <div class="flex items-center gap-2 flex-1 min-w-0">
           <ProfileName pubkey={props.node.event.pubkey} asLink={true} class="font-mono text-xs text-text-secondary" />
+          <FollowButton pubkey={props.node.event.pubkey} size="xs" variant="ghost" />
           <div class="text-xs text-text-tertiary">{timestamp()}</div>
           <Show when={powDifficulty() > 0}>
             <span class="text-xs font-mono text-accent">
@@ -242,6 +244,7 @@ export const ThreadedReplies: Component<ThreadedRepliesProps> = (props) => {
                 <div class="flex items-start justify-between mb-2">
                   <div class="flex items-center gap-2 flex-1 min-w-0">
                     <ProfileName pubkey={reply.pubkey} asLink={true} class="font-mono text-xs text-text-secondary" />
+                    <FollowButton pubkey={reply.pubkey} size="xs" variant="ghost" />
                     <div class="text-xs text-text-tertiary">
                       {new Date(reply.created_at * 1000).toLocaleString()}
                     </div>

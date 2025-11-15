@@ -15,6 +15,7 @@ import { FacebookEmbed } from './FacebookEmbed';
 import { SubstackEmbed } from './SubstackEmbed';
 import { MediumEmbed } from './MediumEmbed';
 import { BasicLinkCard } from './BasicLinkCard';
+import { PaymentQr } from './PaymentQr';
 
 interface ParsedContentProps {
   content: string;
@@ -208,6 +209,18 @@ export const ParsedContent: Component<ParsedContentProps> = (props) => {
 
               case 'link':
                 return <BasicLinkCard url={entity.data.url} />;
+
+              case 'bitcoin':
+                return <PaymentQr value={entity.data.value} label="Bitcoin Address" subtitle="Scan or copy to pay" />;
+
+              case 'lightning':
+                return <PaymentQr value={entity.data.value} label="Lightning Invoice" subtitle="Scan to pay via Lightning" />;
+
+              case 'lnurl':
+                return <PaymentQr value={entity.data.value} label="LNURL" subtitle="Lightning address" />;
+
+              case 'cashu':
+                return <PaymentQr value={entity.data.value} label="Cashu Token" subtitle="Redeem with a Cashu wallet" />;
 
               case 'nsec':
                 // Don't render nsec (private key) - just show warning

@@ -59,6 +59,8 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
       visibilityRootMarginPx: 300,
       interactionsMaxConcurrent: 3,
       interactionsQueueMax: 24,
+      timelineRelayLimit: 8,
+      interactionRelayLimit: 12,
       prefetchInteractionsCount: 3,
       anchorPreserveDelayMs: 50,
       topThresholdPx: 100,
@@ -91,6 +93,8 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
     visibilityRootMarginPx: 300,
     interactionsMaxConcurrent: 3,
     interactionsQueueMax: 24,
+    timelineRelayLimit: 8,
+    interactionRelayLimit: 12,
     prefetchInteractionsCount: 3,
   };
 
@@ -266,6 +270,24 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
               class="w-full h-1"
             />
             <div class="text-xs opacity-50">Prevents missed notes between windows</div>
+          </div>
+
+          {/* Cache Hydration */}
+          <div class="space-y-1">
+            <label class="flex justify-between text-xs text-text-secondary">
+              <span title="How many cached notes render instantly on load">💾 Cached Notes</span>
+              <span class="font-mono">{prefs().hydrationLimit}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="200"
+              step="10"
+              value={prefs().hydrationLimit}
+              onInput={(e) => handleUpdate('hydrationLimit', Number(e.currentTarget.value))}
+              class="w-full h-1"
+            />
+            <div class="text-xs opacity-50">Higher values show more cached notes immediately (default: 50)</div>
           </div>
 
           {/* Prefetch Interactions */}

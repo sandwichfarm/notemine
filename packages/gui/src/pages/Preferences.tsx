@@ -474,6 +474,44 @@ export const Preferences: Component = () => {
               </p>
             </div>
 
+            {/* Timeline Relay Limit */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Timeline Relay Fan-out: {preferences().feedParams.timelineRelayLimit}
+              </label>
+              <input
+                type="range"
+                min="2"
+                max="24"
+                step="1"
+                value={preferences().feedParams.timelineRelayLimit}
+                onInput={(e) => updateFeedParam('timelineRelayLimit', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Maximum number of relays queried for the main timeline (default: 8). Lower values use fewer WebSocket connections.
+              </p>
+            </div>
+
+            {/* Interaction Relay Limit */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Interaction Relay Fan-out: {preferences().feedParams.interactionRelayLimit}
+              </label>
+              <input
+                type="range"
+                min="4"
+                max="32"
+                step="1"
+                value={preferences().feedParams.interactionRelayLimit}
+                onInput={(e) => updateFeedParam('interactionRelayLimit', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Limits how many relays are contacted when fetching replies/reactions (default: 12). Lower values reduce bursty fan-out.
+              </p>
+            </div>
+
             {/* Visibility Dwell */}
             <div class="card">
               <label class="block text-sm font-medium text-text-secondary mb-2">
@@ -1124,6 +1162,77 @@ export const Preferences: Component = () => {
                 </div>
               </div>
             </Show>
+          </div>
+          <div class="card mt-4">
+            <h3 class="text-sm font-medium text-text-secondary mb-2">Cache Backend</h3>
+            <p class="text-xs text-text-tertiary opacity-70">
+              Choose how the local event cache stores data. Worker Relay is recommended for fastest, most reliable performance.
+            </p>
+            <div class="mt-4 space-y-3">
+              <label class="flex items-start gap-3 cursor-pointer p-3 rounded border border-border hover:border-accent transition-colors">
+                <input
+                  type="radio"
+                  name="cache-backend"
+                  value="worker-relay"
+                  checked={preferences().cacheBackendPreference === 'worker-relay'}
+                  onChange={(e) => {
+                    if (e.currentTarget.checked) {
+                      updatePreference('cacheBackendPreference', 'worker-relay');
+                    }
+                  }}
+                  class="mt-1 w-4 h-4 text-accent focus:ring-accent"
+                />
+                <div>
+                  <span class="block text-sm font-medium text-text-primary">Worker Relay (recommended)</span>
+                  <p class="text-xs text-text-tertiary opacity-70">
+                    Leverages the worker-relay module with OPFS storage for persistent, resumable caching.
+                  </p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 cursor-pointer p-3 rounded border border-border hover:border-accent transition-colors">
+                <input
+                  type="radio"
+                  name="cache-backend"
+                  value="turso-wasm"
+                  checked={preferences().cacheBackendPreference === 'turso-wasm'}
+                  onChange={(e) => {
+                    if (e.currentTarget.checked) {
+                      updatePreference('cacheBackendPreference', 'turso-wasm');
+                    }
+                  }}
+                  class="mt-1 w-4 h-4 text-accent focus:ring-accent"
+                />
+                <div>
+                  <span class="block text-sm font-medium text-text-primary">Turso WASM</span>
+                  <p class="text-xs text-text-tertiary opacity-70">
+                    Uses Turso&apos;s WASM SQLite bindings directly. Useful as a fallback if Worker Relay is unavailable.
+                  </p>
+                </div>
+              </label>
+              <label class="flex items-start gap-3 cursor-pointer p-3 rounded border border-border hover:border-accent transition-colors">
+                <input
+                  type="radio"
+                  name="cache-backend"
+                  value="off"
+                  checked={preferences().cacheBackendPreference === 'off'}
+                  onChange={(e) => {
+                    if (e.currentTarget.checked) {
+                      updatePreference('cacheBackendPreference', 'off');
+                    }
+                  }}
+                  class="mt-1 w-4 h-4 text-accent focus:ring-accent"
+                />
+                <div>
+                  <span class="block text-sm font-medium text-text-primary">Disable Cache</span>
+                  <p class="text-xs text-text-tertiary opacity-70">
+                    Skip initializing the local cache entirely. Fetches will always come from relays (requires reload).
+                  </p>
+                </div>
+              </label>
+            </div>
+            <p class="text-xs text-text-tertiary opacity-60 mt-4">
+              Changes take effect after you reload the app.
+            </p>
           </div>
         </section>
 

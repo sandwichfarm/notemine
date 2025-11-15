@@ -23,11 +23,18 @@ export interface Profile {
   event?: NostrEvent;
 }
 
+interface UseProfileOptions {
+  additionalRelays?: (() => string[] | undefined) | string[];
+}
+
 /**
  * Hook to fetch and subscribe to profile metadata (kind 0) for a pubkey
  * Uses inbox/outbox relays if available, falls back to active relays
  */
-export function useProfile(pubkeyInput: string | (() => string | undefined) | undefined): () => Profile {
+export function useProfile(
+  pubkeyInput: string | (() => string | undefined) | undefined,
+  options?: UseProfileOptions
+): () => Profile {
   const [profile, setProfile] = createSignal<Profile>({
     pubkey: '',
     metadata: null,
@@ -84,7 +91,14 @@ export function useProfile(pubkeyInput: string | (() => string | undefined) | un
 
       debug(`[useProfile] Fetching metadata for ${resolvedPubkey.slice(0, 8)} from profile relays`);
 
-      const relays = PROFILE_RELAYS;
+      const additional =
+        typeof options?.additionalRelays === 'function'
+          ? options.additionalRelays() ?? []
+          : options?.additionalRelays ?? [];
+      const relays =
+        additional.length > 0
+          ? Array.from(new Set([...PROFILE_RELAYS, ...additional.filter(Boolean)]))
+          : PROFILE_RELAYS;
       const filter = {
         kinds: [0],
         authors: [resolvedPubkey],

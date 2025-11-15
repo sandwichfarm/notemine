@@ -9,7 +9,12 @@ import type { ISigner } from 'applesauce-signers';
 import { relayPool } from '../lib/applesauce';
 import { Observable } from 'rxjs';
 import { debug } from '../lib/debug';
-import { saveAnonKey, loadAnonKey, clearAnonKey } from '../lib/anon-storage';
+import {
+  saveAnonKey,
+  loadAnonKey,
+  clearAnonKey,
+  setPersistedAuthMode,
+} from '../lib/anon-storage';
 import {
   saveSession,
   loadSession,
@@ -37,6 +42,7 @@ export interface User {
 interface UserContextType {
   user: () => User | null;
   authAnon: (secret?: Uint8Array, persist?: boolean) => void;
+  authWithSecretKey: (secret: Uint8Array, persist?: boolean) => Promise<void>;
   authExtension: (saveToSession?: boolean) => Promise<void>;
   authPrivateKey: (keyInput: string) => Promise<void>;
   authBunker: (bunkerUri: string, saveToSession?: boolean) => Promise<void>;
@@ -85,6 +91,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
     // Save to localStorage if persist is true
     if (persist) {
       saveAnonKey(finalSecret);
+      setPersistedAuthMode('anon');
     }
 
     setUser({
@@ -94,6 +101,31 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       authMethod: 'anon',
       isAnonPersisted: persist,
     });
+  };
+
+  const authWithSecretKey = async (secret: Uint8Array, persist: boolean = true) => {
+    try {
+      const signer = PrivateKeySigner.fromKey(secret);
+      const pubkey = await signer.getPublicKey();
+
+      if (persist) {
+        saveAnonKey(secret);
+        setPersistedAuthMode('private');
+      }
+
+      setUser({
+        isAnon: false,
+        pubkey,
+        signer,
+        authMethod: 'privatekey',
+        secret,
+      });
+
+      await fetchUserData(pubkey);
+    } catch (error) {
+      console.error('[Auth] Failed to initialize with mined key:', error);
+      throw error;
+    }
   };
 
   const authExtension = async (saveToSession: boolean = true) => {
@@ -667,6 +699,7 @@ export const UserProvider: ParentComponent = (props): JSX.Element => {
       value={{
         user,
         authAnon,
+        authWithSecretKey,
         authExtension,
         authPrivateKey,
         authBunker,

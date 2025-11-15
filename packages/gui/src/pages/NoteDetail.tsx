@@ -12,6 +12,7 @@ import { ParsedContent } from '../components/ParsedContent';
 import { ReactionPicker } from '../components/ReactionPicker';
 import { ReplyComposer } from '../components/ReplyComposer';
 import { ProfilePowBadge } from '../components/ProfilePowBadge';
+import { FollowButton } from '../components/FollowButton';
 import { useProfile } from '../hooks/useProfile';
 
 // Minimum POW threshold for replies/reactions
@@ -533,43 +534,7 @@ const NoteDetail: Component = () => {
         ← back to feed
       </button>
 
-      {/* Compact Profile Section */}
-      <Show when={false && note() && authorProfile()}>
-        <div class="p-4 border-l-2 border-l-accent/30">
-          <div class="flex items-center gap-3">
-            {/* Avatar */}
-            <Show when={authorProfile().metadata?.picture}>
-              <img
-                src={authorProfile().metadata!.picture}
-                alt="Profile"
-                class="w-12 h-12 rounded-full object-cover"
-              />
-            </Show>
 
-            {/* Profile Info */}
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <ProfileName
-                  pubkey={note()!.pubkey}
-                  asLink={true}
-                  class="font-medium text-base text-text-primary"
-                />
-                <Show when={authorProfile().event?.id}>
-                  <ProfilePowBadge
-                    profileEventId={authorProfile().event!.id}
-                    style="inline"
-                  />
-                </Show>
-              </div>
-              <Show when={authorProfile().metadata?.about}>
-                <p class="text-sm text-text-secondary mt-1 line-clamp-2">
-                  {authorProfile().metadata!.about}
-                </p>
-              </Show>
-            </div>
-          </div>
-        </div>
-      </Show>
 
       {/* Loading State */}
       <Show when={loading()}>
@@ -654,6 +619,45 @@ const NoteDetail: Component = () => {
             
           </div>
 
+           {/* Compact Profile Section */}
+          <Show when={note() && authorProfile()}>
+            <div class="note !bg-purple-400/50">
+              <div class="flex items-center gap-3">
+                {/* Avatar */}
+                <Show when={authorProfile().metadata?.picture}>
+                  <img
+                    src={authorProfile().metadata!.picture}
+                    alt="Profile"
+                    class="w-12 h-12 rounded-full object-cover"
+                  />
+                </Show>
+
+                {/* Profile Info */}
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <ProfileName
+                      pubkey={note()!.pubkey}
+                      asLink={true}
+                      class="font-medium text-base text-text-primary"
+                    />
+                    <Show when={authorProfile().event?.id}>
+                      <ProfilePowBadge
+                        profileEventId={authorProfile().event!.id}
+                        style="inline"
+                      />
+                    </Show>
+                    <FollowButton pubkey={note()!.pubkey} size="sm" variant="solid" />
+                  </div>
+                  <Show when={authorProfile().metadata?.about}>
+                    <p class="text-sm text-text-secondary mt-1 line-clamp-2">
+                      {authorProfile().metadata!.about}
+                    </p>
+                  </Show>
+                </div>
+              </div>
+            </div>
+          </Show>
+
           {/* ROOT REPLY COMPOSER - Default visible below root post */}
           <Show when={showRootReplyComposer()}>
             <div class="mb-6">
@@ -680,6 +684,7 @@ const NoteDetail: Component = () => {
               </span>
             </label>
           </div>
+          
 
           {/* REPLIES - Threaded comments section */}
           <Show when={filteredReplies().length > 0}>
@@ -719,6 +724,7 @@ const NoteDetail: Component = () => {
       </Portal>
     </div>
   );
+  
 };
 
 export default NoteDetail;

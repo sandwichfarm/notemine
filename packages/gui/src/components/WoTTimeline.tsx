@@ -1,6 +1,6 @@
 import { Component, createSignal, onCleanup, For, Show, createEffect, untrack } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays, eventStore, createTimelineStream, getActiveRelays, relayConnectionManager, PROFILE_RELAYS } from '../lib/applesauce';
+import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays, eventStore, createTimelineStream, getActiveRelays, relayConnectionManager, PROFILE_RELAYS, DEFAULT_POW_RELAY } from '../lib/applesauce';
 import { getCachedEventsByFilters } from '../lib/cache';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
@@ -8,7 +8,8 @@ import { AlgorithmControls } from './AlgorithmControls';
 import { FeedControls } from './FeedControls';
 import { NewNotesBar } from './NewNotesBar';
 import { Subscription } from 'rxjs';
-import { usePreferences, type UserPreferences } from '../providers/PreferencesProvider';
+import { usePreferences } from '../providers/PreferencesProvider';
+import type { UserPreferences } from '../types/preferences';
 import { loadWoTFeed, type RelayMap } from '../services/AdaptiveFeedService';
 import { IntakePrioritizer } from '../services/IntakePrioritizer';
 import { MediaPreloader } from '../services/MediaPreloader';
@@ -16,6 +17,9 @@ import type { PreparedNote } from '../types/FeedTypes';
 import { configureVisibilityObserver, getVisibilityObserver } from '../services/VisibilityObserver';
 import { configureInteractionsCoordinator, getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 import { VirtualizedNoteSlot } from './VirtualizedNoteSlot';
+import { FeedViewMenu } from './FeedViewMenu';
+import { getFeedWidthClass } from '../lib/feedViewOptions';
+import { consumeFeedPrefetch } from '../lib/feed-prefetcher';
 
 interface WoTTimelineProps {
   userPubkey: string;
@@ -75,6 +79,10 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   const [hydratedNotes, setHydratedNotes] = createSignal<Record<string, boolean>>({});
   const [virtualizedNotes, setVirtualizedNotes] = createSignal<Record<string, number>>({});
   const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes visible without scrolling
+  const timelineRelayLimit = () => Math.max(1, preferences().feedParams.timelineRelayLimit || 8);
+  const interactionRelayLimit = () => Math.max(1, preferences().feedParams.interactionRelayLimit || 8);
+  const applyRelayLimit = (relays: string[], limit: number) =>
+    Array.from(new Set([DEFAULT_POW_RELAY, ...relays])).slice(0, limit);
 
   const bumpInteractionTick = (id: string) => {
     setInteractionTicks(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
@@ -335,8 +343,9 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       const prepared = await preloader.prepareBatch(prioritized, prefs.feedParams.preloaderTimeoutMs);
 
       // Phase 1: Batch insertion - build array first, then single setAllNotes call
+      const maxPrepared = Math.max(10, prefs.feedParams.initialLimit || 20);
       const newNotes: ScoredNote[] = [];
-      for (const prep of prepared) {
+      for (const prep of prepared.slice(0, maxPrepared)) {
         const event = prep.note.event;
         if (eventCache.has(event.id)) continue;
 
@@ -540,8 +549,14 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
             setLoadingStatus(`✨ Showing ${cachedNotes.length} cached notes...`);
 
             // Phase 2: Set initial render count for cached notes
-            const PAGE_SIZE = prefs.feedParams.initialLimit || 20;
-            setRenderCount(Math.min(cachedNotes.length, PAGE_SIZE));
+            const hydrationVisible = Math.max(
+              1,
+              Math.min(
+                cachedNotes.length,
+                prefs.feedParams.hydrationLimit || cachedNotes.length
+              )
+            );
+            setRenderCount(hydrationVisible);
             recalculateScoresImmediate();
           }
           // Phase 1: Debug logging for cache performance
@@ -574,24 +589,28 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
         console.log('[WoTTimeline] Relay map ready for', authorRelays.size, 'authors');
         currentAuthorRelays = authorRelays;
 
-        // Step 4: Start adaptive feed loading
+        // Step 4: Start adaptive feed loading (reuse onboarding prefetch when possible)
         setLoadingStatus(getRandomFunMessage());
 
-        // Get feed parameters from preferences (already captured)
         const feedParams = prefs.feedParams;
         const debugMode = prefs.feedDebugMode || false;
-        const feedObservable = loadWoTFeed(follows, authorRelays, {
-          desiredCount: props.limit ?? feedParams.desiredCount,
-          initialLimit: feedParams.initialLimit,
-          maxLimit: feedParams.maxLimit,
-          initialHorizonMs: feedParams.initialHorizonHours * 60 * 60 * 1000,
-          maxHorizonMs: feedParams.maxHorizonDays * 24 * 60 * 60 * 1000,
-          growthFast: feedParams.growthFast,
-          growthSlow: feedParams.growthSlow,
-          overlapRatio: feedParams.overlapRatio,
-          overfetch: feedParams.overfetch,
-          skewMarginMs: feedParams.skewMarginMinutes * 60 * 1000,
-        }, debugMode);
+        const prefetchHandle = consumeFeedPrefetch(follows);
+        if (prefetchHandle) {
+          subscriptions.push(prefetchHandle.upstream);
+        }
+        const feedObservable = prefetchHandle?.stream ??
+          loadWoTFeed(follows, authorRelays, {
+            desiredCount: props.limit ?? feedParams.desiredCount,
+            initialLimit: feedParams.initialLimit,
+            maxLimit: feedParams.maxLimit,
+            initialHorizonMs: feedParams.initialHorizonHours * 60 * 60 * 1000,
+            maxHorizonMs: feedParams.maxHorizonDays * 24 * 60 * 60 * 1000,
+            growthFast: feedParams.growthFast,
+            growthSlow: feedParams.growthSlow,
+            overlapRatio: feedParams.overlapRatio,
+            overfetch: feedParams.overfetch,
+            skewMarginMs: feedParams.skewMarginMinutes * 60 * 1000,
+          }, debugMode);
 
         // Phase 1: Mark initial network stream active
         initialStreamActive = true;
@@ -891,7 +910,13 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     currentAuthors.forEach(a => (currentAuthorRelays.get(a) || []).forEach((r) => liveRelaysSet.add(r)));
     myInboxRelays.forEach((r) => liveRelaysSet.add(r));
     let liveRelays = Array.from(liveRelaysSet);
-    if (liveRelays.length === 0) liveRelays = getActiveRelays();
+    if (liveRelays.length === 0) {
+      liveRelays = relayConnectionManager.getTimelineRelays(timelineRelayLimit());
+    }
+    if (liveRelays.length === 0) {
+      liveRelays = getActiveRelays();
+    }
+    liveRelays = applyRelayLimit(liveRelays, timelineRelayLimit());
 
     const live$ = createTimelineStream(
       liveRelays,
@@ -941,8 +966,10 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   // Phase 2: Lazy loading handler using InteractionsCoordinator (defined outside createEffect so it's stable)
   const handleNoteVisible = async (eventId: string) => {
     if (hydratedNotes()[eventId]) return;
-    if (hydratingNotes.has(eventId)) return;
-    hydratingNotes.add(eventId);
+    if (!hydratingNotes.has(eventId)) {
+      hydratingNotes.add(eventId);
+      markHydrated(eventId);
+    }
 
     // Build a robust relay set for interactions:
     // CRITICAL: Interactions (replies/reactions) are addressed to the NOTE AUTHOR's inbox relays
@@ -982,7 +1009,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     // Include profile relays as additional fallback (often host widely used infra)
     PROFILE_RELAYS.forEach(r => relaySet.add(r));
 
-    const interactionRelays = Array.from(relaySet);
+    relaySet.add(DEFAULT_POW_RELAY);
+    const interactionRelays = applyRelayLimit(Array.from(relaySet), interactionRelayLimit());
     if (interactionRelays.length === 0) {
       console.warn('[WoTTimeline] No relays available for interactions fetch');
       markHydrated(eventId);
@@ -1274,15 +1302,27 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   // Reload feed when feed params change
   const handleFeedParamsUpdate = () => {
     console.log('[WoTTimeline] Feed params updated, triggering reload...');
-    setReloadTrigger(prev => prev + 1); // Increment to trigger createEffect
+    setRenderCount(0);
+    lastLoadTs = 0;
+    lastGrowthTs = 0;
+    if (loadMoreObserver && bottomSentinelRef) {
+      try { loadMoreObserver.unobserve(bottomSentinelRef); } catch {}
+    }
+    loadMoreObserver = null;
+    setHasMore(true);
+    setLoadingMore(false);
+    setReloadTrigger(prev => prev + 1);
   };
 
+  const feedWidthClass = () => getFeedWidthClass(preferences().feedView?.widthPreset);
+
   return (
-    <div ref={feedContainerRef} class="w-full max-w-2xl mx-auto space-y-4">
+    <div ref={feedContainerRef} class={`w-full ${feedWidthClass()} mx-auto space-y-4`}>
       {/* Feed Settings and Algorithm Controls - Inline */}
       <Show when={!loading()}>
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3">
           <FeedControls onUpdate={handleFeedParamsUpdate} />
+          <FeedViewMenu />
           <Show when={notes().length > 0}>
             <AlgorithmControls onUpdate={recalculateScoresImmediate} />
           </Show>
@@ -1371,12 +1411,12 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
           </Show>
 
           {/* Scroll affordance */}
-          <Show when={hasMore()}>
+          {/* <Show when={hasMore()}>
             <div class="text-center text-xs text-text-tertiary flex items-center justify-center gap-2 py-3">
               <span class="inline-block h-2 w-2 rounded-full bg-text-tertiary animate-pulse" />
               <span>{loadingMore() ? 'Fetching more notes…' : 'Scroll to load more notes'}</span>
             </div>
-          </Show>
+          </Show> */}
 
           {/* End of feed */}
           <Show when={!hasMore() && !loadingMore()}>

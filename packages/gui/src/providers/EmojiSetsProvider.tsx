@@ -2,7 +2,7 @@ import { createContext, useContext, ParentComponent, JSX, createSignal, Accessor
 import type { NostrEvent } from 'nostr-tools/core';
 import { relayPool, eventStore } from '../lib/applesauce';
 import { debug } from '../lib/debug';
-import type { Emoji } from './EmojiProvider';
+import type { Emoji } from '../types/emoji';
 
 // EmojiSet data structure (NIP-51 kind 10030)
 export interface EmojiSet {

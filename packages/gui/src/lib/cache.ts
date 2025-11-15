@@ -235,8 +235,8 @@ export interface CacheMetrics {
   avgFlushDurationMs: number;
 }
 
-const CACHE_BACKEND_STORAGE_KEY = 'notemine:cacheBackendPreference';
-const DEFAULT_CACHE_BACKEND: CacheBackend = 'turso-wasm';
+export const CACHE_BACKEND_STORAGE_KEY = 'notemine:cacheBackendPreference';
+const DEFAULT_CACHE_BACKEND: CacheBackend = 'worker-relay';
 const WORKER_DB_PATH = 'notemine-worker-cache.db';
 
 let activeCacheBackend: CacheBackend | null = null;
@@ -584,10 +584,10 @@ export async function initializeCache(options?: {
   }
 
   const preferred = resolvePreferredBackend();
-  if (preferred === 'worker-relay') {
-    console.warn('[Cache] Worker relay backend temporarily disabled due to stability issues. Falling back to Turso WASM.');
-  }
-  const backendOrder: CacheBackend[] = ['turso-wasm'];
+  debug('[Cache] Preferred backend:', preferred);
+
+  const backendOrder: CacheBackend[] =
+    preferred === 'turso-wasm' ? ['turso-wasm', 'worker-relay'] : ['worker-relay', 'turso-wasm'];
 
   let lastError: unknown = null;
 
@@ -882,42 +882,9 @@ export function setupCachePersistence(mainEventStore: any): void {
           return result;
         }
         // Fire-and-forget; metrics reflect successful writes only
-        cacheDatabase
-          .add(event)
-          .then(() => {
-            cacheMetrics.totalEventsWritten += 1;
-            cacheMetrics.lastFlushDurationMs = 0;
-            cacheMetrics.lastFlushTimestamp = Date.now();
-            if (event?.id) rememberEventId(event.id);
-          })
-          .catch(async (error: any) => {
-            if (isDuplicateConstraint(error)) return; // ignore duplicates
-            const errorStr = String(error);
-            if (errorStr.includes('quota') || errorStr.includes('QuotaExceededError') || errorStr.includes('storage')) {
-              cacheMetrics.persistenceDisabled = true;
-              cacheMetrics.quotaErrorCount++;
-              cacheMetrics.lastQuotaError = Date.now();
-              console.error('[Cache] Storage quota exceeded (add) - disabling temporarily');
-              setTimeout(() => {
-                compactCache().then(() => (cacheMetrics.persistenceDisabled = false));
-              }, 1000);
-              return;
-            }
-            // Fallback: check if event exists and suppress error if so
-            if (event?.id && cacheDatabase) {
-              try {
-                const existing = await cacheDatabase.getByFilters([{ ids: [event.id] }]);
-                if (existing && existing.length > 0) {
-                  rememberEventId(event.id);
-                  return;
-                }
-              } catch (e) {
-                // ignore
-              }
-            }
-            cacheMetrics.flushErrorCount++;
-            console.error('[Cache] Error persisting event (add hook):', error);
-          });
+        cacheDatabase.add(event).catch(() => {
+          // swallow errors; batch flush handles retries/logging
+        });
       }
       return result;
     };

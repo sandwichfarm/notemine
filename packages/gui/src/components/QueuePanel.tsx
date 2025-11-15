@@ -183,7 +183,7 @@ export const QueuePanel: Component = () => {
             <select
               value={preferences().queueOrderingStrategy}
               onChange={(e) => handleStrategyChange(e.currentTarget.value as QueueOrderingStrategy)}
-              class="text-xs px-3 py-1.5 bg-bg-tertiary text-text-primary rounded hover:bg-bg-tertiary/80 transition-colors cursor-pointer border border-bg-tertiary focus:border-accent focus:outline-none"
+              class="text-xs px-3 py-1.5 rounded transition-colors cursor-pointer border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] dark:bg-[var(--bg-secondary)] hover:bg-[var(--bg-secondary)]/80 focus:border-[var(--accent)] focus:outline-none"
               title="Queue ordering strategy"
             >
               <option value="lowDifficultyFirst">⚡ Low Diff (default)</option>

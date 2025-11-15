@@ -4,7 +4,7 @@ import { getPowDifficulty } from '../lib/pow';
 import { useQueue } from '../providers/QueueProvider';
 import { useUser } from '../providers/UserProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
-import type { Emoji } from '../providers/EmojiProvider';
+import type { Emoji } from '../types/emoji';
 
 interface ReactionBreakdownProps {
   reactions: NostrEvent[];

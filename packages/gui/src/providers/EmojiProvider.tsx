@@ -1,24 +1,7 @@
 import { createContext, useContext, ParentComponent, JSX, createSignal, Accessor } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-
-// Emoji data structure
-export interface Emoji {
-  shortcode: string;
-  url: string;
-  m?: string; // MIME type
-  w?: number; // width
-  h?: number; // height
-  alt?: string; // alt text
-}
-
-// Default emoji pack (commonly used emojis)
-const DEFAULT_EMOJIS: Emoji[] = [
-  { shortcode: 'bitcoin', url: 'https://i.nostr.build/bitcoin.png', alt: 'Bitcoin' },
-  { shortcode: 'lightning', url: 'https://i.nostr.build/lightning.png', alt: 'Lightning' },
-  { shortcode: 'zap', url: 'https://i.nostr.build/zap.png', alt: 'Zap' },
-  { shortcode: 'nostr', url: 'https://i.nostr.build/nostr.png', alt: 'Nostr' },
-  { shortcode: 'notemine', url: 'https://notemine.io/favicon.png', alt: 'Notemine' },
-];
+import type { Emoji } from '../types/emoji';
+import { getDefaultEmojis } from '../config/defaults';
 
 // Emoji registry with source tracking (for global entries only)
 interface RegistryEntry extends Emoji {
@@ -50,7 +33,7 @@ const EmojiContext = createContext<EmojiContextType>();
 export const EmojiProvider: ParentComponent = (props): JSX.Element => {
   // Global registry for defaults and user emojis
   const initialRegistry = new Map<string, RegistryEntry>();
-  DEFAULT_EMOJIS.forEach(emoji => {
+  getDefaultEmojis().forEach(emoji => {
     initialRegistry.set(emoji.shortcode, { ...emoji, source: 'default' });
   });
   const [registry, setRegistry] = createSignal<Map<string, RegistryEntry>>(initialRegistry);

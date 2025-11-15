@@ -12,28 +12,15 @@ import {
   createReactionsLoader,
 } from 'applesauce-loaders/loaders';
 import type { TimelineLoaderOptions } from 'applesauce-loaders/loaders/timeline-loader';
+import { DEFAULT_POW_RELAY, PROFILE_RELAYS } from '../config/defaults';
+
+export { DEFAULT_POW_RELAY, PROFILE_RELAYS };
 
 // Create singleton EventStore
 export const eventStore = new EventStore();
 
 // Create singleton RelayPool
 export const relayPool = new RelayPool();
-
-// Default POW relay - switches based on environment
-export const DEFAULT_POW_RELAY = import.meta.env.DEV
-  ? 'ws://localhost:3334'
-  : 'wss://notemine.io';
-
-// Well-known profile relays for kind 0 (profiles) and kind 10002 (relay lists)
-// These are always used for fetching profile metadata
-export const PROFILE_RELAYS = [
-  'wss://purplepag.es',
-  'wss://user.kindpag.es',
-  'wss://profiles.nostr1.com',
-  'wss://relay.damus.io',
-  'wss://relay.primal.net',
-  'wss://relay.nostr.band',
-];
 
 import { createSignal } from 'solid-js';
 import { debug } from '../lib/debug';

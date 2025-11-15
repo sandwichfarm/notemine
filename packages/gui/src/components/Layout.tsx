@@ -1,5 +1,5 @@
-import { Component, createSignal, Show, createEffect, createMemo } from 'solid-js';
-import { A } from '@solidjs/router';
+import { Component, createSignal, Show, createEffect, createMemo, createContext, useContext } from 'solid-js';
+import { A, useLocation } from '@solidjs/router';
 import { useTheme } from '../providers/ThemeProvider';
 import { useUser } from '../providers/UserProvider';
 import { useTooltip } from '../providers/TooltipProvider';
@@ -17,19 +17,50 @@ import { useProfile } from '../hooks/useProfile';
 import { useNip05Validation } from '../lib/nip05-validator';
 import { nip19 } from 'nostr-tools';
 import { eventStore, getUserOutboxRelaysSignal } from '../lib/applesauce';
+import { usePreferences } from '../providers/PreferencesProvider';
+import { useOnboardingGate } from '../hooks/useOnboardingGate';
+
+interface AuthModalContextValue {
+  open: () => void;
+  close: () => void;
+}
+
+const AuthModalContext = createContext<AuthModalContextValue | null>(null);
+
+export const useAuthModal = (): AuthModalContextValue => {
+  const ctx = useContext(AuthModalContext);
+  if (!ctx) {
+    throw new Error('useAuthModal must be used within Layout');
+  }
+  return ctx;
+};
 
 const Layout: Component<{ children?: any }> = (props) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, authAnon, setAnonPersistence } = useUser();
+  const { clearAnonWotPreference } = usePreferences();
+  useOnboardingGate();
   const { activeTooltip, tooltipContent, setActiveTooltip, setCloseAllPanels } = useTooltip();
   const { miningState, pauseMining } = useMining();
   const { queueState, pauseQueue, startQueue } = useQueue();
+  const location = useLocation();
   const [showLoginModal, setShowLoginModal] = createSignal(false);
   const [showProfileModal, setShowProfileModal] = createSignal(false);
   const [activePanel, setActivePanel] = createSignal<'mining' | 'user' | 'queue' | 'publishing' | null>(null);
   const [showPersistenceConfirm, setShowPersistenceConfirm] = createSignal(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = createSignal(false);
+  const [showBurnConfirm, setShowBurnConfirm] = createSignal(false);
+  const [isBurningAnon, setIsBurningAnon] = createSignal(false);
   const [headerHeight, setHeaderHeight] = createSignal(80); // Default fallback
+  const isMinimalLanding = createMemo(() => {
+    const pathname = location.pathname;
+    const onLanding = pathname === '/' || pathname === '/landing';
+    const currentUser = user();
+    const anonSession = !currentUser || currentUser.isAnon;
+    return onLanding && anonSession;
+  });
+  const isOnboardingRoute = createMemo(() => location.pathname === '/onboarding');
+  const hideChrome = createMemo(() => isMinimalLanding() || isOnboardingRoute());
 
   // Get current user's profile for display
   const userProfile = useProfile(() => user()?.pubkey);
@@ -62,6 +93,23 @@ const Layout: Component<{ children?: any }> = (props) => {
 
     return { pubkey, npub, nprofile };
   });
+
+  const handleBurnAnonKey = async () => {
+    if (!user()?.isAnon) return;
+    setIsBurningAnon(true);
+    try {
+      clearAnonWotPreference();
+      clearAnonKey();
+      await logout();
+    } catch (error) {
+      console.error('[Layout] Failed to burn anonymous key:', error);
+    } finally {
+      setIsBurningAnon(false);
+      setShowBurnConfirm(false);
+      setActivePanel(null);
+      window.location.replace('/');
+    }
+  };
 
   // Discovery status for events
   const [discoveryStatus, setDiscoveryStatus] = createSignal({
@@ -151,9 +199,16 @@ const Layout: Component<{ children?: any }> = (props) => {
   });
 
   return (
-    <div class="min-h-screen flex flex-col pb-16">
+    <AuthModalContext.Provider value={{
+      open: () => setShowLoginModal(true),
+      close: () => setShowLoginModal(false),
+    }}>
+      <div
+        class="min-h-screen flex flex-col"
+        classList={{ 'pb-16': !hideChrome() }}
+      >
       {/* Backdrop when tooltip or panel is active */}
-      <Show when={activeTooltip() || activePanel()}>
+      <Show when={!hideChrome() && (activeTooltip() || activePanel())}>
         <div
           class="fixed inset-0 bg-black/85 z-35"
           onClick={() => {
@@ -164,10 +219,11 @@ const Layout: Component<{ children?: any }> = (props) => {
       </Show>
 
       {/* Header with Mining, User, Login, Theme */}
-      <div
-        ref={headerRef}
-        class="fixed top-0 left-0 right-0 z-40 transition-all bg-bg-primary dark:bg-bg-secondary"
-      >
+      <Show when={!hideChrome()}>
+        <div
+          ref={headerRef}
+          class="fixed top-0 left-0 right-0 z-40 transition-all bg-bg-primary dark:bg-bg-secondary"
+        >
         <div class="flex items-center justify-center py-4 bg-black/90">
           <div class="flex items-center gap-2">
             {/* Pause/Resume button (far left) */}
@@ -529,6 +585,14 @@ const Layout: Component<{ children?: any }> = (props) => {
                       <span class="text-xs">🔄</span>
                     </button>
                   </Show>
+
+                  <button
+                    onClick={() => setShowBurnConfirm(true)}
+                    class="w-full px-3 py-2 text-left text-sm bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors flex items-center justify-between"
+                  >
+                    <span>Burn Key</span>
+                    <span class="text-xs">🔥</span>
+                  </button>
                 </div>
               </Show>
 
@@ -566,7 +630,8 @@ const Layout: Component<{ children?: any }> = (props) => {
             </div>
           </div>
         </Show>
-      </div>
+        </div>
+      </Show>
 
       {/* Login Modal */}
       <LoginModal
@@ -682,11 +747,48 @@ const Layout: Component<{ children?: any }> = (props) => {
         </div>
       </Show>
 
+      {/* Burn Key Confirmation */}
+      <Show when={showBurnConfirm()}>
+        <div
+          class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowBurnConfirm(false)}
+        >
+          <div
+            class="card p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 class="text-lg font-bold mb-3">Burn Anonymous Key?</h3>
+            <p class="text-sm text-text-secondary mb-4">
+              This permanently deletes your current anonymous key, clears local preferences, and restarts the session as a fresh visitor.
+            </p>
+            <div class="space-y-2">
+              <button
+                onClick={handleBurnAnonKey}
+                class="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isBurningAnon()}
+              >
+                {isBurningAnon() ? 'Burning…' : 'Burn Key'}
+              </button>
+              <button
+                onClick={() => setShowBurnConfirm(false)}
+                class="w-full px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary rounded transition-colors text-sm text-text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* Main Content */}
       <main
-        class="flex-1 px-6 py-8 transition-all"
+        class="flex-1 transition-all"
+        classList={{
+          'px-6 py-8': !hideChrome(),
+          'px-4 py-12': hideChrome(),
+        }}
         style={{
-          'padding-top': `${headerHeight()}px`
+          'padding-top': hideChrome() ? '0px' : `${headerHeight()}px`
         }}
       >
         <div class="max-w-6xl mx-auto">
@@ -695,41 +797,44 @@ const Layout: Component<{ children?: any }> = (props) => {
       </main>
 
       {/* Floating Footer */}
-      <footer class="fixed bottom-0 left-0 right-0 bg-bg-primary/80 dark:bg-bg-secondary/80 backdrop-blur-sm border-t border-border px-6 py-3 z-30">
-        <div class="max-w-6xl mx-auto flex items-center justify-between text-xs">
-          <A href="/" class="font-bold hover:text-accent transition-colors">
-            notemine.io
-          </A>
-          <div class="flex gap-4">
-            <A href="/about" class="hover:text-accent transition-colors">
-              about
+      <Show when={!hideChrome()}>
+        <footer class="fixed bottom-0 left-0 right-0 bg-bg-primary/80 dark:bg-bg-secondary/80 backdrop-blur-sm border-t border-border px-6 py-3 z-30">
+          <div class="max-w-6xl mx-auto flex items-center justify-between text-xs">
+            <A href="/" class="font-bold hover:text-accent transition-colors">
+              notemine.io
             </A>
-            <A href="/relays" class="hover:text-accent transition-colors">
-              relays
-            </A>
-            <A href="/stats" class="hover:text-accent transition-colors">
-              stats
-            </A>
-            <a
-              href="https://github.com/sandwichfarm/notemine"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="hover:text-accent transition-colors"
-            >
-              github
-            </a>
-            <a
-              href="https://crates.io/crates/notemine"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="hover:text-accent transition-colors"
-            >
-              crates.io
-            </a>
+            <div class="flex gap-4">
+              <A href="/about" class="hover:text-accent transition-colors">
+                about
+              </A>
+              <A href="/relays" class="hover:text-accent transition-colors">
+                relays
+              </A>
+              <A href="/stats" class="hover:text-accent transition-colors">
+                stats
+              </A>
+              <a
+                href="https://github.com/sandwichfarm/notemine"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="hover:text-accent transition-colors"
+              >
+                github
+              </a>
+              <a
+                href="https://crates.io/crates/notemine"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="hover:text-accent transition-colors"
+              >
+                crates.io
+              </a>
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </Show>
     </div>
+    </AuthModalContext.Provider>
   );
 };
 

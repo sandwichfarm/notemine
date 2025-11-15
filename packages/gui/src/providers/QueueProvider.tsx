@@ -4,6 +4,7 @@ import { createLocalStore } from '../lib/localStorage';
 import { debug } from '../lib/debug';
 import { computeInsertionIndex, shouldPreempt } from '../lib/queue-ordering';
 import { usePreferences } from './PreferencesProvider';
+import { createDefaultQueueState } from '../config/defaults';
 
 interface QueueContextType {
   queueState: () => QueueState;
@@ -25,23 +26,12 @@ interface QueueContextType {
 
 const QueueContext = createContext<QueueContextType>();
 
-const DEFAULT_QUEUE_STATE: QueueState = {
-  items: [],
-  activeItemId: null,
-  isProcessing: false,
-  autoProcess: true,
-};
-
 export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
   // Get preferences for queue ordering strategy
   const { preferences } = usePreferences();
 
   // Use lazy mode: keep state in-memory, only flush on page exit or critical operations
-  const store = createLocalStore<QueueState>(
-    'notemine:miningQueue',
-    DEFAULT_QUEUE_STATE,
-    { lazy: true }
-  );
+  const store = createLocalStore<QueueState>('notemine:miningQueue', createDefaultQueueState(), { lazy: true });
   const queueState = store.value;
   const setQueueState = store.setValue;
   const flushQueue = store.flush;
@@ -238,7 +228,7 @@ export const QueueProvider: Component<{ children: JSX.Element }> = (props) => {
 
   // Clear entire queue
   const clearQueue = () => {
-    setQueueState(DEFAULT_QUEUE_STATE);
+    setQueueState(createDefaultQueueState());
     debug('[Queue] Cleared all items');
     flushQueue(); // Persist immediately after queue modification
   };

@@ -5,6 +5,7 @@ import { useQueue } from '../providers/QueueProvider';
 import { nip19 } from 'nostr-tools';
 import { debug } from '../lib/debug';
 import { useNip05Validation } from '../lib/nip05-validator';
+import { DEFAULT_PROFILE_DIFFICULTY } from '../config/defaults';
 
 interface ProfileMetadata {
   name?: string;
@@ -18,7 +19,7 @@ interface ProfileMetadata {
   bot?: boolean;
 }
 
-const DEFAULT_DIFFICULTY = 20;
+const DEFAULT_DIFFICULTY = DEFAULT_PROFILE_DIFFICULTY;
 
 const Profile: Component = () => {
   const { user } = useUser();

@@ -9,6 +9,7 @@ import type {
 } from '../types/publishing';
 import { createLocalStore } from '../lib/localStorage';
 import { debug } from '../lib/debug';
+import { createDefaultPublishingState } from '../config/defaults';
 
 interface PublishingContextType {
   publishState: () => PublishingState;
@@ -30,13 +31,6 @@ interface PublishingContextType {
 
 const PublishingContext = createContext<PublishingContextType>();
 
-const DEFAULT_PUBLISHING_STATE: PublishingState = {
-  items: [],
-  activeJobId: null,
-  isProcessing: true,  // Auto-start by default
-  autoPublish: true,   // Auto-process by default
-};
-
 // Maximum attempts before marking job as failed
 const MAX_SIGN_ATTEMPTS = 20;
 const MAX_PUBLISH_ATTEMPTS = 20;
@@ -45,7 +39,7 @@ export const PublishingProvider: Component<{ children: JSX.Element }> = (props) 
   // Use lazy mode: keep state in-memory, only flush on page exit or critical operations
   const store = createLocalStore<PublishingState>(
     'notemine:publishingQueue',
-    DEFAULT_PUBLISHING_STATE,
+    createDefaultPublishingState(),
     { lazy: true }
   );
   const publishState = store.value;

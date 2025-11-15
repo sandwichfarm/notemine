@@ -3,6 +3,7 @@
  */
 
 import { beforeEach, vi } from 'vitest';
+import { TextDecoder, TextEncoder } from 'util';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -34,6 +35,14 @@ const localStorageMock = (() => {
 
 // Define localStorage on global object
 (globalThis as any).localStorage = localStorageMock as Storage;
+
+// Polyfill TextEncoder/TextDecoder for libraries that expect Node globals
+if (!(globalThis as any).TextEncoder) {
+  (globalThis as any).TextEncoder = TextEncoder;
+}
+if (!(globalThis as any).TextDecoder) {
+  (globalThis as any).TextDecoder = TextDecoder;
+}
 
 // Mock window.nostr for NIP-07 tests
 (globalThis as any).window = {

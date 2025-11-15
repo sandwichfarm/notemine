@@ -5,7 +5,7 @@
  */
 
 import type { FeedNote, PriorityConfig } from '../types/FeedTypes';
-import { DEFAULT_PRIORITY_CONFIG } from '../types/FeedTypes';
+import { DEFAULT_PRIORITY_CONFIG } from '../config/defaults';
 import { getPowDifficultyFromId } from '../lib/pow';
 
 /**

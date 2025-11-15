@@ -7,6 +7,7 @@ import { getPublishRelays, getUserOutboxRelays } from '../lib/applesauce';
 import type { NostrEvent } from 'nostr-tools/core';
 import { debug } from '../lib/debug';
 import { getPublishRelaysForInteraction } from '../lib/inbox-outbox';
+import { USER_META_RELAYS } from '../lib/user-meta-relays';
 
 /**
  * QueueProcessor handles automatic processing of queued mining operations.
@@ -121,9 +122,11 @@ export const QueueProcessor: Component = () => {
       // Import defaults upfront for fallback use
       const { DEFAULT_POW_RELAY: defaultRelay } = await import('../lib/applesauce');
       const { getWriteRelays } = await import('../lib/relay-settings');
+      const writeEnabledRelays = getWriteRelays();
 
       // Check if this is a reply or reaction (interacting with another user's content)
       const isInteraction = nextItem.type === 'reply' || nextItem.type === 'reaction';
+      const isProfile = nextItem.type === 'profile';
       const targetPubkey = isInteraction ? nextItem.tags?.find(t => t[0] === 'p')?.[1] : null;
 
       try {
@@ -153,6 +156,13 @@ export const QueueProcessor: Component = () => {
             const outboxRelays = await getUserOutboxRelays(currentUser.pubkey).catch(() => []);
             allPublishRelays = [defaultRelay, ...outboxRelays];
           }
+        } else if (isProfile) {
+          const uniqueRelays = new Set<string>([
+            defaultRelay,
+            ...USER_META_RELAYS,
+            ...writeEnabledRelays,
+          ]);
+          allPublishRelays = Array.from(uniqueRelays);
         } else {
           // For regular notes: notemine.io + NIP-66 POW relays + user's outbox relays
           try {
@@ -173,11 +183,11 @@ export const QueueProcessor: Component = () => {
       }
 
       // Get write-enabled relays from settings (safe - reads localStorage)
-      const writeEnabledRelays = getWriteRelays();
+      const forcedRelays = new Set<string>([defaultRelay, ...USER_META_RELAYS]);
 
-      // Filter to write-enabled relays, but ALWAYS include notemine.io (immutable)
+      // Filter to write-enabled relays, but ALWAYS include notemine.io + onboarding meta relays (immutable)
       const publishRelays = allPublishRelays.filter(url => {
-        return url === defaultRelay || writeEnabledRelays.includes(url);
+        return forcedRelays.has(url) || writeEnabledRelays.includes(url);
       });
 
       // Ensure at least one relay (default relay) is always included

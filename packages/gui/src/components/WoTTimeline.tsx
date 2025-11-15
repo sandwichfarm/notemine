@@ -8,7 +8,7 @@ import { AlgorithmControls } from './AlgorithmControls';
 import { FeedControls } from './FeedControls';
 import { NewNotesBar } from './NewNotesBar';
 import { Subscription } from 'rxjs';
-import { usePreferences } from '../providers/PreferencesProvider';
+import { usePreferences, type UserPreferences } from '../providers/PreferencesProvider';
 import { loadWoTFeed, type RelayMap } from '../services/AdaptiveFeedService';
 import { IntakePrioritizer } from '../services/IntakePrioritizer';
 import { MediaPreloader } from '../services/MediaPreloader';

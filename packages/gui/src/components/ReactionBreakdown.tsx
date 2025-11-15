@@ -168,11 +168,11 @@ export const ReactionBreakdown: Component<ReactionBreakdownProps> = (props) => {
   });
 
   return (
-    <div class="flex flex-wrap gap-2 opacity-70 hover:opacity-100">
+    <div class="flex flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap min-h-[28px] py-1 opacity-70 hover:opacity-100 no-scrollbar w-full">
       <For each={groupedReactions()}>
         {(group) => (
           <div
-            class="cursor-pointer flex items-center px-2 pt-1 rounded-lg bg-bg-secondary/30 dark:bg-bg-tertiary/30 bg-black/10 dark:bg-black/40 relative overflow-hidden transition-all"
+            class="cursor-pointer flex items-center px-2 py-1 rounded-lg bg-bg-secondary/30 dark:bg-bg-tertiary/30 bg-black/10 dark:bg-black/40 relative overflow-hidden transition-all shrink-0"
             classList={{
               'ring-2 ring-accent': holdingGroup()?.emoji === group.emoji,
             }}

@@ -17,7 +17,7 @@ import type { PreparedNote } from '../types/FeedTypes';
 import { getVisibilityObserver } from '../services/VisibilityObserver';
 import { getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 import { buildRelayHintsForEvent } from '../lib/relayHints';
-import { extractNoteTopics } from '../utils/topics';
+import { extractTopicsFromEvent } from '../lib/content-parser';
 
 interface NoteProps {
   event: NostrEvent;
@@ -88,7 +88,9 @@ export const Note: Component<NoteProps> = (props) => {
 
   const hasReactionPills = createMemo(() => reactionsList().length > 0);
   const relayHints = createMemo(() => buildRelayHintsForEvent(props.event));
-  const topicData = createMemo(() => extractNoteTopics(props.event));
+
+  const topicData = createMemo(() => extractTopicsFromEvent(props.event));
+
   const noteContent = () => topicData().sanitizedContent;
   const topics = () => topicData().topics;
 

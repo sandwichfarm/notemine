@@ -1,4 +1,5 @@
 import { nip19 } from 'nostr-tools';
+import type { NostrEvent } from 'nostr-tools/core';
 
 export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium' | 'link' | 'bitcoin' | 'lightning' | 'lnurl' | 'cashu';
 
@@ -99,6 +100,68 @@ const MEDIUM_REGEX = /https?:\/\/(?:www\.)?medium\.com\/(?:@([a-zA-Z0-9_-]+)|([a
  * Matches any http:// or https:// URL
  */
 const GENERIC_URL_REGEX = /https?:\/\/[^\s<>]+/gi;
+
+const INLINE_HASHTAG_REGEX = /(^|[\s\t\r\n.,!?;:])#([\p{L}\p{N}_-]+)/giu;
+
+export interface ContentTopicsResult {
+  sanitizedContent: string;
+  topics: string[];
+}
+
+function addTopic(normalizedTopics: string[], topicSet: Set<string>, topic?: string) {
+  if (!topic) return;
+  const trimmed = topic.trim();
+  if (!trimmed) return;
+  const lower = trimmed.toLowerCase();
+  if (topicSet.has(lower)) return;
+  topicSet.add(lower);
+  normalizedTopics.push(lower);
+}
+
+export function extractTopicsFromEvent(event: NostrEvent): ContentTopicsResult {
+  const content = event.content ?? '';
+  const tags = event.tags ?? [];
+
+  const normalizedTopics: string[] = [];
+  const topicSet = new Set<string>();
+
+  for (const tag of tags) {
+    if (tag[0] !== 't') continue;
+    addTopic(normalizedTopics, topicSet, tag[1]);
+  }
+
+  const inlineRegex = new RegExp(INLINE_HASHTAG_REGEX.source, INLINE_HASHTAG_REGEX.flags);
+  for (const match of content.matchAll(inlineRegex)) {
+    const topic = match[2];
+    if (!topic) continue;
+    addTopic(normalizedTopics, topicSet, topic);
+  }
+
+  if (topicSet.size === 0) {
+    return {
+      sanitizedContent: content,
+      topics: normalizedTopics,
+    };
+  }
+
+  const removalRegex = new RegExp(INLINE_HASHTAG_REGEX.source, INLINE_HASHTAG_REGEX.flags);
+  let sanitizedContent = content.replace(
+    removalRegex,
+    (fullMatch, leading: string, topic: string) => {
+      if (!topic || !topicSet.has(topic.toLowerCase())) {
+        return fullMatch;
+      }
+      return leading ?? '';
+    }
+  );
+
+  sanitizedContent = sanitizedContent.replace(/[ \t]{2,}/g, ' ');
+
+  return {
+    sanitizedContent,
+    topics: normalizedTopics,
+  };
+}
 
 /**
  * Parse a string to find all nostr: entity references

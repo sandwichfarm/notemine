@@ -62,7 +62,35 @@
   }
 
   .button {
-        @apply mb-6 bg-gray-300/30 dark:bg-black/30 rounded-none border border-black p-10 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)];
+     @apply opacity-80 mb-1 mr-1 rounded-none border border-black px-10 py-3 shadow-[0.5rem_0.5rem_rgba(0,0,0,0.6)];
+  }
+
+  .button.basic { 
+    @apply border-black/40 dark:border-black bg-gray-300/30 dark:bg-black/30;
+  }
+
+  .button.dangerous {
+     @apply border-red-300 bg-red-300/30;
+  }
+
+  .button.cautious {
+     @apply border-yellow-200 bg-yellow-300/30;
+  }
+
+  .button.info {
+     @apply border-blue-400 bg-blue-300/30;
+  }
+
+  .button.highlight {
+     @apply border-green-300 bg-green-300/30;
+  }
+
+  .button:disabled {
+    @apply opacity-30;
+  }
+
+  .button:not(:disabled):hover {
+    @apply opacity-100 text-amber-800 cursor-pointer;
   }
 
   .note {

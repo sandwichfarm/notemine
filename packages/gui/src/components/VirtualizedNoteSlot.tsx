@@ -27,7 +27,7 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   };
 
   const forceRehydrateIfVisible = () => {
-    if (!props.isVirtualized || !props.canVirtualize) return;
+    if (!currentVirtualized || !props.canVirtualize) return;
     if (!containerRef) return;
     const rect = containerRef.getBoundingClientRect();
     const placeholderHeight = rect.height;
@@ -64,8 +64,11 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
   };
 
   createEffect(() => {
-    currentVirtualized = props.isVirtualized;
-    if (!props.canVirtualize && currentVirtualized) {
+    const previousVirtualized = currentVirtualized;
+    const nextVirtualized = props.isVirtualized;
+    currentVirtualized = nextVirtualized;
+
+    if (!props.canVirtualize && nextVirtualized) {
       debug('[VirtualizedNoteSlot] forcing hydration for', props.eventId);
       props.onUnvirtualize();
       currentVirtualized = false;
@@ -73,8 +76,9 @@ export const VirtualizedNoteSlot: Component<VirtualizedNoteSlotProps> = (props) 
     if (!props.canVirtualize) {
       cancelPendingVirtualize();
     }
-    // Only force rehydrate when we just transitioned from virtualized to real
-    if (!props.isVirtualized && currentVirtualized) {
+
+    if (nextVirtualized && !previousVirtualized) {
+      // Parent reconstructed virtualization state; ensure we hydrate immediately if needed.
       queueMicrotask(() => forceRehydrateIfVisible());
     }
   });

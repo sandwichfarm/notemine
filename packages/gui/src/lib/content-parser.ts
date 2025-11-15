@@ -26,6 +26,16 @@ export interface ContentSegment {
 const NOSTR_ENTITY_REGEX = /nostr:(?:npub|note|nprofile|nevent|naddr|nsec)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+\b/g;
 
 /**
+ * Regular expression to match bare NIP-19 entities (without nostr: prefix)
+ * Matches: npub1..., note1..., nprofile1..., nevent1..., naddr1..., nsec1...
+ * IMPORTANT: Must not match when part of a URL path
+ * Uses negative lookbehind to exclude:
+ * - After :// (protocol separator)
+ * - After / (path separator, unless preceded by whitespace)
+ */
+const BARE_NIP19_REGEX = /(?:^|[\s\n\r\t()\[\]{}'"<>])(?<entity>(?:npub|note|nprofile|nevent|naddr|nsec)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+)\b/g;
+
+/**
  * Regular expression to match image URLs
  */
 const IMAGE_REGEX = /https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s]*)?/gi;
@@ -104,6 +114,51 @@ export function findNostrEntities(content: string): ParsedEntity[] {
         start: match.index!,
         end: match.index! + raw.length,
         raw,
+      });
+    } catch (error) {
+      // Skip invalid entities
+    }
+  }
+  return entities;
+}
+
+/**
+ * Parse a string to find bare NIP-19 entities (without nostr: prefix)
+ * Carefully avoids matching entities that are part of URLs
+ * @param content - The text content to parse
+ * @returns Array of parsed entities
+ */
+export function findBareNip19Entities(content: string): ParsedEntity[] {
+  const entities: ParsedEntity[] = [];
+  const matches = content.matchAll(BARE_NIP19_REGEX);
+
+  for (const match of matches) {
+    // The named group captures just the entity without the preceding character
+    const identifier = match.groups?.entity;
+    if (!identifier) continue;
+
+    // Calculate actual position (accounting for the preceding character in the match)
+    const fullMatch = match[0];
+    const precedingChar = fullMatch.substring(0, fullMatch.length - identifier.length);
+    const actualStart = match.index! + precedingChar.length;
+
+    // Additional safety check: ensure this isn't part of a URL
+    // Check what comes before the match in the content
+    const beforeMatch = content.substring(Math.max(0, actualStart - 10), actualStart);
+
+    // Skip if preceded by :// or / (URL patterns)
+    if (beforeMatch.includes('://') || beforeMatch.match(/\/[^\s]*$/)) {
+      continue;
+    }
+
+    try {
+      const decoded = nip19.decode(identifier);
+      entities.push({
+        type: decoded.type as EntityType,
+        data: decoded.data,
+        start: actualStart,
+        end: actualStart + identifier.length,
+        raw: identifier,
       });
     } catch (error) {
       // Skip invalid entities
@@ -277,8 +332,23 @@ function findMediaEntities(content: string): ParsedEntity[] {
  */
 export function parseContent(content: string): ContentSegment[] {
   const nostrEntities = findNostrEntities(content);
+  const bareNip19Entities = findBareNip19Entities(content);
   const mediaEntities = findMediaEntities(content);
-  const allEntities = [...nostrEntities, ...mediaEntities].sort((a, b) => a.start - b.start);
+
+  // Combine all entities and remove duplicates (prefer nostr: prefix over bare)
+  // If a bare entity overlaps with a nostr: entity, keep the nostr: one
+  const combinedNostr = [...nostrEntities];
+  for (const bareEntity of bareNip19Entities) {
+    const overlaps = nostrEntities.some(
+      e => (bareEntity.start >= e.start && bareEntity.start < e.end) ||
+           (bareEntity.end > e.start && bareEntity.end <= e.end)
+    );
+    if (!overlaps) {
+      combinedNostr.push(bareEntity);
+    }
+  }
+
+  const allEntities = [...combinedNostr, ...mediaEntities].sort((a, b) => a.start - b.start);
 
   if (allEntities.length === 0) {
     return [{ type: 'text', content }];

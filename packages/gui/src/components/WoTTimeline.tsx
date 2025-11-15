@@ -992,14 +992,42 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
         }
 
         const combined = new Subscription();
+        let reactionsDone = false;
+        let repliesDone = false;
+        let closed = false;
 
-        // Multi-relay REQs (let them run until scroll-away or component cleanup)
+        const finalize = (reason: string) => {
+          if (closed) return;
+          closed = true;
+          if (prefs.feedDebugMode) {
+            console.log('[WoTTimeline] Interactions fetch complete for', eventId.slice(0, 8), `(${reason})`);
+          }
+          combined.unsubscribe();
+        };
+
+        const checkComplete = () => {
+          if (reactionsDone && repliesDone) {
+            finalize('EOSE');
+          }
+        };
+
+        const timeoutId = window.setTimeout(() => finalize('timeout'), 6000);
+        combined.add(() => {
+          window.clearTimeout(timeoutId);
+        });
+
+        // Multi-relay REQs (let them run until both complete or timeout)
         const reactionsFilter: any = { kinds: [7], '#e': [eventId], limit: 1000 };
         const repliesFilter: any = { kinds: [1], '#e': [eventId], limit: 1000 };
 
         const rSub = relayPool.req(interactionRelays, reactionsFilter).subscribe({
           next: (response) => {
-            if (response !== 'EOSE' && (response as any).kind === 7) {
+            if (response === 'EOSE') {
+              reactionsDone = true;
+              checkComplete();
+              return;
+            }
+            if ((response as any)?.kind === 7) {
               const reaction = response as NostrEvent;
               const existing = reactionsCache.get(eventId) || [];
               if (!existing.find(r => r.id === reaction.id)) {
@@ -1010,13 +1038,25 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
               }
             }
           },
-          error: () => { /* ignore errors */ },
+          error: () => {
+            reactionsDone = true;
+            checkComplete();
+          },
+          complete: () => {
+            reactionsDone = true;
+            checkComplete();
+          },
         });
         combined.add(rSub);
 
         const rpSub = relayPool.req(interactionRelays, repliesFilter).subscribe({
           next: (response) => {
-            if (response !== 'EOSE' && (response as any).kind === 1) {
+            if (response === 'EOSE') {
+              repliesDone = true;
+              checkComplete();
+              return;
+            }
+            if ((response as any)?.kind === 1) {
               const reply = response as NostrEvent;
               const existing = repliesCache.get(eventId) || [];
               if (!existing.find(r => r.id === reply.id)) {
@@ -1027,7 +1067,14 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
               }
             }
           },
-          error: () => { /* ignore errors */ },
+          error: () => {
+            repliesDone = true;
+            checkComplete();
+          },
+          complete: () => {
+            repliesDone = true;
+            checkComplete();
+          },
         });
         combined.add(rpSub);
 

@@ -8,6 +8,7 @@ import { Subscription } from 'rxjs';
 import { debug } from '../lib/debug';
 import { usePreferences } from '../providers/PreferencesProvider';
 import { VirtualizedNoteSlot } from './VirtualizedNoteSlot';
+import { getInteractionsCoordinator } from '../services/InteractionsCoordinator';
 
 interface TimelineProps {
   limit?: number;
@@ -28,6 +29,7 @@ export const Timeline: Component<TimelineProps> = (props) => {
   const [hasMore, setHasMore] = createSignal(true);
   // Per-note tick to ensure Note reacts to interaction arrivals
   const [interactionTicks, setInteractionTicks] = createSignal<Record<string, number>>({});
+  const interactionsCoordinator = getInteractionsCoordinator();
 
   let subscription: Subscription | null = null;
   let loadMoreObserver: IntersectionObserver | null = null;
@@ -239,99 +241,104 @@ export const Timeline: Component<TimelineProps> = (props) => {
       return;
     }
 
-    // Fetch reactions
-    let reactionsDone = false;
-    let repliesDone = false;
-    let finished = false;
-    const finishHydration = () => {
-      if (finished) return;
-      finished = true;
-      markHydrated(eventId);
-    };
-    const maybeFinish = () => {
-      if (reactionsDone && repliesDone) {
-        finishHydration();
-      }
-    };
+    const queued = interactionsCoordinator.request({
+      noteId: eventId,
+      fetcher: () => {
+        const combined = new Subscription();
+        let reactionsDone = false;
+        let repliesDone = false;
+        let finished = false;
 
-    const reactionsObs = relayPool.req(interactionRelays, { kinds: [7], '#e': [eventId], limit: 1000 });
-    const reactionsSub = reactionsObs.subscribe({
-      next: (response) => {
-        if (response === 'EOSE') {
-          reactionsDone = true;
-          maybeFinish();
-          return;
-        }
-        if (response.kind === 7) {
-          const reaction = response as NostrEvent;
-          const existing = reactionsCache.get(eventId) || [];
-          if (!existing.find(r => r.id === reaction.id)) {
-            // Immutable update to trigger Solid reactivity downstream
-            reactionsCache.set(eventId, [...existing, reaction]);
-            // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
-            eventStore.add(reaction);
-            // Show updates as they arrive (no debounce)
-            recalculateScoresImmediate();
-            // Bump interaction tick for this note to propagate prop change
-            setInteractionTicks(prev => ({ ...prev, [eventId]: (prev[eventId] || 0) + 1 }));
+        const finalize = (reason: string) => {
+          if (finished) return;
+          finished = true;
+          debug('[Timeline] Interactions fetch complete for', eventId.slice(0, 8), reason);
+          markHydrated(eventId);
+          combined.unsubscribe();
+        };
+
+        const maybeFinish = () => {
+          if (reactionsDone && repliesDone) {
+            finalize('EOSE');
           }
-        }
-      },
-      error: (err) => {
-        // Silently ignore relay errors
-        debug('[Timeline] Reaction fetch error (ignoring):', err);
-        reactionsDone = true;
-        maybeFinish();
-      },
-      complete: () => {
-        reactionsDone = true;
-        maybeFinish();
+        };
+
+        const timeoutId = window.setTimeout(() => finalize('timeout'), 6000);
+        combined.add(() => window.clearTimeout(timeoutId));
+
+        const reactionsSub = relayPool
+          .req(interactionRelays, { kinds: [7], '#e': [eventId], limit: 1000 })
+          .subscribe({
+            next: (response) => {
+              if (response === 'EOSE') {
+                reactionsDone = true;
+                maybeFinish();
+                return;
+              }
+              if ((response as NostrEvent).kind === 7) {
+                const reaction = response as NostrEvent;
+                const existing = reactionsCache.get(eventId) || [];
+                if (!existing.find(r => r.id === reaction.id)) {
+                  reactionsCache.set(eventId, [...existing, reaction]);
+                  eventStore.add(reaction);
+                  recalculateScoresImmediate();
+                  setInteractionTicks(prev => ({ ...prev, [eventId]: (prev[eventId] || 0) + 1 }));
+                }
+              }
+            },
+            error: (err) => {
+              debug('[Timeline] Reaction fetch error (ignoring):', err);
+              reactionsDone = true;
+              maybeFinish();
+            },
+            complete: () => {
+              reactionsDone = true;
+              maybeFinish();
+            },
+          });
+
+        const repliesSub = relayPool
+          .req(interactionRelays, { kinds: [1], '#e': [eventId], limit: 1000 })
+          .subscribe({
+            next: (response) => {
+              if (response === 'EOSE') {
+                repliesDone = true;
+                maybeFinish();
+                return;
+              }
+              if ((response as NostrEvent).kind === 1) {
+                const reply = response as NostrEvent;
+                const existing = repliesCache.get(eventId) || [];
+                if (!existing.find(r => r.id === reply.id)) {
+                  repliesCache.set(eventId, [...existing, reply]);
+                  eventStore.add(reply);
+                  recalculateScoresImmediate();
+                  setInteractionTicks(prev => ({ ...prev, [eventId]: (prev[eventId] || 0) + 1 }));
+                }
+              }
+            },
+            error: (err) => {
+              debug('[Timeline] Reply fetch error (ignoring):', err);
+              repliesDone = true;
+              maybeFinish();
+            },
+            complete: () => {
+              repliesDone = true;
+              maybeFinish();
+            },
+          });
+
+        combined.add(reactionsSub);
+        combined.add(repliesSub);
+        combined.add(() => hydratingNotes.delete(eventId));
+        return combined;
       },
     });
 
-    // Fetch replies
-    const repliesObs = relayPool.req(interactionRelays, { kinds: [1], '#e': [eventId], limit: 1000 });
-    const repliesSub = repliesObs.subscribe({
-      next: (response) => {
-        if (response === 'EOSE') {
-          repliesDone = true;
-          maybeFinish();
-          return;
-        }
-        if (response.kind === 1) {
-          const reply = response as NostrEvent;
-          const existing = repliesCache.get(eventId) || [];
-          if (!existing.find(r => r.id === reply.id)) {
-            // Immutable update to trigger Solid reactivity downstream
-            repliesCache.set(eventId, [...existing, reply]);
-            // Persist to global EventStore so other views (e.g., NoteDetail) and cache can see it
-            eventStore.add(reply);
-            // Show updates as they arrive (no debounce)
-            recalculateScoresImmediate();
-            // Bump interaction tick for this note to propagate prop change
-            setInteractionTicks(prev => ({ ...prev, [eventId]: (prev[eventId] || 0) + 1 }));
-          }
-        }
-      },
-      error: (err) => {
-        // Silently ignore relay errors
-        debug('[Timeline] Reply fetch error (ignoring):', err);
-        repliesDone = true;
-        maybeFinish();
-      },
-      complete: () => {
-        repliesDone = true;
-        maybeFinish();
-      },
-    });
-
-    setTimeout(() => {
-      if (!finished) {
-        reactionsSub.unsubscribe();
-        repliesSub.unsubscribe();
-        finishHydration();
-      }
-    }, 6000);
+    if (!queued) {
+      hydratingNotes.delete(eventId);
+      debug('[Timeline] Interactions coordinator dropped request for', eventId.slice(0, 8));
+    }
   };
 
   // Prefetch interactions for notes just below the fold so they feel instant when scrolling

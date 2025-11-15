@@ -544,8 +544,14 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
             setLoadingStatus(`✨ Showing ${cachedNotes.length} cached notes...`);
 
             // Phase 2: Set initial render count for cached notes
-            const PAGE_SIZE = prefs.feedParams.initialLimit || 20;
-            setRenderCount(Math.min(cachedNotes.length, PAGE_SIZE));
+            const hydrationVisible = Math.max(
+              1,
+              Math.min(
+                cachedNotes.length,
+                prefs.feedParams.hydrationLimit || cachedNotes.length
+              )
+            );
+            setRenderCount(hydrationVisible);
             recalculateScoresImmediate();
           }
           // Phase 1: Debug logging for cache performance
@@ -1285,7 +1291,16 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   // Reload feed when feed params change
   const handleFeedParamsUpdate = () => {
     console.log('[WoTTimeline] Feed params updated, triggering reload...');
-    setReloadTrigger(prev => prev + 1); // Increment to trigger createEffect
+    setRenderCount(0);
+    lastLoadTs = 0;
+    lastGrowthTs = 0;
+    if (loadMoreObserver && bottomSentinelRef) {
+      try { loadMoreObserver.unobserve(bottomSentinelRef); } catch {}
+    }
+    loadMoreObserver = null;
+    setHasMore(true);
+    setLoadingMore(false);
+    setReloadTrigger(prev => prev + 1);
   };
 
   return (

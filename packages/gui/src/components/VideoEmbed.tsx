@@ -58,7 +58,14 @@ export const VideoEmbed: Component<VideoEmbedProps> = (props) => {
 
   return (
     <div class="my-3">
-      <div style={{ 'min-height': props.reservedHeight ? `${props.reservedHeight}px` : undefined }}>
+      <div
+        class="relative w-full overflow-hidden rounded-lg bg-black/20 dark:bg-white/5"
+        style={
+          props.reservedHeight
+            ? { 'min-height': `${props.reservedHeight}px` }
+            : { 'aspect-ratio': '16 / 9' }
+        }
+      >
         <video
           ref={(el) => {
             videoRef = el;
@@ -66,11 +73,12 @@ export const VideoEmbed: Component<VideoEmbedProps> = (props) => {
           src={props.url}
           controls
           preload="metadata"
-          class="w-full h-auto rounded-lg"
+          class="w-full h-full object-contain bg-black rounded-lg"
           onLoadedMetadata={() => applyPendingState()}
           onPlay={persistState}
           onPause={persistState}
           onTimeUpdate={persistState}
+          style={props.reservedHeight ? {} : { height: '100%' }}
         >
           Your browser does not support the video tag.
         </video>

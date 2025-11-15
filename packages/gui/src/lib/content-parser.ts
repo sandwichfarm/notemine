@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools';
 
-export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium';
+export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium' | 'link';
 
 export interface ParsedEntity {
   type: EntityType;
@@ -92,6 +92,13 @@ const SUBSTACK_REGEX = /https?:\/\/([a-zA-Z0-9-]+)\.substack\.com(?:\/(?:pub\/[a
  * Matches: medium.com/@username/post-slug or medium.com/publication/post-slug
  */
 const MEDIUM_REGEX = /https?:\/\/(?:www\.)?medium\.com\/(?:@([a-zA-Z0-9_-]+)|([a-zA-Z0-9_-]+))\/([a-zA-Z0-9_-]+)(?:\?[^\s]*)?/gi;
+
+/**
+ * Regular expression to match generic HTTP(S) URLs
+ * This should be checked LAST after all specific patterns
+ * Matches any http:// or https:// URL
+ */
+const GENERIC_URL_REGEX = /https?:\/\/[^\s<>]+/gi;
 
 /**
  * Parse a string to find all nostr: entity references
@@ -314,6 +321,24 @@ function findMediaEntities(content: string): ParsedEntity[] {
 
     entities.push({
       type: 'image',
+      data: { url: match[0] },
+      start: match.index!,
+      end: match.index! + match[0].length,
+      raw: match[0],
+    });
+  }
+
+  // Find generic links (checked LAST to avoid duplicates with specific patterns)
+  const linkMatches = content.matchAll(GENERIC_URL_REGEX);
+  for (const match of linkMatches) {
+    // Skip if this URL is already matched by any specific pattern
+    const isAlreadyMatched = entities.some(
+      e => e.start <= match.index! && e.end >= match.index! + match[0].length
+    );
+    if (isAlreadyMatched) continue;
+
+    entities.push({
+      type: 'link',
       data: { url: match[0] },
       start: match.index!,
       end: match.index! + match[0].length,

@@ -15,6 +15,7 @@ import { MediaPreloader } from '../services/MediaPreloader';
 import type { PreparedNote } from '../types/FeedTypes';
 import { configureVisibilityObserver, getVisibilityObserver } from '../services/VisibilityObserver';
 import { configureInteractionsCoordinator, getInteractionsCoordinator } from '../services/InteractionsCoordinator';
+import { VirtualizedNoteSlot } from './VirtualizedNoteSlot';
 
 interface WoTTimelineProps {
   userPubkey: string;
@@ -70,6 +71,7 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   // Phase 3: Per-note tick to force reactive updates on interaction arrivals
   const [interactionTicks, setInteractionTicks] = createSignal<Record<string, number>>({});
   const prefetchedEventIds = new Set<string>(); // Track prefetched notes to avoid duplicate fetches
+  const [virtualizedNotes, setVirtualizedNotes] = createSignal<Record<string, number>>({});
   const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes visible without scrolling
 
   const bumpInteractionTick = (id: string) => {
@@ -1109,6 +1111,37 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     }
   });
 
+  const markVirtualized = (eventId: string, height: number) => {
+    setVirtualizedNotes((prev) => {
+      if (prev[eventId]) return prev;
+      return { ...prev, [eventId]: height };
+    });
+  };
+
+  const unvirtualize = (eventId: string) => {
+    setVirtualizedNotes((prev) => {
+      if (!prev[eventId]) return prev;
+      const next = { ...prev };
+      delete next[eventId];
+      return next;
+    });
+  };
+
+  createEffect(() => {
+    const currentIds = new Set(notes().map((n) => n.event.id));
+    setVirtualizedNotes((prev) => {
+      let mutated = false;
+      const next = { ...prev };
+      for (const id of Object.keys(prev)) {
+        if (!currentIds.has(id)) {
+          delete next[id];
+          mutated = true;
+        }
+      }
+      return mutated ? next : prev;
+    });
+  });
+
   // Helper function to recalculate scores without reordering
   // CRITICAL: Scores are updated for badges, but notes stay in insertion order
   const recalculateScoresImmediate = () => {
@@ -1255,18 +1288,32 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
             {notes().length} notes from your Web of Trust • sorted by total PoW (including delegated)
           </div> */}
           <For each={notes()}>
-            {(scoredNote) => (
-              <Note
-                event={scoredNote.event}
-                score={scoredNote.score}
-                reactions={reactionsCache.get(scoredNote.event.id) || []}
-                replies={repliesCache.get(scoredNote.event.id) || []}
-                showScore={props.showScores ?? true}
-                onVisible={handleNoteVisible}
-                preparedNote={scoredNote.preparedNote}
-                interactionTick={(interactionTicks()[scoredNote.event.id] || 0)}
-              />
-            )}
+            {(scoredNote) => {
+              const noteId = scoredNote.event.id;
+              const virtualizationMap = virtualizedNotes();
+              const virtualHeight = virtualizationMap[noteId];
+
+              return (
+                <VirtualizedNoteSlot
+                  eventId={noteId}
+                  isVirtualized={virtualHeight !== undefined}
+                  virtualHeight={virtualHeight}
+                  onVirtualize={(height) => markVirtualized(noteId, height)}
+                  onUnvirtualize={() => unvirtualize(noteId)}
+                >
+                  <Note
+                    event={scoredNote.event}
+                    score={scoredNote.score}
+                    reactions={reactionsCache.get(noteId) || []}
+                    replies={repliesCache.get(noteId) || []}
+                    showScore={props.showScores ?? true}
+                    onVisible={handleNoteVisible}
+                    preparedNote={scoredNote.preparedNote}
+                    interactionTick={interactionTicks()[noteId] || 0}
+                  />
+                </VirtualizedNoteSlot>
+              );
+            }}
           </For>
 
           {/* Infinite scroll sentinel */}

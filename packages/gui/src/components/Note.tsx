@@ -25,6 +25,7 @@ interface NoteProps {
   replies?: NostrEvent[];
   onVisible?: (eventId: string) => void; // Callback when note becomes visible
   preparedNote?: PreparedNote; // Reserved heights for stable rendering (Phase 2)
+  interactionTick?: number; // Forces reactive updates on interaction arrivals
 }
 
 // Global signal to track which note's tooltip is open (must be reactive)
@@ -188,29 +189,37 @@ export const Note: Component<NoteProps> = (props) => {
     if (noteRef && props.onVisible) {
       const visibilityObserver = getVisibilityObserver();
       const coordinator = getInteractionsCoordinator();
-      let triggered = false; // Ensure one-time trigger
+      let cancelTimer: number | null = null;
 
       visibilityObserver.register({
         element: noteRef,
         onVisible: () => {
-          if (!triggered) {
-            triggered = true;
-            props.onVisible?.(props.event.id);
-            // Keep observer registered to detect scroll-away
+          // Clear any pending cancel and trigger fetch (coordinator dedupes internally)
+          if (cancelTimer !== null) {
+            clearTimeout(cancelTimer);
+            cancelTimer = null;
           }
+          props.onVisible?.(props.event.id);
         },
         onLeave: () => {
-          if (triggered) {
-            // Interactions may be in-flight or queued - cancel them when scrolling away
-            coordinator.cancel(props.event.id);
+          // Delay cancel to avoid transient unobserve jitter; only cancel queued
+          if (cancelTimer !== null) {
+            clearTimeout(cancelTimer);
           }
+          cancelTimer = window.setTimeout(() => {
+            coordinator.cancelQueued(props.event.id);
+            cancelTimer = null;
+          }, 2000);
         },
       });
 
       onCleanup(() => {
         visibilityObserver.unregister(noteRef);
-        // Final cleanup: cancel any remaining in-flight or queued interactions
-        coordinator.cancel(props.event.id);
+        // Do not cancel in-flight fetches on cleanup; allow them to complete
+        if (cancelTimer !== null) {
+          clearTimeout(cancelTimer);
+          cancelTimer = null;
+        }
       });
     }
 
@@ -253,6 +262,7 @@ export const Note: Component<NoteProps> = (props) => {
     <div
       ref={noteRef}
       data-note-id={props.event.id}
+      data-interaction-tick={props.interactionTick ?? 0}
       class="!mb-10 note"
       classList={{
         'border-l-accent bg-bg-primary dark:bg-bg-secondary': hasPow(),

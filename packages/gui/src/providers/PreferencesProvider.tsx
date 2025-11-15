@@ -103,6 +103,7 @@ export interface UserPreferences {
     infiniteTriggerPct: number; // Trigger percentage (0.0-1.0) for loading more
     batchClampMin: number; // Minimum batch size for pagination
     batchClampMax: number; // Maximum batch size for pagination
+    overscan: number; // Render buffer beyond window edge (Phase 2 windowing)
 
     // Phase 6: Diagnostics
     preloaderTimeoutMs: number; // Timeout for media preloader
@@ -198,6 +199,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     infiniteTriggerPct: 0.8, // Trigger at 80% of scroll
     batchClampMin: 5, // Min 5 notes per batch
     batchClampMax: 20, // Max 20 notes per batch
+    overscan: 5, // Small buffer beyond window edge for smooth scrolling
 
     // Phase 6: Diagnostics
     preloaderTimeoutMs: 1500, // 1.5s timeout for media preloading

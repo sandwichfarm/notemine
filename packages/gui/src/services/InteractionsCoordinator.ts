@@ -132,7 +132,25 @@ class InteractionsCoordinatorService {
   }
 
   /**
-   * Cancel interactions fetch for a note (e.g., scrolled away)
+   * Cancel queued interactions fetch for a note (e.g., scrolled away)
+   * Does NOT cancel in-flight fetches - lets them complete to capture all interactions
+   */
+  public cancelQueued(noteId: string): void {
+    // Remove from queue if present
+    const queueIndex = this.queue.findIndex((q) => q.noteId === noteId);
+    if (queueIndex !== -1) {
+      this.queue.splice(queueIndex, 1);
+      this.stats.totalCanceled++;
+
+      if (this.debugMode) {
+        console.log(`[InteractionsCoordinator] Removed note ${noteId.slice(0, 8)} from queue (in-flight preserved)`);
+      }
+    }
+  }
+
+  /**
+   * Cancel interactions fetch for a note (both queued and in-flight)
+   * Use this for cleanup only, not for scroll-away
    */
   public cancel(noteId: string): void {
     // Cancel if in flight
@@ -153,16 +171,8 @@ class InteractionsCoordinatorService {
       return;
     }
 
-    // Remove from queue if present
-    const queueIndex = this.queue.findIndex((q) => q.noteId === noteId);
-    if (queueIndex !== -1) {
-      this.queue.splice(queueIndex, 1);
-      this.stats.totalCanceled++;
-
-      if (this.debugMode) {
-        console.log(`[InteractionsCoordinator] Removed note ${noteId.slice(0, 8)} from queue`);
-      }
-    }
+    // Remove from queue if present (fallback)
+    this.cancelQueued(noteId);
   }
 
   /**

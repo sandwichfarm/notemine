@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools';
 
-export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium' | 'link';
+export type EntityType = 'npub' | 'note' | 'nprofile' | 'nevent' | 'naddr' | 'nsec' | 'image' | 'video' | 'youtube' | 'spotify' | 'github' | 'x' | 'facebook' | 'substack' | 'medium' | 'link' | 'bitcoin' | 'lightning' | 'lnurl' | 'cashu';
 
 export interface ParsedEntity {
   type: EntityType;
@@ -373,7 +373,9 @@ export function parseContent(content: string): ContentSegment[] {
     }
   }
 
-  const allEntities = [...combinedNostr, ...mediaEntities].sort((a, b) => a.start - b.start);
+const paymentEntities = findPaymentEntities(content);
+
+const allEntities = [...combinedNostr, ...mediaEntities, ...paymentEntities].sort((a, b) => a.start - b.start);
 
   if (allEntities.length === 0) {
     return [{ type: 'text', content }];
@@ -454,4 +456,36 @@ export function getRelayHints(entity: ParsedEntity): string[] {
     return entity.data.relays;
   }
   return [];
+}
+
+const BITCOIN_BASE58_REGEX = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g;
+const BITCOIN_BECH32_REGEX = /\bbc1[ac-hj-np-z02-9]{11,71}\b/gi;
+const LIGHTNING_INVOICE_REGEX = /\bln(bc|tb|sb|bcrt)[0-9][a-z0-9]+\b/gi;
+const LNURL_REGEX = /\blnurl[a-z0-9]+\b/gi;
+const CASHU_REGEX = /\bcashu[a-zA-Z0-9]{20,}\b/g;
+
+function findPaymentEntities(content: string): ParsedEntity[] {
+  const entities: ParsedEntity[] = [];
+
+  const addMatches = (regex: RegExp, type: EntityType) => {
+    const matches = content.matchAll(regex);
+    for (const match of matches) {
+      if (!match.index) continue;
+      entities.push({
+        type,
+        data: { value: match[0] },
+        start: match.index,
+        end: match.index + match[0].length,
+        raw: match[0],
+      });
+    }
+  };
+
+  addMatches(BITCOIN_BASE58_REGEX, 'bitcoin');
+  addMatches(BITCOIN_BECH32_REGEX, 'bitcoin');
+  addMatches(LIGHTNING_INVOICE_REGEX, 'lightning');
+  addMatches(LNURL_REGEX, 'lnurl');
+  addMatches(CASHU_REGEX, 'cashu');
+
+  return entities;
 }

@@ -536,13 +536,13 @@ export const Timeline: Component<TimelineProps> = (props) => {
               <p class="mt-2 text-sm text-text-secondary">Loading more...</p>
             </div>
           </Show>
-
+{/* 
           <Show when={hasMore()}>
             <div class="text-center text-xs text-text-tertiary flex items-center justify-center gap-2 py-3">
               <span class="inline-block h-2 w-2 rounded-full bg-text-tertiary animate-pulse" />
               <span>{loadingMore() ? 'Fetching more notes…' : 'Scroll to load more notes'}</span>
             </div>
-          </Show>
+          </Show> */}
 
           {/* End of feed indicator */}
           <Show when={!hasMore() && !loadingMore()}>

@@ -339,8 +339,9 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
       const prepared = await preloader.prepareBatch(prioritized, prefs.feedParams.preloaderTimeoutMs);
 
       // Phase 1: Batch insertion - build array first, then single setAllNotes call
+      const maxPrepared = Math.max(10, prefs.feedParams.initialLimit || 20);
       const newNotes: ScoredNote[] = [];
-      for (const prep of prepared) {
+      for (const prep of prepared.slice(0, maxPrepared)) {
         const event = prep.note.event;
         if (eventCache.has(event.id)) continue;
 
@@ -957,8 +958,10 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   // Phase 2: Lazy loading handler using InteractionsCoordinator (defined outside createEffect so it's stable)
   const handleNoteVisible = async (eventId: string) => {
     if (hydratedNotes()[eventId]) return;
-    if (hydratingNotes.has(eventId)) return;
-    hydratingNotes.add(eventId);
+    if (!hydratingNotes.has(eventId)) {
+      hydratingNotes.add(eventId);
+      markHydrated(eventId);
+    }
 
     // Build a robust relay set for interactions:
     // CRITICAL: Interactions (replies/reactions) are addressed to the NOTE AUTHOR's inbox relays
@@ -1397,12 +1400,12 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
           </Show>
 
           {/* Scroll affordance */}
-          <Show when={hasMore()}>
+          {/* <Show when={hasMore()}>
             <div class="text-center text-xs text-text-tertiary flex items-center justify-center gap-2 py-3">
               <span class="inline-block h-2 w-2 rounded-full bg-text-tertiary animate-pulse" />
               <span>{loadingMore() ? 'Fetching more notes…' : 'Scroll to load more notes'}</span>
             </div>
-          </Show>
+          </Show> */}
 
           {/* End of feed */}
           <Show when={!hasMore() && !loadingMore()}>

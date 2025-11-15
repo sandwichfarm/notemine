@@ -59,6 +59,8 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
       visibilityRootMarginPx: 300,
       interactionsMaxConcurrent: 3,
       interactionsQueueMax: 24,
+      timelineRelayLimit: 8,
+      interactionRelayLimit: 12,
       prefetchInteractionsCount: 3,
       anchorPreserveDelayMs: 50,
       topThresholdPx: 100,
@@ -91,6 +93,8 @@ export const FeedControls: Component<FeedControlsProps> = (props) => {
     visibilityRootMarginPx: 300,
     interactionsMaxConcurrent: 3,
     interactionsQueueMax: 24,
+    timelineRelayLimit: 8,
+    interactionRelayLimit: 12,
     prefetchInteractionsCount: 3,
   };
 

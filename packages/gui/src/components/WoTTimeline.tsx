@@ -1,6 +1,6 @@
 import { Component, createSignal, onCleanup, For, Show, createEffect, untrack } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays, eventStore, createTimelineStream, getActiveRelays, relayConnectionManager, PROFILE_RELAYS } from '../lib/applesauce';
+import { relayPool, getUserFollows, getUserOutboxRelays, getUserInboxRelays, eventStore, createTimelineStream, getActiveRelays, relayConnectionManager, PROFILE_RELAYS, DEFAULT_POW_RELAY } from '../lib/applesauce';
 import { getCachedEventsByFilters } from '../lib/cache';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
@@ -75,6 +75,10 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
   const [hydratedNotes, setHydratedNotes] = createSignal<Record<string, boolean>>({});
   const [virtualizedNotes, setVirtualizedNotes] = createSignal<Record<string, number>>({});
   const PREFETCH_VISIBLE_BUFFER = 2; // Approximate number of notes visible without scrolling
+  const timelineRelayLimit = () => Math.max(1, preferences().feedParams.timelineRelayLimit || 8);
+  const interactionRelayLimit = () => Math.max(1, preferences().feedParams.interactionRelayLimit || 8);
+  const applyRelayLimit = (relays: string[], limit: number) =>
+    Array.from(new Set([DEFAULT_POW_RELAY, ...relays])).slice(0, limit);
 
   const bumpInteractionTick = (id: string) => {
     setInteractionTicks(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
@@ -891,7 +895,13 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     currentAuthors.forEach(a => (currentAuthorRelays.get(a) || []).forEach((r) => liveRelaysSet.add(r)));
     myInboxRelays.forEach((r) => liveRelaysSet.add(r));
     let liveRelays = Array.from(liveRelaysSet);
-    if (liveRelays.length === 0) liveRelays = getActiveRelays();
+    if (liveRelays.length === 0) {
+      liveRelays = relayConnectionManager.getTimelineRelays(timelineRelayLimit());
+    }
+    if (liveRelays.length === 0) {
+      liveRelays = getActiveRelays();
+    }
+    liveRelays = applyRelayLimit(liveRelays, timelineRelayLimit());
 
     const live$ = createTimelineStream(
       liveRelays,
@@ -982,7 +992,8 @@ export const WoTTimeline: Component<WoTTimelineProps> = (props) => {
     // Include profile relays as additional fallback (often host widely used infra)
     PROFILE_RELAYS.forEach(r => relaySet.add(r));
 
-    const interactionRelays = Array.from(relaySet);
+    relaySet.add(DEFAULT_POW_RELAY);
+    const interactionRelays = applyRelayLimit(Array.from(relaySet), interactionRelayLimit());
     if (interactionRelays.length === 0) {
       console.warn('[WoTTimeline] No relays available for interactions fetch');
       markHydrated(eventId);

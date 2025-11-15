@@ -1,6 +1,6 @@
 import { Component, createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
 import type { NostrEvent } from 'nostr-tools/core';
-import { createTimelineStream, relayPool, eventStore, relayConnectionManager, getActiveRelays, PROFILE_RELAYS, getUserInboxRelays } from '../lib/applesauce';
+import { createTimelineStream, relayPool, eventStore, relayConnectionManager, getActiveRelays, PROFILE_RELAYS, getUserInboxRelays, DEFAULT_POW_RELAY } from '../lib/applesauce';
 import { calculatePowScore } from '../lib/pow';
 import { Note } from './Note';
 import { AlgorithmControls } from './AlgorithmControls';
@@ -45,6 +45,11 @@ export const Timeline: Component<TimelineProps> = (props) => {
   let relaysCache: string[] = [];
   let recalculateTimer: number | null = null; // Debounce timer
 
+  const timelineRelayLimit = () => Math.max(1, preferences().feedParams.timelineRelayLimit || 8);
+  const interactionRelayLimit = () => Math.max(1, preferences().feedParams.interactionRelayLimit || 8);
+  const applyRelayLimit = (relays: string[], limit: number) =>
+    Array.from(new Set([DEFAULT_POW_RELAY, ...relays])).slice(0, limit);
+
   onMount(() => {
     const INITIAL_LOAD = 15; // Slightly larger initial batch for faster first paint
     const LOAD_MORE_BATCH = 8; // Load more per batch for smoother scrolling
@@ -53,9 +58,9 @@ export const Timeline: Component<TimelineProps> = (props) => {
 
     try {
       // Use relay connection manager's connected relays (limited and optimized)
-      const relays = relayConnectionManager.getConnectedRelays();
-      relaysCache = relays; // Store for lazy loading
-      debug('[Timeline] Loading from relays:', relays);
+      const relays = applyRelayLimit(relayConnectionManager.getTimelineRelays(timelineRelayLimit()), timelineRelayLimit());
+      relaysCache = relays.length > 0 ? relays : applyRelayLimit(getActiveRelays(), timelineRelayLimit());
+      debug('[Timeline] Loading from relays:', relaysCache);
       debug('[Timeline] Connection stats:', relayConnectionManager.getStats());
 
       if (relays.length === 0) {
@@ -227,7 +232,8 @@ export const Timeline: Component<TimelineProps> = (props) => {
       }
     } catch {}
 
-    const interactionRelays = Array.from(relaySet);
+    relaySet.add(DEFAULT_POW_RELAY);
+    const interactionRelays = applyRelayLimit(Array.from(relaySet), interactionRelayLimit());
     if (interactionRelays.length === 0) {
       markHydrated(eventId);
       return;

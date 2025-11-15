@@ -474,6 +474,44 @@ export const Preferences: Component = () => {
               </p>
             </div>
 
+            {/* Timeline Relay Limit */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Timeline Relay Fan-out: {preferences().feedParams.timelineRelayLimit}
+              </label>
+              <input
+                type="range"
+                min="2"
+                max="24"
+                step="1"
+                value={preferences().feedParams.timelineRelayLimit}
+                onInput={(e) => updateFeedParam('timelineRelayLimit', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Maximum number of relays queried for the main timeline (default: 8). Lower values use fewer WebSocket connections.
+              </p>
+            </div>
+
+            {/* Interaction Relay Limit */}
+            <div class="card">
+              <label class="block text-sm font-medium text-text-secondary mb-2">
+                Interaction Relay Fan-out: {preferences().feedParams.interactionRelayLimit}
+              </label>
+              <input
+                type="range"
+                min="4"
+                max="32"
+                step="1"
+                value={preferences().feedParams.interactionRelayLimit}
+                onInput={(e) => updateFeedParam('interactionRelayLimit', Number(e.currentTarget.value))}
+                class="w-full"
+              />
+              <p class="text-xs text-text-tertiary mt-1 opacity-50">
+                Limits how many relays are contacted when fetching replies/reactions (default: 12). Lower values reduce bursty fan-out.
+              </p>
+            </div>
+
             {/* Visibility Dwell */}
             <div class="card">
               <label class="block text-sm font-medium text-text-secondary mb-2">

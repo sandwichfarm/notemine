@@ -10,6 +10,33 @@ export interface Nip05ValidationResult {
 // Key format: "nip05@pubkey"
 const validationCache = new Map<string, { result: boolean; timestamp: number }>();
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+const MAX_CONCURRENT_REQUESTS = 2;
+
+let availableSlots = MAX_CONCURRENT_REQUESTS;
+const pendingResolvers: Array<() => void> = [];
+
+async function acquireSlot(): Promise<void> {
+  if (availableSlots > 0) {
+    availableSlots--;
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    pendingResolvers.push(() => {
+      availableSlots--;
+      resolve();
+    });
+  });
+}
+
+function releaseSlot(): void {
+  const next = pendingResolvers.shift();
+  if (next) {
+    next();
+  } else {
+    availableSlots = Math.min(MAX_CONCURRENT_REQUESTS, availableSlots + 1);
+  }
+}
 
 /**
  * Validates a NIP-05 identifier against the pubkey
@@ -46,18 +73,23 @@ export async function validateNip05(
     // Construct the .well-known URL
     const url = `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`;
 
-    // Fetch with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const response = await (async () => {
+      await acquireSlot();
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-
-    clearTimeout(timeoutId);
+      try {
+        return await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+      } finally {
+        clearTimeout(timeoutId);
+        releaseSlot();
+      }
+    })();
 
     if (!response.ok) {
       validationCache.set(cacheKey, { result: false, timestamp: Date.now() });

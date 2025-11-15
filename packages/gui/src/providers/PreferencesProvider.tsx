@@ -94,6 +94,8 @@ export interface UserPreferences {
     interactionsMaxConcurrent: number; // Max concurrent interactions fetches
     interactionsQueueMax: number; // Max queued interactions requests
     prefetchInteractionsCount: number; // Number of notes below fold to prefetch interactions for
+    timelineRelayLimit: number; // Max relays for timeline fetches
+    interactionRelayLimit: number; // Max relays for interaction hydration
 
     // Phase 3: Anchor preservation
     anchorPreserveDelayMs: number; // Delay before measuring anchor for preservation
@@ -191,6 +193,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     interactionsMaxConcurrent: 3, // Max 3 concurrent interactions fetches
     interactionsQueueMax: 24, // Max 24 queued requests
     prefetchInteractionsCount: 3, // Prefetch interactions for 3 notes below the fold
+    timelineRelayLimit: 8, // Limit timeline relay fan-out
+    interactionRelayLimit: 12, // Limit reaction/reply fan-out
 
     // Phase 3: Anchor preservation
     anchorPreserveDelayMs: 50, // 50ms delay before anchor measurement

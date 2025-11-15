@@ -79,6 +79,13 @@ export const Note: Component<NoteProps> = (props) => {
     );
   });
 
+  const interactionSummaryReady = createMemo(() => {
+    const delegated = stats().reactionsPowTotal + stats().repliesPowTotal;
+    return reactionsList().length > 0 || repliesList().length > 0 || delegated > 0;
+  });
+
+  const hasReactionPills = createMemo(() => reactionsList().length > 0);
+
   const contentClass = () =>
     [
       'leading-relaxed text-xl',
@@ -385,10 +392,7 @@ export const Note: Component<NoteProps> = (props) => {
       
 
       <div class="mb-3 text-xs font-mono text-black/60 dark:text-white/60 min-h-[24px] flex items-center">
-        <Show
-          when={hydrated()}
-          fallback={<div class="h-4 w-32" />}
-        >
+        <Show when={interactionSummaryReady()}>
           <div>
             <Show when={stats().reactionsPowTotal + stats().repliesPowTotal > 0}>
               <span
@@ -409,21 +413,24 @@ export const Note: Component<NoteProps> = (props) => {
             </Show>
           </div>
         </Show>
+        <Show when={!interactionSummaryReady() && !hydrated()}>
+          <div class="h-4 w-32" />
+        </Show>
       </div>
 
 
 
       {/* Reactions Bar - Visual breakdown of reactions */}
       <div class="mb-3 min-h-[32px]">
-        <Show
-          when={hydrated() && reactionsList().length > 0}
-          fallback={<div class="h-7" />}
-        >
+        <Show when={hasReactionPills()}>
           <ReactionBreakdown
             reactions={reactionsList()}
             eventId={props.event.id}
             eventAuthor={props.event.pubkey}
           />
+        </Show>
+        <Show when={!hasReactionPills() && !hydrated()}>
+          <div class="h-7" />
         </Show>
       </div>
 
@@ -541,4 +548,3 @@ export const Note: Component<NoteProps> = (props) => {
     </div>
   );
 };
-  const hydrated = () => props.isHydrated ?? true;

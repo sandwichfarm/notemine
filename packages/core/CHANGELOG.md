@@ -1,5 +1,11 @@
 # @notemine/core
 
+## 0.5.0
+
+### Minor Changes
+
+- Performance improvements, mining resumability, state bugfixes
+
 ## 0.4.3
 
 ### Patch Changes
